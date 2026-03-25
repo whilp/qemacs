@@ -105,6 +105,7 @@ struct QEDisplay {
     void (*dpy_selection_request)(QEditScreen *s);
     int (*dpy_set_clipboard)(QEditScreen *s);
     int (*dpy_request_clipboard)(QEditScreen *s);
+    void (*dpy_set_cwd)(QEditScreen *s, const char *path);
     void (*dpy_invalidate)(QEditScreen *s);
     void (*dpy_cursor_at)(QEditScreen *s, int x1, int y1, int w, int h);
 
@@ -214,6 +215,12 @@ static inline int dpy_request_clipboard(QEditScreen *s)
     if (s->dpy.dpy_request_clipboard)
         return s->dpy.dpy_request_clipboard(s);
     return -1;
+}
+
+static inline void dpy_set_cwd(QEditScreen *s, const char *path)
+{
+    if (s->dpy.dpy_set_cwd)
+        s->dpy.dpy_set_cwd(s, path);
 }
 
 static inline void dpy_invalidate(QEditScreen *s)

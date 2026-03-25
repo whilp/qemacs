@@ -949,6 +949,22 @@ static int tty_set_clipboard(QEditScreen *s)
     return 0;
 }
 
+/* Emit OSC 7 to inform the outer terminal of the current working directory.
+ * Format: OSC 7 ; file://hostname/path ST
+ */
+static void tty_set_cwd(QEditScreen *s, const char *path) {
+    char hostname[256];
+
+    if (!path || !*path)
+        return;
+
+    if (gethostname(hostname, sizeof(hostname)) != 0)
+        hostname[0] = '\0';
+
+    TTY_FPRINTF(s->STDOUT, "\033]7;file://%s%s\007", hostname, path);
+    fflush(s->STDOUT);
+}
+
 static int const csi_lookup[] = {
     KEY_UNKNOWN,  /* 0 */
     KEY_HOME,     /* 1 */
@@ -2266,6 +2282,7 @@ static QEDisplay tty_dpy = {
     NULL, /* dpy_selection_request */
     tty_set_clipboard,
     tty_request_clipboard,
+    tty_set_cwd,
     tty_dpy_invalidate,
     tty_dpy_cursor_at,
     tty_dpy_bmp_alloc,
