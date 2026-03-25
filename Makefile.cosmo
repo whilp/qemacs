@@ -69,7 +69,7 @@ release: cosmocc configure build
 	cp qe release/qe
 	cp tqe release/tqe
 	chmod +x release/qe release/tqe
-	tag="$$(date -u +%Y-%m-%d)-$${GITHUB_SHA::7}" && \
+	tag="$$(date -u +%Y-%m-%d)-$$(printf '%.7s' "$$GITHUB_SHA")" && \
 	(cd release && sha256sum qe tqe > SHA256SUMS && cat SHA256SUMS) && \
 	gh release create "$$tag" \
 		$$([ -z "$(RELEASE)" ] && echo --prerelease) \
