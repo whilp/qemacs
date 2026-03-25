@@ -186,6 +186,7 @@ typedef struct TTYState {
     char *clipboard;
     size_t clipboard_size;
     int got_focus;
+    int bracketed_paste;    /* non-zero when inside a bracketed paste */
 } TTYState;
 
 static QEditScreen *tty_screen;   /* for tty_term_exit and tty_term_resize */
@@ -232,6 +233,8 @@ static void tty_term_set_raw(QEditScreen *s) {
         /* enable focus reporting */
         TTY_FPRINTF(s->STDOUT, "\033[?1004h");
     }
+    /* enable bracketed paste mode */
+    TTY_FPUTS("\033[?2004h", s->STDOUT);
 #endif
     fflush(s->STDOUT);
     tcsetattr(fileno(s->STDIN), TCSANOW, &ts->newtty);
@@ -253,6 +256,7 @@ static void tty_term_set_cooked(QEditScreen *s) {
     /* go to last line and clear it */
     TTY_FPRINTF(s->STDOUT, "\033[%d;%dH" "\033[m\033[K", s->height, 1);
     TTY_FPRINTF(s->STDOUT,
+                "\033[0 q"          /* reset cursor shape to default */
                 "\033[?1049l"       /* exit_ca_mode */
                 "\033[?1l\033>"     /* keypad_local */
                 "\033[?25h"         /* show cursor */
@@ -270,6 +274,8 @@ static void tty_term_set_cooked(QEditScreen *s) {
         /* disable focus reporting */
         TTY_FPRINTF(s->STDOUT, "\033[?1004l");
     }
+    /* disable bracketed paste mode */
+    TTY_FPUTS("\033[?2004l", s->STDOUT);
 #endif
     fflush(s->STDOUT);
     tcsetattr(fileno(s->STDIN), TCSANOW, &ts->oldtty);
@@ -988,6 +994,21 @@ static void tty_read_handler(void *opaque)
             }
         }
         if (ch == '\033') {
+            if (ts->bracketed_paste) {
+                /* During bracketed paste, still parse escape sequences
+                 * so we can detect the CSI 201~ end-of-paste marker,
+                 * but don't use the "no pending input = ESC key" trick.
+                 */
+                ts->input_state = IS_ESC;
+                if (qs->input_buf != qs->input_buf_def) {
+                    qe_free(&qs->input_buf);
+                    qs->input_buf = qs->input_buf_def;
+                    qs->input_size = countof(qs->input_buf_def);
+                    qs->input_buf[0] = ch;
+                    qs->input_len = 1;
+                }
+                break;
+            }
             if (!tty_dpy_is_user_input_pending(s)) {
                 /* Trick to distinguish the ESC key from function and meta
                  * keys transmitting escape sequences starting with \033
@@ -1106,6 +1127,19 @@ static void tty_read_handler(void *opaque)
             ts->input_state = IS_CSI2;
             break;
         case '~':
+            /* bracketed paste: CSI 200~ starts, CSI 201~ ends */
+            if (n1 == 200) {
+                ts->bracketed_paste = 1;
+                ts->input_state = IS_NORM;
+                ts->has_meta = 0;
+                break;
+            }
+            if (n1 == 201) {
+                ts->bracketed_paste = 0;
+                ts->input_state = IS_NORM;
+                ts->has_meta = 0;
+                break;
+            }
             /* extended key:
              * first argument is the key number
              * second argument if present is the shift state + 1
@@ -1978,8 +2012,12 @@ static void tty_dpy_flush(QEditScreen *s)
     // XXX: should check if needed
     TTY_FPUTS("\033[0m", s->STDOUT);
     if (ts->cursor_y + 1 >= 0 && ts->cursor_x + 1 >= 0) {
-        TTY_FPRINTF(s->STDOUT, "\033[?25h\033[%d;%dH",
-                    ts->cursor_y + 1, ts->cursor_x + 1);
+        /* DECSCUSR: set cursor shape based on insert/overwrite mode
+         * 5 = blinking bar, 1 = blinking block */
+        EditState *e = s->qs->active_window;
+        int cursor_shape = (e && e->overwrite) ? 1 : 5;
+        TTY_FPRINTF(s->STDOUT, "\033[%d q\033[?25h\033[%d;%dH",
+                    cursor_shape, ts->cursor_y + 1, ts->cursor_x + 1);
     }
     fflush(s->STDOUT);
 
