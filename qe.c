@@ -73,7 +73,7 @@ int disable_crc;
 int use_session_file;
 #endif
 int use_html = 1;
-int is_player = 1;    /* Start in dired mode when invoked with no arguments */
+int is_player = 0;    /* Do not start in dired mode when invoked with no arguments */
 #ifndef CONFIG_TINY
 static int free_everything;
 #endif
