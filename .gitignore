@@ -17,6 +17,9 @@ bin
 *_asan
 *_msan
 *_ubsan
+# cosmocc build artifacts
+*.aarch64.elf
+*.com.dbg
 html2png
 qe
 tqe
