@@ -6,5 +6,9 @@
 
 .DEFAULT_GOAL := all
 
+# test uses the system compiler via upstream Makefile
+test:
+	@$(MAKE) -f Makefile test
+
 %:
 	@$(MAKE) -f Makefile.cosmo $@
