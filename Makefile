@@ -176,8 +176,12 @@ ifdef CONFIG_WIN32
 #  OBJS+= printf.o
   LIBS+= -lmsvcrt -lgdi32 -lwsock32
 else
-  OBJS+= unix.o tty.o session.o
-  LIBS+= -lutil $(EXTRALIBS)
+  OBJS+= unix.o tty.o
+  ifdef CONFIG_SESSION_DETACH
+    OBJS+= session.o
+    LIBS+= -lutil
+  endif
+  LIBS+= $(EXTRALIBS)
 endif
 
 ifndef TARGET_TINY

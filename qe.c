@@ -26,7 +26,7 @@
 #include "qe.h"
 #include "unicode_join.h"
 #include "variables.h"
-#ifndef CONFIG_WIN32
+#ifdef CONFIG_SESSION_DETACH
 #include <dirent.h>
 #include "session.h"
 #endif
@@ -77,7 +77,7 @@ int is_player = 1;    /* Start in dired mode when invoked with no arguments */
 #ifndef CONFIG_TINY
 static int free_everything;
 #endif
-#ifndef CONFIG_WIN32
+#ifdef CONFIG_SESSION_DETACH
 static int session_action;
 static const char *session_name;
 #endif
@@ -11086,7 +11086,7 @@ static void qe_set_tty_charset(QEmacsState *qs, const char *name)
     qs->tty_charset = qe_strdup(name);
 }
 
-#ifndef CONFIG_WIN32
+#ifdef CONFIG_SESSION_DETACH
 static void qe_set_session_create(QEmacsState *qs, const char *name) {
     session_action = SESSION_ACTION_CREATE;
     session_name = name;
@@ -11221,7 +11221,7 @@ static CmdLineOptionDef cmd_options[] = {
                  "set the tty clipboard support method (0,1,2)"),
     CMD_LINE_INT("m", "mouse", "VAL", &tty_mouse,
                  "set the mouse emulation mode (0,1,2)"),
-#ifndef CONFIG_WIN32
+#ifdef CONFIG_SESSION_DETACH
     CMD_LINE_FARG("S", "session-create", "NAME", qe_set_session_create,
                   "create a new detachable session and attach to it"),
     CMD_LINE_FARG("A", "session-attach", "NAME", qe_set_session_attach,
@@ -11995,7 +11995,7 @@ static int qe_init(void *opaque)
     /* init basic modules */
     qe_register_mode(qs, &text_mode, MODEF_VIEW);
     qe_register_commands(qs, NULL, basic_commands, countof(basic_commands));
-#ifndef CONFIG_WIN32
+#ifdef CONFIG_SESSION_DETACH
     qe_register_commands(qs, NULL, session_commands, countof(session_commands));
 #endif
     qe_register_cmd_line_options(qs, cmd_options);
@@ -12156,7 +12156,7 @@ int main(int argc, char **argv)
     QEArgs args;
     int status;
 
-#ifndef CONFIG_WIN32
+#ifdef CONFIG_SESSION_DETACH
     /* Pre-parse session arguments before editor initialization.
      * Session handling forks a daemon and re-execs qemacs inside a PTY,
      * so it must happen before any terminal or display setup.
