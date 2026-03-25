@@ -245,6 +245,8 @@ ifdef CONFIG_FFMPEG
   LIBS+= -L$(FFMPEG_LIBDIR)/libavcodec -L$(FFMPEG_LIBDIR)/libavformat -lavformat -lavcodec -lz -lpthread
   DEFINES+= -I$(FFMPEG_SRCDIR)/libavcodec -I$(FFMPEG_SRCDIR)/libavformat
   TARGETS+= ffplay$(EXE)
+else
+  OBJS+= modes/stb.o
 endif
 
 ifdef CONFIG_X11
