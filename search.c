@@ -533,6 +533,25 @@ static void isearch_run(ISearchState *is) {
     if (is->quoting)
         buf_puts(out, "^Q-");
 
+    /* count matches and display match index */
+    if (is->found_offset >= 0 && len > 0) {
+        int match_offset, match_end, total = 0, current = 0;
+        int scan_offset = 0;
+        while (eb_search(s->b, 1, flags, scan_offset, s->b->total_size,
+                         is->search_u32, len, NULL, NULL,
+                         &match_offset, &match_end) > 0) {
+            total++;
+            if (match_offset == is->found_offset)
+                current = total;
+            scan_offset = match_end > match_offset ? match_end : match_offset + 1;
+            if (total > 9999)
+                break;
+        }
+        if (current > 0 && total <= 9999) {
+            buf_printf(out, " [%d/%d]", current, total);
+        }
+    }
+
     /* display text */
     do_center_cursor(s, 0);
     put_status(s, "%s", out->buf);   /* XXX: why NULL? */

@@ -3376,25 +3376,28 @@ void basic_mode_line(EditState *s, buf_t *out, int c1)
 {
     char buf[128];
     const char *mode_name;
-    int mod, state;
+    const char *mod_indicator;
 
-    mod = s->b->modified ? '*' : '-';
     if (s->b->flags & BF_LOADING)
-        state = 'L';
+        mod_indicator = " \342\227\213 ";   /* ○ loading */
     else if (s->b->flags & BF_SAVING)
-        state = 'S';
+        mod_indicator = " \342\227\213 ";   /* ○ saving */
     else if (s->busy)
-        state = 'B';
+        mod_indicator = " \342\227\213 ";   /* ○ busy */
+    else if (s->b->modified)
+        mod_indicator = " \342\227\217 ";   /* ● modified */
     else
-        state = '-';
+        mod_indicator = "   ";              /* clean */
 
     mode_name = qe_get_mode_name(s, buf, sizeof(buf), 1);
     /* Strip text mode name if another mode is also active */
     strstart(mode_name, "text ", &mode_name);
 
-    buf_printf(out, "%c%c:%c%c  %-20s  (%s)",
-               c1, state, s->b->flags & BF_READONLY ? '%' : mod,
-               mod, s->b->name, mode_name);
+    buf_printf(out, "%s%s \342\224\202 %s",
+               mod_indicator,
+               s->b->name, mode_name);
+    if (s->b->flags & BF_READONLY)
+        buf_puts(out, " [RO]");
 }
 
 void text_mode_line(EditState *s, buf_t *out)
@@ -3412,31 +3415,30 @@ void text_mode_line(EditState *s, buf_t *out)
     basic_mode_line(s, out, wrap_mode);
 
     eb_get_pos(s->b, &line_num, &col_num, s->offset);
+    /* \342\224\202 is UTF-8 for U+2502 │ (box drawing light vertical) */
+    buf_puts(out, " \342\224\202 ");
     if (s->qs->line_number_mode)
-        buf_printf(out, "--L%d", line_num + 1);
+        buf_printf(out, "L%d ", line_num + 1);
     if (s->qs->column_number_mode)
-        buf_printf(out, "--C%d", col_num + 1);
-    buf_printf(out, "--%s", s->b->charset->name);
+        buf_printf(out, "C%d ", col_num + 1);
+    buf_printf(out, "%s", s->b->charset->name);
     if (s->b->eol_type == EOL_DOS)
         buf_puts(out, "-dos");
     if (s->b->eol_type == EOL_MAC)
         buf_puts(out, "-mac");
     if (s->bidir)
-        buf_printf(out, "--%s", s->cur_rtl ? "RTL" : "LTR");
+        buf_printf(out, " %s", s->cur_rtl ? "RTL" : "LTR");
 
     if (s->input_method)
-        buf_printf(out, "--%s", s->input_method->name);
-    buf_printf(out, "--%d%%", compute_percent(s->offset, s->b->total_size));
+        buf_printf(out, " %s", s->input_method->name);
+    buf_printf(out, " \342\224\202 %d%%", compute_percent(s->offset, s->b->total_size));
     if (s->x_disp[0])
-        buf_printf(out, "--<%d", -s->x_disp[0]);
+        buf_printf(out, " <%d", -s->x_disp[0]);
     if (s->x_disp[1])
-        buf_printf(out, "-->%d", -s->x_disp[1]);
+        buf_printf(out, " >%d", -s->x_disp[1]);
     tag = eb_find_property(s->b, 0, s->offset + 1, QE_PROP_TAG);
     if (tag)
-        buf_printf(out, "--%s", (char*)tag->data);
-#if 0
-    buf_printf(out, "--[%d]", s->y_disp);
-#endif
+        buf_printf(out, " %s", (char*)tag->data);
 }
 
 void display_mode_line(EditState *s)
@@ -12112,9 +12114,9 @@ static int qe_init(void *opaque)
     }
 #endif
 #ifdef CONFIG_TINY
-    put_status(s, "Tiny QEmacs %s - Press F1 for help", QE_VERSION);
+    put_status(s, "Tiny QEmacs %s \342\224\202 F1 help \342\224\202 C-x C-f open \342\224\202 C-x C-c quit", QE_VERSION);
 #else
-    put_status(s, "QEmacs %s - Press F1 for help", QE_VERSION);
+    put_status(s, "QEmacs %s \342\224\202 F1 help \342\224\202 C-x C-f open \342\224\202 C-x C-c quit", QE_VERSION);
     b = qe_find_buffer_name(qs, "*errors*");
     if (b != NULL) {
         show_popup(s, b, "Errors");
