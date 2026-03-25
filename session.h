@@ -46,4 +46,10 @@ int qe_session_handle(int action, const char *session_name,
 /* List active sessions to stdout. Returns 0 on success. */
 int qe_session_list(void);
 
+/* Get the session socket directory path. Returns 0 on success. */
+int qe_session_get_dir(char *buf, size_t size);
+
+/* OSC escape sequence to trigger detach from within the editor */
+#define QE_SESSION_DETACH_SEQ "\033]qe;detach\007"
+
 #endif /* QE_SESSION_H */

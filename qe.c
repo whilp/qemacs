@@ -27,6 +27,7 @@
 #include "unicode_join.h"
 #include "variables.h"
 #ifndef CONFIG_WIN32
+#include <dirent.h>
 #include "session.h"
 #endif
 
@@ -11105,6 +11106,87 @@ static void qe_show_session_list(void) {
     qe_session_list();
     exit(0);
 }
+
+static void do_session_list(EditState *s) {
+    EditBuffer *b;
+    char dir[256];
+    struct dirent **namelist;
+    int n;
+
+    b = qe_new_buffer(s->qs, "*sessions*",
+                       BC_REUSE | BC_CLEAR | BF_SYSTEM | BF_UTF8 | BF_STYLE1);
+    if (!b) return;
+
+    if (qe_session_get_dir(dir, sizeof(dir)) < 0) {
+        eb_puts(b, "Cannot determine session directory\n");
+    } else {
+        eb_printf(b, "QEmacs sessions in %s:\n\n", dir);
+        n = scandir(dir, &namelist, NULL, alphasort);
+        if (n < 0) {
+            eb_printf(b, "Cannot scan directory: %s\n", strerror(errno));
+        } else {
+            int found = 0;
+            while (n--) {
+                char path[512];
+                struct stat sb;
+                snprintf(path, sizeof(path), "%s/%s", dir, namelist[n]->d_name);
+                if (stat(path, &sb) == 0 && S_ISSOCK(sb.st_mode)) {
+                    char timebuf[64];
+                    strftime(timebuf, sizeof(timebuf), "%F %T",
+                             localtime(&sb.st_mtime));
+                    char status = ' ';
+                    if (sb.st_mode & S_IXUSR)
+                        status = '*';
+                    else if (sb.st_mode & S_IXGRP)
+                        status = '+';
+                    eb_printf(b, "  %c %-20s  %s\n",
+                              status, namelist[n]->d_name, timebuf);
+                    found = 1;
+                }
+                (free)(namelist[n]);
+            }
+            (free)(namelist);
+            if (!found)
+                eb_puts(b, "  (no active sessions)\n");
+        }
+        eb_puts(b, "\nLegend: * = clients attached, + = process terminated\n");
+        eb_puts(b, "Use 'qe -A <name>' to attach, 'qe -S <name>' to create.\n");
+    }
+    b->offset = 0;
+    show_popup(s, b, "QEmacs Sessions");
+}
+
+static void do_session_info(EditState *s) {
+    const char *name = getenv("QE_SESSION");
+    if (name && name[0])
+        put_status(s, "Session: %s (detach with C-\\)", name);
+    else
+        put_status(s, "Not running inside a session");
+}
+
+static void do_session_detach(EditState *s) {
+    const char *name = getenv("QE_SESSION");
+    if (!name || !name[0]) {
+        put_status(s, "Not running inside a session");
+        return;
+    }
+    /* Write the OSC detach escape sequence to stdout.
+     * The session server intercepts this and detaches all clients. */
+    write(STDOUT_FILENO, QE_SESSION_DETACH_SEQ,
+          sizeof(QE_SESSION_DETACH_SEQ) - 1);
+}
+
+static const CmdDef session_commands[] = {
+    CMD0( "session-list", "",
+          "Display a list of active qemacs sessions",
+          do_session_list)
+    CMD0( "session-info", "",
+          "Show the current session name in the status bar",
+          do_session_info)
+    CMD0( "session-detach", "",
+          "Detach from the current session (editor keeps running)",
+          do_session_detach)
+};
 #endif
 
 static CmdLineOptionDef cmd_options[] = {
@@ -11913,6 +11995,9 @@ static int qe_init(void *opaque)
     /* init basic modules */
     qe_register_mode(qs, &text_mode, MODEF_VIEW);
     qe_register_commands(qs, NULL, basic_commands, countof(basic_commands));
+#ifndef CONFIG_WIN32
+    qe_register_commands(qs, NULL, session_commands, countof(session_commands));
+#endif
     qe_register_cmd_line_options(qs, cmd_options);
 
     qe_register_completion(qs, &buffer_completion);

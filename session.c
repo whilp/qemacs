@@ -25,6 +25,7 @@
  * THE SOFTWARE.
  */
 
+#define _GNU_SOURCE
 #include <stddef.h>
 #include <stdint.h>
 #include <errno.h>
@@ -62,6 +63,15 @@
 
 /* Default detach key: Ctrl-\ (same as abduco) */
 static char key_detach = CTRL('\\');
+
+/* OSC escape sequence that qemacs can write to trigger server-side actions.
+ * Format: ESC ] q e ; <command> BEL
+ * Commands: "detach" - detach all clients
+ */
+#define QE_OSC_PREFIX  "\033]qe;"
+#define QE_OSC_SUFFIX  "\007"
+#define QE_OSC_DETACH  "\033]qe;detach\007"
+#define QE_OSC_DETACH_LEN 14
 
 /*------------------------------------------------------------------------
  * Packet protocol
@@ -228,7 +238,7 @@ static int set_socket_non_blocking(int fd) {
     return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
-static int get_socket_dir(char *buf, size_t size) {
+int qe_session_get_dir(char *buf, size_t size) {
     const char *dir;
     struct stat sb;
     uid_t uid = getuid();
@@ -274,7 +284,7 @@ static int set_socket_path(char *path, size_t size, const char *name) {
         snprintf(path, size, "%s", name);
         return 0;
     }
-    if (get_socket_dir(dir, sizeof(dir)) < 0)
+    if (qe_session_get_dir(dir, sizeof(dir)) < 0)
         return -1;
     snprintf(path, size, "%s/%s", dir, name);
     return 0;
@@ -483,8 +493,24 @@ static void server_mainloop(void) {
             server_pkt.type = MSG_CONTENT;
             ssize_t len = read(server.pty, server_pkt.u.msg, sizeof(server_pkt.u.msg));
             if (len > 0) {
-                server_pkt.len = len;
-                pty_data = 1;
+                /* Check for OSC detach escape sequence from qemacs */
+                char *osc = memmem(server_pkt.u.msg, len,
+                                   QE_OSC_DETACH, QE_OSC_DETACH_LEN);
+                if (osc) {
+                    /* Remove the OSC sequence from output */
+                    size_t before = osc - server_pkt.u.msg;
+                    size_t after = len - before - QE_OSC_DETACH_LEN;
+                    if (after > 0)
+                        memmove(osc, osc + QE_OSC_DETACH_LEN, after);
+                    len = before + after;
+                    /* Mark all clients for disconnection */
+                    for (Client *dc = server.clients; dc; dc = dc->next)
+                        dc->state = STATE_DISCONNECTED;
+                }
+                if (len > 0) {
+                    server_pkt.len = len;
+                    pty_data = 1;
+                }
             } else if (len == 0) {
                 server.running = 0;
             } else if (errno != EAGAIN && errno != EINTR && errno != EWOULDBLOCK) {
@@ -774,6 +800,7 @@ static int create_session(const char *name, int argc, char **argv, int optind) {
             case 0:  /* grandchild: exec qemacs */
                 close(server.socket);
                 close(server_pipe[0]);
+                setenv("QE_SESSION", name, 1);
                 if (fcntl(client_pipe[1], F_SETFD, FD_CLOEXEC) == 0 &&
                     fcntl(server_pipe[1], F_SETFD, FD_CLOEXEC) == 0) {
                     /* Re-exec ourselves without session flags */
@@ -922,7 +949,7 @@ int qe_session_list(void) {
     struct dirent **namelist;
     int n;
 
-    if (get_socket_dir(dir, sizeof(dir)) < 0) {
+    if (qe_session_get_dir(dir, sizeof(dir)) < 0) {
         fprintf(stderr, "qe: cannot determine session directory\n");
         return 1;
     }
