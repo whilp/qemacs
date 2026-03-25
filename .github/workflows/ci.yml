@@ -12,6 +12,18 @@ on:
       - '*'
 
 jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Configure
+        run: ./configure
+
+      - name: Run tests
+        run: make test
+
   cosmocc:
     name: Cosmopolitan (cosmocc)
     runs-on: ubuntu-latest
