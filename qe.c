@@ -2421,6 +2421,8 @@ void do_kill(EditState *s, int p1, int p2, int dir, int keep)
         qs->this_cmd_func = (CmdFunc)do_append_next_kill;
     }
     selection_activate(qs->screen);
+    /* push kill ring to system clipboard */
+    dpy_set_clipboard(qs->screen);
 }
 
 void do_kill_region(EditState *s) {
@@ -2540,6 +2542,9 @@ void do_yank(EditState *s) {
 
     /* if the GUI selection is used, it will be handled in the GUI code */
     selection_request(qs->screen);
+
+    /* pull system clipboard into kill ring if changed */
+    dpy_request_clipboard(qs->screen);
 
     s->b->mark = s->offset;
     b = qs->yank_buffers[qs->yank_current];

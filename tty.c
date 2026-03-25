@@ -793,11 +793,65 @@ static int tty_get_clipboard(QEditScreen *s, int ch)
 static int tty_request_clipboard(QEditScreen *s)
 {
     if (tty_clipboard == 1) {
-        qe_trace_bytes(s->qs, "tty-request-clipboard", -1, EB_TRACE_COMMAND);
+        QEmacsState *qs = s->qs;
+        int fd = fileno(s->STDIN);
+        int in_osc = 0, last_ch = 0;
+        fd_set rfds;
+        struct timeval tv;
+
+        qe_trace_bytes(qs, "tty-request-clipboard", -1, EB_TRACE_COMMAND);
         TTY_FPUTS("\033]52;;?\007", s->STDOUT);
         fflush(s->STDOUT);
-        // FIXME: should read tty response with a 100ms timeout
-        return 1;
+
+        /* Read OSC 52 response with timeout.
+         * Accumulate into qs->input_buf so tty_get_clipboard can parse it.
+         * Response format: ESC ] 52 ; <sel> ; <base64> BEL  or  ESC ] 52 ; <sel> ; <base64> ESC \
+         */
+        qs->input_len = 0;
+        for (;;) {
+            u8 buf[1];
+
+            FD_ZERO(&rfds);
+            FD_SET(fd, &rfds);
+            tv.tv_sec = 0;
+            tv.tv_usec = 200000;  /* 200ms timeout */
+            if (select(fd + 1, &rfds, NULL, NULL, &tv) <= 0)
+                break;
+            if (read(fd, buf, 1) != 1)
+                break;
+
+            int ch = buf[0];
+            /* grow input buffer if needed */
+            if (qs->input_len >= qs->input_size) {
+                qs->input_size += qs->input_size / 2 + 64;
+                if (qs->input_buf == qs->input_buf_def) {
+                    qs->input_buf = qe_malloc_bytes(qs->input_size);
+                    memcpy(qs->input_buf, qs->input_buf_def, qs->input_len);
+                } else {
+                    qe_realloc_bytes(&qs->input_buf, qs->input_size);
+                }
+            }
+            qs->input_buf[qs->input_len++] = ch;
+
+            if (!in_osc) {
+                /* waiting for ESC ] to start the OSC sequence */
+                if (ch == ']' && last_ch == '\033') {
+                    in_osc = 1;
+                    /* reset buffer to start of OSC: ESC ] */
+                    qs->input_len = 2;
+                    qs->input_buf[0] = '\033';
+                    qs->input_buf[1] = ']';
+                }
+            } else {
+                /* inside OSC, look for terminator: BEL or ESC \ */
+                if (ch == 7 || ch == 0x9C || (ch == '\\' && last_ch == '\033')) {
+                    tty_get_clipboard(s, ch);
+                    return 1;
+                }
+            }
+            last_ch = ch;
+        }
+        return 0;  /* timeout or no response */
     }
 #ifdef CONFIG_DARWIN
     if (tty_clipboard == 2) {
@@ -2210,6 +2264,8 @@ static QEDisplay tty_dpy = {
     tty_dpy_set_clip,
     NULL, /* dpy_selection_activate */
     NULL, /* dpy_selection_request */
+    tty_set_clipboard,
+    tty_request_clipboard,
     tty_dpy_invalidate,
     tty_dpy_cursor_at,
     tty_dpy_bmp_alloc,

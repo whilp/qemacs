@@ -122,6 +122,8 @@ static QEDisplay ppm_dpy = {
     NULL, /* dpy_set_clip */
     NULL, /* dpy_selection_activate */
     NULL, /* dpy_selection_request */
+    NULL, /* dpy_set_clipboard */
+    NULL, /* dpy_request_clipboard */
     NULL, /* dpy_invalidate */
     NULL, /* dpy_cursor_at */
     NULL, /* dpy_bmp_alloc */
