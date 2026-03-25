@@ -48,7 +48,8 @@ configure:
 		--disable-html \
 		--disable-plugins \
 		--disable-png \
-		--disable-ffmpeg
+		--disable-ffmpeg; \
+	sed -i 's/^STRIP=.*/STRIP=true/' config.mak
 
 build:
 	@cosmocc="$(COSMOCC)"; \
