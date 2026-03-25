@@ -8,10 +8,11 @@
 #   make -f Makefile.cosmo COSMOCC=/path/to/cosmocc/bin
 #
 # Prerequisites:
-#   - cosmocc toolchain (https://cosmo.zip/pub/cosmocc/cosmocc.zip)
+#   - cosmocc toolchain (https://github.com/whilp/cosmopolitan/releases)
 #   - cosmocc, cosmoar must be in PATH or set COSMOCC to the bin directory
 
-COSMOCC_URL := https://cosmo.zip/pub/cosmocc/cosmocc.zip
+COSMOCC_VERSION := cosmocc-2026.03.15-bbe7b3cf4
+COSMOCC_URL := https://github.com/whilp/cosmopolitan/releases/download/$(COSMOCC_VERSION)/cosmocc.zip
 COSMOCC_DIR := /opt/cosmocc
 
 # Path to cosmocc bin directory (override with COSMOCC=/path/to/bin)
