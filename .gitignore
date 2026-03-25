@@ -23,6 +23,8 @@ bin
 html2png
 qe
 tqe
+tests/test_cutils
+tests/test_session
 tqe1
 xqe
 # temp-directories
