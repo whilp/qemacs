@@ -262,6 +262,8 @@ void fill_rectangle(QEditScreen *s,
 void xor_rectangle(QEditScreen *s,
                    int x1, int y1, int w, int h, QEColor color);
 void set_clip_rectangle(QEditScreen *s, CSSRect *r);
+void draw_char(QEditScreen *s, int x, int y, char32_t ch,
+               QEColor fg_color, QEColor bg_color);
 void push_clip_rectangle(QEditScreen *s, CSSRect *r0, CSSRect *r);
 
 void free_font_cache(QEditScreen *s);

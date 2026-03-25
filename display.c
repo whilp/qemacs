@@ -239,6 +239,30 @@ void push_clip_rectangle(QEditScreen *s, CSSRect *r0, CSSRect *r)
     s->dpy.dpy_set_clip(s, x1, y1, x2 - x1, y2 - y1);
 }
 
+/* Draw a single character at position (x, y) with given colors.
+ * In TTY mode, coordinates are character cells.
+ * In graphics mode, coordinates are pixels. */
+void draw_char(QEditScreen *s, int x, int y, char32_t ch,
+               QEColor fg_color, QEColor bg_color)
+{
+    char32_t buf[1];
+    QEFont *font;
+
+    if (x < s->clip_x1 || x >= s->clip_x2 ||
+        y < s->clip_y1 || y >= s->clip_y2)
+        return;
+
+    buf[0] = ch;
+    /* Fill background for this cell */
+    fill_rectangle(s, x, y, 1, 1, bg_color);
+    /* Draw the character */
+    font = open_font(s, QE_FONT_FAMILY_FIXED, 0);
+    if (font) {
+        draw_text(s, font, x, y + font->ascent, buf, 1, fg_color);
+        close_font(s, &font);
+    }
+}
+
 int qe_register_display(QEmacsState *qs, QEDisplay *dpy)
 {
     QEDisplay **pp;

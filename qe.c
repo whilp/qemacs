@@ -3440,9 +3440,40 @@ void display_mode_line(EditState *s)
         out = buf_init(&outbuf, buf, sizeof(buf));
         s->mode->get_mode_line(s, out);
         if (!strequal(buf, s->modeline_shadow)) {
-            print_at_byte(s->screen, s->xleft, y, s->width,
-                          s->qs->mode_line_height,
-                          buf, QE_STYLE_MODE_LINE);
+            if (s->screen->media & CSS_MEDIA_TTY) {
+                /* Modern TTY mode line: thin horizontal line with text */
+                QEColor fg = qe_styles[QE_STYLE_MODE_LINE].fg_color;
+                QEColor bg = qe_styles[QE_STYLE_MODE_LINE].bg_color;
+                char32_t ubuf[MAX_SCREEN_WIDTH];
+                int len, i, text_start;
+                CSSRect rect;
+
+                len = utf8_to_char32(ubuf, countof(ubuf), buf);
+
+                rect.x1 = s->xleft;
+                rect.y1 = y;
+                rect.x2 = s->xleft + s->width;
+                rect.y2 = y + s->qs->mode_line_height;
+                set_clip_rectangle(s->screen, &rect);
+
+                /* Draw a horizontal line across the full width first */
+                for (i = 0; i < s->width; i++) {
+                    draw_char(s->screen, s->xleft + i, y, 0x2500, fg, bg);
+                }
+                /* Overlay the mode line text, leaving a line char at the start */
+                text_start = s->xleft + 1;
+                draw_char(s->screen, s->xleft, y, 0x2524, fg, bg);
+                for (i = 0; i < len && text_start + i < s->xleft + s->width - 1; i++) {
+                    draw_char(s->screen, text_start + i, y, ubuf[i], fg, bg);
+                }
+                if (text_start + i < s->xleft + s->width) {
+                    draw_char(s->screen, text_start + i, y, 0x251C, fg, bg);
+                }
+            } else {
+                print_at_byte(s->screen, s->xleft, y, s->width,
+                              s->qs->mode_line_height,
+                              buf, QE_STYLE_MODE_LINE);
+            }
             pstrcpy(s->modeline_shadow, sizeof(s->modeline_shadow), buf);
         }
     }
@@ -3455,59 +3486,110 @@ void display_window_borders(EditState *e)
     if (e->borders_invalid) {
         if (e->flags & (WF_POPUP | WF_RSEPARATOR)) {
             CSSRect rect;
-            QEColor color;
             int x = e->x1;
             int y = e->y1;
             int width = e->x2 - e->x1;
             int height = e->y2 - e->y1;
+            int is_tty = (qs->screen->media & CSS_MEDIA_TTY);
 
             rect.x1 = 0;
             rect.y1 = 0;
             rect.x2 = qs->width;
             rect.y2 = qs->height;
-            /* XXX: should use popup size? */
             set_clip_rectangle(qs->screen, &rect);
-            color = qe_styles[QE_STYLE_WINDOW_BORDER].bg_color;
+
             if (e->flags & WF_POPUP) {
-                /* XXX: should use client area instead of recomputing it */
-                int top_h = e->caption ? qs->mode_line_height : qs->border_width;
-                int bottom_h = qs->border_width;
-                int left_w = qs->border_width;
-                int right_w = qs->border_width;
+                if (is_tty) {
+                    /* Modern TTY popup: thin box-drawing frame */
+                    QEColor fg = qe_styles[QE_STYLE_WINDOW_BORDER].fg_color;
+                    QEColor bg = qe_styles[QE_STYLE_WINDOW_BORDER].bg_color;
+                    int i;
 
-                fill_rectangle(qs->screen, x, y, width, top_h, color);
-                fill_rectangle(qs->screen, x, y + bottom_h,
-                               left_w, height - top_h - bottom_h, color);
-                fill_rectangle(qs->screen, x + width - right_w, y + top_h,
-                               right_w, height - top_h - bottom_h, color);
-                fill_rectangle(qs->screen, x, y + height - bottom_h,
-                               width, bottom_h, color);
-                /* display caption */
-                if (e->caption) {
-                    QEStyleDef styledef;
-                    QECharMetrics metrics;
-                    QEFont *font;
-                    char32_t buf[256];
-                    int len;
+                    /* Top border: ┌───┐ */
+                    draw_char(qs->screen, x, y, 0x250C, fg, bg);
+                    for (i = x + 1; i < x + width - 1; i++)
+                        draw_char(qs->screen, i, y, 0x2500, fg, bg);
+                    draw_char(qs->screen, x + width - 1, y, 0x2510, fg, bg);
 
-                    /* XXX: Should convert from UTF-8? */
-                    for (len = 0; len < 256 && e->caption[len]; len++) {
-                        buf[len] = e->caption[len];
+                    /* Side borders: │ ... │ */
+                    for (i = y + 1; i < y + height - 1; i++) {
+                        draw_char(qs->screen, x, i, 0x2502, fg, bg);
+                        draw_char(qs->screen, x + width - 1, i, 0x2502, fg, bg);
                     }
-                    get_style(e, &styledef, QE_STYLE_WINDOW_BORDER);
-                    font = select_font(qs->screen,
-                                       styledef.font_style, styledef.font_size);
-                    text_metrics(qs->screen, font, &metrics, buf, len);
-                    draw_text(qs->screen, font,
-                              x + width / 2 - metrics.width / 2, y + metrics.font_ascent,
-                              buf, len, styledef.fg_color);
-                    release_font(qs->screen, font);
+
+                    /* Bottom border: └───┘ */
+                    draw_char(qs->screen, x, y + height - 1, 0x2514, fg, bg);
+                    for (i = x + 1; i < x + width - 1; i++)
+                        draw_char(qs->screen, i, y + height - 1, 0x2500, fg, bg);
+                    draw_char(qs->screen, x + width - 1, y + height - 1, 0x2518, fg, bg);
+
+                    /* Display caption centered in top border */
+                    if (e->caption) {
+                        int len, caption_x;
+                        for (len = 0; e->caption[len]; len++) {}
+                        caption_x = x + (width - len) / 2;
+                        if (caption_x < x + 1) caption_x = x + 1;
+                        /* Draw caption text over top border */
+                        draw_char(qs->screen, caption_x - 1, y, 0x2524, fg, bg);
+                        for (i = 0; i < len && caption_x + i < x + width - 2; i++) {
+                            draw_char(qs->screen, caption_x + i, y,
+                                      (char32_t)e->caption[i], fg, bg);
+                        }
+                        draw_char(qs->screen, caption_x + i, y, 0x251C, fg, bg);
+                    }
+                } else {
+                    /* Graphics mode: keep existing filled rectangle borders */
+                    QEColor color = qe_styles[QE_STYLE_WINDOW_BORDER].bg_color;
+                    int top_h = e->caption ? qs->mode_line_height : qs->border_width;
+                    int bottom_h = qs->border_width;
+                    int left_w = qs->border_width;
+                    int right_w = qs->border_width;
+
+                    fill_rectangle(qs->screen, x, y, width, top_h, color);
+                    fill_rectangle(qs->screen, x, y + bottom_h,
+                                   left_w, height - top_h - bottom_h, color);
+                    fill_rectangle(qs->screen, x + width - right_w, y + top_h,
+                                   right_w, height - top_h - bottom_h, color);
+                    fill_rectangle(qs->screen, x, y + height - bottom_h,
+                                   width, bottom_h, color);
+                    /* display caption */
+                    if (e->caption) {
+                        QEStyleDef styledef;
+                        QECharMetrics metrics;
+                        QEFont *font;
+                        char32_t buf[256];
+                        int len;
+
+                        for (len = 0; len < 256 && e->caption[len]; len++) {
+                            buf[len] = e->caption[len];
+                        }
+                        get_style(e, &styledef, QE_STYLE_WINDOW_BORDER);
+                        font = select_font(qs->screen,
+                                           styledef.font_style, styledef.font_size);
+                        text_metrics(qs->screen, font, &metrics, buf, len);
+                        draw_text(qs->screen, font,
+                                  x + width / 2 - metrics.width / 2, y + metrics.font_ascent,
+                                  buf, len, styledef.fg_color);
+                        release_font(qs->screen, font);
+                    }
                 }
             }
             if (e->flags & WF_RSEPARATOR) {
-                fill_rectangle(qs->screen,
-                               x + width - qs->separator_width, y,
-                               qs->separator_width, height, color);
+                if (is_tty) {
+                    /* Modern TTY separator: thin vertical line */
+                    QEColor fg = qe_styles[QE_STYLE_WINDOW_BORDER].fg_color;
+                    QEColor bg = qe_styles[QE_STYLE_DEFAULT].bg_color;
+                    int i;
+                    int sep_x = x + width - qs->separator_width;
+                    for (i = y; i < y + height; i++) {
+                        draw_char(qs->screen, sep_x, i, 0x2502, fg, bg);
+                    }
+                } else {
+                    QEColor color = qe_styles[QE_STYLE_WINDOW_BORDER].bg_color;
+                    fill_rectangle(qs->screen,
+                                   x + width - qs->separator_width, y,
+                                   qs->separator_width, height, color);
+                }
             }
         }
         e->borders_invalid = 0;
