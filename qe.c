@@ -77,10 +77,6 @@ int is_player = 1;    /* Start in dired mode when invoked with no arguments */
 #ifndef CONFIG_TINY
 static int free_everything;
 #endif
-#ifdef CONFIG_SESSION_DETACH
-static int session_action;
-static const char *session_name;
-#endif
 
 /* mode handling */
 
@@ -10939,6 +10935,14 @@ static void show_usage(void)
             p++;
         }
     }
+#ifdef CONFIG_SESSION_DETACH
+    printf("\n"
+           "Session options (pre-parsed before editor init):\n"
+           "  -S --session-create NAME  create a new session and attach\n"
+           "  -A --session-attach NAME  attach to an existing session\n"
+           "  -R --session-resume NAME  attach or create if not found\n"
+           "  --session-list            list active sessions and exit\n");
+#endif
     printf("\n"
            "Report bugs to bug@qemacs.org.  First, please see the Bugs\n"
            "section of the QEmacs manual or the file BUGS.\n");
@@ -11087,26 +11091,6 @@ static void qe_set_tty_charset(QEmacsState *qs, const char *name)
 }
 
 #ifdef CONFIG_SESSION_DETACH
-static void qe_set_session_create(QEmacsState *qs, const char *name) {
-    session_action = SESSION_ACTION_CREATE;
-    session_name = name;
-}
-
-static void qe_set_session_attach(QEmacsState *qs, const char *name) {
-    session_action = SESSION_ACTION_ATTACH;
-    session_name = name;
-}
-
-static void qe_set_session_resume(QEmacsState *qs, const char *name) {
-    session_action = SESSION_ACTION_CREATE_ATTACH;
-    session_name = name;
-}
-
-static void qe_show_session_list(void) {
-    qe_session_list();
-    exit(0);
-}
-
 static void do_session_list(EditState *s) {
     EditBuffer *b;
     char dir[256];
@@ -11221,16 +11205,6 @@ static CmdLineOptionDef cmd_options[] = {
                  "set the tty clipboard support method (0,1,2)"),
     CMD_LINE_INT("m", "mouse", "VAL", &tty_mouse,
                  "set the mouse emulation mode (0,1,2)"),
-#ifdef CONFIG_SESSION_DETACH
-    CMD_LINE_FARG("S", "session-create", "NAME", qe_set_session_create,
-                  "create a new detachable session and attach to it"),
-    CMD_LINE_FARG("A", "session-attach", "NAME", qe_set_session_attach,
-                  "attach to an existing session"),
-    CMD_LINE_FARG("R", "session-resume", "NAME", qe_set_session_resume,
-                  "attach to session or create it if it does not exist"),
-    CMD_LINE_FVOID("", "session-list", qe_show_session_list,
-                   "list active sessions and exit"),
-#endif
     CMD_LINE_LINK()
 };
 
@@ -12162,7 +12136,7 @@ int main(int argc, char **argv)
      * so it must happen before any terminal or display setup.
      */
     {
-        int i, sess_optind = 0;
+        int i;
         int sess_action = SESSION_ACTION_NONE;
         const char *sess_name = NULL;
 
@@ -12203,7 +12177,7 @@ int main(int argc, char **argv)
             }
             child_argv[ci] = NULL;
 
-            status = qe_session_handle(sess_action, sess_name, ci, child_argv, 0);
+            status = qe_session_handle(sess_action, sess_name, ci, child_argv);
             return (status < 0) ? 1 : status;
         }
     }

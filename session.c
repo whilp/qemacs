@@ -64,12 +64,11 @@
 /* Default detach key: Ctrl-\ (same as abduco) */
 static char key_detach = CTRL('\\');
 
-/* OSC escape sequence that qemacs can write to trigger server-side actions.
- * Format: ESC ] q e ; <command> BEL
- * Commands: "detach" - detach all clients
+/* OSC escape sequence that qemacs can write to trigger server-side detach.
+ * Format: ESC ] q e ; detach BEL
+ * Note: if the sequence is split across two PTY reads, detection will fail.
+ * This is unlikely in practice since the sequence is only 12 bytes.
  */
-#define QE_OSC_PREFIX  "\033]qe;"
-#define QE_OSC_SUFFIX  "\007"
 #define QE_OSC_DETACH  "\033]qe;detach\007"
 #define QE_OSC_DETACH_LEN 12
 
@@ -136,7 +135,6 @@ struct Client {
 typedef struct {
     Client *clients;
     int socket;
-    Packet pty_output;
     int pty;
     int exit_status;
     struct termios term;
@@ -313,6 +311,14 @@ static int server_create_socket(const char *name) {
     socklen_t socklen = offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path) + 1;
     mode_t mask = umask(S_IXUSR | S_IRWXG | S_IRWXO);
     int r = bind(fd, (struct sockaddr *)&addr, socklen);
+    if (r == -1 && errno == EADDRINUSE) {
+        /* Remove stale socket from a crashed server and retry */
+        struct stat sb;
+        if (stat(addr.sun_path, &sb) == 0 && S_ISSOCK(sb.st_mode)) {
+            unlink(addr.sun_path);
+            r = bind(fd, (struct sockaddr *)&addr, socklen);
+        }
+    }
     umask(mask);
 
     if (r == -1) {
@@ -370,7 +376,7 @@ static Client *client_new(int fd) {
 
 static void client_free(Client *c) {
     if (c) {
-        if (c->socket > 0)
+        if (c->socket >= 0)
             close(c->socket);
         free(c);
     }
@@ -755,7 +761,7 @@ static int client_mainloop(void) {
  * Session creation (double-fork + forkpty)
  *------------------------------------------------------------------------*/
 
-static int create_session(const char *name, int argc, char **argv, int optind) {
+static int create_session(const char *name, int argc, char **argv) {
     int client_pipe[2];
     pid_t pid;
     char errormsg[256];
@@ -804,7 +810,7 @@ static int create_session(const char *name, int argc, char **argv, int optind) {
                 if (fcntl(client_pipe[1], F_SETFD, FD_CLOEXEC) == 0 &&
                     fcntl(server_pipe[1], F_SETFD, FD_CLOEXEC) == 0) {
                     /* Re-exec ourselves without session flags */
-                    execvp(argv[0], &argv[optind > 0 ? optind : 0]);
+                    execvp(argv[0], argv);
                 }
                 snprintf(errormsg, sizeof(errormsg), "execvp: %s: %s\n",
                          argv[0], strerror(errno));
@@ -992,7 +998,7 @@ int qe_session_list(void) {
  *------------------------------------------------------------------------*/
 
 int qe_session_handle(int action, const char *session_name,
-                      int argc, char **argv, int optind) {
+                      int argc, char **argv) {
     if (action == SESSION_ACTION_NONE)
         return -1;  /* no session action, proceed normally */
 
@@ -1016,7 +1022,7 @@ int qe_session_handle(int action, const char *session_name,
 
     switch (action) {
     case SESSION_ACTION_CREATE:
-        if (create_session(session_name, argc, argv, optind) < 0) {
+        if (create_session(session_name, argc, argv) < 0) {
             fprintf(stderr, "qe: failed to create session '%s': %s\n",
                     session_name, strerror(errno));
             return 1;
@@ -1038,7 +1044,7 @@ int qe_session_handle(int action, const char *session_name,
     case SESSION_ACTION_CREATE_ATTACH:
         /* Try attach first, create if not found */
         if (attach_session(session_name, 1) < 0) {
-            if (create_session(session_name, argc, argv, optind) < 0) {
+            if (create_session(session_name, argc, argv) < 0) {
                 fprintf(stderr, "qe: failed to create session '%s': %s\n",
                         session_name, strerror(errno));
                 return 1;

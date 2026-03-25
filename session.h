@@ -36,12 +36,11 @@
 #define SESSION_ACTION_ATTACH  'a'  /* -A name: attach to existing session */
 #define SESSION_ACTION_CREATE_ATTACH 'C'  /* -R name: create or attach */
 #define SESSION_ACTION_LIST    'l'  /* --session-list: list sessions */
-#define SESSION_ACTION_DETACH_KEY 'd'
 
 /* Returns 0 if session handling was performed (caller should exit),
  * -1 if no session action was requested (caller should proceed normally) */
 int qe_session_handle(int action, const char *session_name,
-                      int argc, char **argv, int optind);
+                      int argc, char **argv);
 
 /* List active sessions to stdout. Returns 0 on success. */
 int qe_session_list(void);
