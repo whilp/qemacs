@@ -71,7 +71,7 @@ static char key_detach = CTRL('\\');
 #define QE_OSC_PREFIX  "\033]qe;"
 #define QE_OSC_SUFFIX  "\007"
 #define QE_OSC_DETACH  "\033]qe;detach\007"
-#define QE_OSC_DETACH_LEN 14
+#define QE_OSC_DETACH_LEN 12
 
 /*------------------------------------------------------------------------
  * Packet protocol
