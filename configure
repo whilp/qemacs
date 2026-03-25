@@ -549,8 +549,12 @@ if test "$session_detach" = "yes" ; then
     if test "$win32" = "yes" -o "$atari" = "yes" -o "$cygwin" = "yes" ; then
         session_detach="no"
     else
-        cat > $TMPC <<EOF
-#include <pty.h>
+        # Try Linux/Cygwin header first, then macOS/BSD
+        session_detach="no"
+        session_detach_libs=""
+        for pty_header in pty.h util.h libutil.h; do
+            cat > $TMPC <<EOF
+#include <$pty_header>
 #include <sys/socket.h>
 #include <sys/un.h>
 int main(void) {
@@ -559,11 +563,17 @@ int main(void) {
     return p;
 }
 EOF
-        if $cc -o $TMPO $TMPC -lutil 2> /dev/null ; then
-            session_detach="yes"
-        else
-            session_detach="no"
-        fi
+            if $cc -o $TMPO $TMPC -lutil 2> /dev/null ; then
+                session_detach="yes"
+                session_detach_libs="-lutil"
+                break
+            fi
+            # Some systems (macOS) don't need -lutil
+            if $cc -o $TMPO $TMPC 2> /dev/null ; then
+                session_detach="yes"
+                break
+            fi
+        done
     fi
 fi
 
@@ -741,6 +751,7 @@ fi
 if test "$session_detach" = "yes" ; then
   echo "#define CONFIG_SESSION_DETACH 1" >> $TMPH
   echo "CONFIG_SESSION_DETACH=yes" >> $TMPMAK
+  echo "SESSION_DETACH_LIBS=$session_detach_libs" >> $TMPMAK
 fi
 
 if test "$png" = "yes" ; then

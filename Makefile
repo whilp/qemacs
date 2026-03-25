@@ -179,7 +179,7 @@ else
   OBJS+= unix.o tty.o
   ifdef CONFIG_SESSION_DETACH
     OBJS+= session.o
-    LIBS+= -lutil
+    LIBS+= $(SESSION_DETACH_LIBS)
   endif
   LIBS+= $(EXTRALIBS)
 endif
