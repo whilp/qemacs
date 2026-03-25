@@ -57,7 +57,7 @@ build:
 	if [ -z "$$cosmocc" ] && [ -x "$(COSMOCC_DIR)/bin/cosmocc" ]; then \
 		cosmocc="$(COSMOCC_DIR)/bin"; \
 	fi; \
-	PATH="$$cosmocc:$$PATH" $(MAKE) -j$$(nproc 2>/dev/null || echo 4)
+	PATH="$$cosmocc:$$PATH" $(MAKE) -f Makefile -j$$(nproc 2>/dev/null || echo 4)
 
 # CI target: install cosmocc, build, and verify binaries
 ci: cosmocc configure build
@@ -79,4 +79,4 @@ release: cosmocc configure build
 		release/qe release/tqe release/SHA256SUMS
 
 clean:
-	$(MAKE) clean
+	$(MAKE) -f Makefile clean
