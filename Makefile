@@ -176,8 +176,8 @@ ifdef CONFIG_WIN32
 #  OBJS+= printf.o
   LIBS+= -lmsvcrt -lgdi32 -lwsock32
 else
-  OBJS+= unix.o tty.o
-  LIBS+= $(EXTRALIBS)
+  OBJS+= unix.o tty.o session.o
+  LIBS+= -lutil $(EXTRALIBS)
 endif
 
 ifndef TARGET_TINY
@@ -276,7 +276,7 @@ endif	# TARGET_TINY
 SRCS:= $(OBJS:.o=.c)
 
 DEPENDS:= qe.h config.h config.mak charset.h color.h cutils.h display.h \
-	qestyles.h unicode_join.h util.h variables.h \
+	qestyles.h unicode_join.h util.h variables.h session.h \
 	wcwidth.h lang/clang.h
 
 DEPENDS:= $(addprefix $(DEPTH)/, $(DEPENDS))

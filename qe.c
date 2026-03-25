@@ -26,6 +26,9 @@
 #include "qe.h"
 #include "unicode_join.h"
 #include "variables.h"
+#ifndef CONFIG_WIN32
+#include "session.h"
+#endif
 
 #ifdef CONFIG_DLL
 #include <dlfcn.h>
@@ -72,6 +75,10 @@ int use_html = 1;
 int is_player = 1;    /* Start in dired mode when invoked with no arguments */
 #ifndef CONFIG_TINY
 static int free_everything;
+#endif
+#ifndef CONFIG_WIN32
+static int session_action;
+static const char *session_name;
 #endif
 
 /* mode handling */
@@ -11078,6 +11085,28 @@ static void qe_set_tty_charset(QEmacsState *qs, const char *name)
     qs->tty_charset = qe_strdup(name);
 }
 
+#ifndef CONFIG_WIN32
+static void qe_set_session_create(QEmacsState *qs, const char *name) {
+    session_action = SESSION_ACTION_CREATE;
+    session_name = name;
+}
+
+static void qe_set_session_attach(QEmacsState *qs, const char *name) {
+    session_action = SESSION_ACTION_ATTACH;
+    session_name = name;
+}
+
+static void qe_set_session_resume(QEmacsState *qs, const char *name) {
+    session_action = SESSION_ACTION_CREATE_ATTACH;
+    session_name = name;
+}
+
+static void qe_show_session_list(void) {
+    qe_session_list();
+    exit(0);
+}
+#endif
+
 static CmdLineOptionDef cmd_options[] = {
     CMD_LINE_FVOID("h", "help", show_usage,
                    "display this help message and exit"),
@@ -11110,6 +11139,16 @@ static CmdLineOptionDef cmd_options[] = {
                  "set the tty clipboard support method (0,1,2)"),
     CMD_LINE_INT("m", "mouse", "VAL", &tty_mouse,
                  "set the mouse emulation mode (0,1,2)"),
+#ifndef CONFIG_WIN32
+    CMD_LINE_FARG("S", "session-create", "NAME", qe_set_session_create,
+                  "create a new detachable session and attach to it"),
+    CMD_LINE_FARG("A", "session-attach", "NAME", qe_set_session_attach,
+                  "attach to an existing session"),
+    CMD_LINE_FARG("R", "session-resume", "NAME", qe_set_session_resume,
+                  "attach to session or create it if it does not exist"),
+    CMD_LINE_FVOID("", "session-list", qe_show_session_list,
+                   "list active sessions and exit"),
+#endif
     CMD_LINE_LINK()
 };
 
@@ -12031,6 +12070,59 @@ int main(int argc, char **argv)
     QEmacsState *qs = &qe_state;
     QEArgs args;
     int status;
+
+#ifndef CONFIG_WIN32
+    /* Pre-parse session arguments before editor initialization.
+     * Session handling forks a daemon and re-execs qemacs inside a PTY,
+     * so it must happen before any terminal or display setup.
+     */
+    {
+        int i, sess_optind = 0;
+        int sess_action = SESSION_ACTION_NONE;
+        const char *sess_name = NULL;
+
+        for (i = 1; i < argc; i++) {
+            if ((strcmp(argv[i], "-S") == 0 || strcmp(argv[i], "--session-create") == 0) && i + 1 < argc) {
+                sess_action = SESSION_ACTION_CREATE;
+                sess_name = argv[++i];
+            } else if ((strcmp(argv[i], "-A") == 0 || strcmp(argv[i], "--session-attach") == 0) && i + 1 < argc) {
+                sess_action = SESSION_ACTION_ATTACH;
+                sess_name = argv[++i];
+            } else if ((strcmp(argv[i], "-R") == 0 || strcmp(argv[i], "--session-resume") == 0) && i + 1 < argc) {
+                sess_action = SESSION_ACTION_CREATE_ATTACH;
+                sess_name = argv[++i];
+            } else if (strcmp(argv[i], "--session-list") == 0) {
+                return qe_session_list();
+            }
+        }
+
+        if (sess_action != SESSION_ACTION_NONE) {
+            /* Find the index of the first non-session argument to pass
+             * to the re-exec'd qemacs (i.e., strip -S/-A/-R and name).
+             * We rebuild argv for the child: argv[0] + remaining args.
+             */
+            static char *child_argv[256];
+            int ci = 0;
+            child_argv[ci++] = argv[0];
+            for (i = 1; i < argc && ci < 255; i++) {
+                if ((strcmp(argv[i], "-S") == 0 || strcmp(argv[i], "--session-create") == 0 ||
+                     strcmp(argv[i], "-A") == 0 || strcmp(argv[i], "--session-attach") == 0 ||
+                     strcmp(argv[i], "-R") == 0 || strcmp(argv[i], "--session-resume") == 0) &&
+                    i + 1 < argc) {
+                    i++;  /* skip the name argument too */
+                    continue;
+                }
+                if (strcmp(argv[i], "--session-list") == 0)
+                    continue;
+                child_argv[ci++] = argv[i];
+            }
+            child_argv[ci] = NULL;
+
+            status = qe_session_handle(sess_action, sess_name, ci, child_argv, 0);
+            return (status < 0) ? 1 : status;
+        }
+    }
+#endif
 
     args.qs = qs;
     args.argc = argc;
