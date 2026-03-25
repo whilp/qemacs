@@ -1,0 +1,43 @@
+# QEmacs Cosmopolitan (cosmocc) build
+#
+# Produces Actually Portable Executables (APE) that run on
+# Linux, macOS, Windows, FreeBSD, OpenBSD, and NetBSD.
+#
+# Usage:
+#   make -f Makefile.cosmo
+#   make -f Makefile.cosmo COSMOCC=/path/to/cosmocc/bin
+#
+# Prerequisites:
+#   - cosmocc toolchain (https://cosmo.zip/pub/cosmocc/cosmocc.zip)
+#   - cosmocc, cosmoar must be in PATH or set COSMOCC to the bin directory
+
+# Path to cosmocc bin directory (override with COSMOCC=/path/to/bin)
+COSMOCC ?= $(shell dirname $$(which cosmocc 2>/dev/null) 2>/dev/null)
+
+ifeq ($(COSMOCC),)
+$(error cosmocc not found. Set COSMOCC=/path/to/cosmocc/bin or add cosmocc to PATH)
+endif
+
+export PATH := $(COSMOCC):$(PATH)
+
+HOST_CC := cc
+
+.PHONY: all clean configure build
+
+all: configure build
+
+configure:
+	./configure \
+		--cc=cosmocc \
+		--host-cc=$(HOST_CC) \
+		--disable-x11 \
+		--disable-html \
+		--disable-plugins \
+		--disable-png \
+		--disable-ffmpeg
+
+build:
+	$(MAKE) -j$$(nproc 2>/dev/null || echo 4)
+
+clean:
+	$(MAKE) clean
