@@ -1764,6 +1764,11 @@ static void tty_dpy_flush(QEditScreen *s)
     TTYState *ts = s->priv_data;
     TTYChar *ptr, *ptr1, *ptr2, *ptr3, *ptr4, cc, blankcc;
     int y, shadow, ch, bgcolor, fgcolor, shifted, gotopos, attr;
+    unsigned int default_bgcolor;
+
+    /* Precompute the mapped color index for the default background */
+    default_bgcolor = qe_map_color(qe_styles[QE_STYLE_DEFAULT].bg_color,
+                                   ts->tty_colors, ts->tty_bg_colors_count, NULL);
 
     /* CG: Should optimize output by computing it in a temporary buffer
      * and flushing it in one call to fwrite()
@@ -1875,7 +1880,7 @@ static void tty_dpy_flush(QEditScreen *s)
                 if (bgcolor != (int)TTY_CHAR_GET_BG(cc)) {
                     int lastbg = bgcolor;
                     bgcolor = TTY_CHAR_GET_BG(cc);
-                    if (bgcolor == 0) {
+                    if (bgcolor == (int)default_bgcolor) {
                         /* Use terminal default background instead of explicit black */
                         TTY_FPUTS("\033[49m", s->STDOUT);
                     } else
