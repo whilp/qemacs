@@ -24,19 +24,18 @@
 DEPTH=.
 OSNAME:=$(shell uname -s)
 
-# Build defaults — override on command line (e.g., make CC=cosmocc)
+# Requires cosmocc — install via: make install-cosmocc
+# Then add /opt/cosmocc/bin to PATH, or set COSMOCC_DIR
+CC = cosmocc
+HOST_CC ?= cc
+AR = cosmoar
+STRIP ?= true
+INSTALL ?= install
+
 prefix ?= /usr/local
 datadir ?= $(prefix)/share
 mandir ?= $(prefix)/man
-CC ?= cc
-HOST_CC ?= $(CC)
-AR ?= ar
-SIZE ?= size
-STRIP ?= strip -s -R .comment -R .note
-INSTALL ?= install
-MAKE ?= make
 CFLAGS ?= -O2
-EXTRA_CFLAGS ?=
 LDFLAGS ?=
 LIBS ?=
 EXE ?=
@@ -46,23 +45,21 @@ TARGET_ARCH ?= $(shell uname -m)
 SRC_PATH ?= $(CURDIR)
 VERSION ?= $(shell cat $(DEPTH)/VERSION)
 
-# Feature flags — all enabled by default
+# Feature flags
 CONFIG_HAS_TYPEOF ?= yes
 CONFIG_PTSNAME ?= yes
 CONFIG_NETWORK ?= yes
 CONFIG_SESSION_DETACH ?= yes
-SESSION_DETACH_LIBS ?= -lutil
 CONFIG_ALL_KMAPS ?= yes
 CONFIG_MMAP ?= yes
 CONFIG_ALL_MODES ?= yes
 CONFIG_UNICODE_JOIN ?= yes
 
-# Cosmopolitan toolchain (for cosmo/ci/release targets)
+# Cosmopolitan toolchain auto-install
 COSMOCC_VERSION := cosmocc-2026.03.15-bbe7b3cf4
 COSMOCC_URL := https://github.com/whilp/cosmopolitan/releases/download/$(COSMOCC_VERSION)/cosmocc.zip
-COSMOCC_DIR := /opt/cosmocc
+COSMOCC_DIR ?= /opt/cosmocc
 
-# Optional config.mak for local overrides
 -include $(DEPTH)/config.mak
 
 ifeq (,$(V)$(VERBOSE))
@@ -73,34 +70,19 @@ else
     cmd  :=
 endif
 
-ifeq ($(CC),gcc)
-  CFLAGS  += -g -O2 -funsigned-char -Wall
-  # do not warn about zero-length formats.
-  CFLAGS  += -Wno-format-zero-length
-  LDFLAGS += -g
-endif
-
-#include local compiler configuration file
 -include $(DEPTH)/cflags.mk
 
-CFLAGS += $(EXTRA_CFLAGS) -Wno-unused-result
-
-CFLAGS+=-I$(DEPTH)
+CFLAGS += -mcosmo -Wno-unused-result
+CFLAGS += -I$(DEPTH)
 
 ifeq ($(CC),$(HOST_CC))
-  HOST_CFLAGS:=$(CFLAGS)
+  HOST_CFLAGS := $(CFLAGS)
 endif
 
 DEFINES=-DHAVE_QE_CONFIG_H
 
 ########################################################
-# do not modify after this
 
-ifeq ($(CC),clang)
-SANITIZE_CFLAGS := -fno-sanitize-recover=all -fno-omit-frame-pointer
-else
-SANITIZE_CFLAGS := -fno-omit-frame-pointer
-endif
 DEBUG_SUFFIX:=
 ifdef DEBUG
 $(info Building with debug info)
@@ -108,30 +90,6 @@ DEBUG_SUFFIX:=_debug
 ECHO_CFLAGS += -DCONFIG_DEBUG
 CFLAGS += -g -O0
 LDFLAGS += -g -O0
-endif
-ifdef ASAN
-$(info Building with ASan)
-DEBUG_SUFFIX:=_asan
-ECHO_CFLAGS += -DCONFIG_ASAN
-CFLAGS += -D__ASAN__
-CFLAGS += -fsanitize=address $(SANITIZE_CFLAGS) -g
-LDFLAGS += -fsanitize=address $(SANITIZE_CFLAGS) -g
-endif
-ifdef MSAN
-$(info Building with MSan)
-DEBUG_SUFFIX:=_msan
-ECHO_CFLAGS += -DCONFIG_MSAN
-CFLAGS += -D__MSAN__
-CFLAGS += -fsanitize=memory $(SANITIZE_CFLAGS) -g
-LDFLAGS += -fsanitize=memory $(SANITIZE_CFLAGS) -g
-endif
-ifdef UBSAN
-$(info Building with UBSan)
-DEBUG_SUFFIX:=_ubsan
-ECHO_CFLAGS += -DCONFIG_UBSAN
-CFLAGS += -D__UBSAN__
-CFLAGS += -fsanitize=undefined $(SANITIZE_CFLAGS) -g
-LDFLAGS += -fsanitize=undefined $(SANITIZE_CFLAGS) -g
 endif
 
 TARGETLIBS:=
@@ -154,8 +112,6 @@ OBJS:= qe.o cutils.o util.o color.o charset.o buffer.o search.o input.o display.
 ifdef TARGET_TINY
 ECHO_CFLAGS += -DCONFIG_TINY
 CFLAGS += -DCONFIG_TINY -Os
-#CFLAGS += -m32
-#LDFLAGS += -m32
 else
 OBJS+= extras.o variables.o
 endif
@@ -163,7 +119,6 @@ endif
 OBJS+= unix.o tty.o
 ifdef CONFIG_SESSION_DETACH
   OBJS+= session.o
-  LIBS+= $(SESSION_DETACH_LIBS)
 endif
 LIBS+= $(EXTRALIBS)
 
@@ -200,7 +155,6 @@ OBJS+= modes/unihex.o   modes/bufed.o    modes/orgmode.o  modes/markdown.o \
        lang/algol68.o	$(EXTRA_MODES)
 OBJS+= modes/shell.o    modes/dired.o    modes/archive.o  modes/latex-mode.o
 endif
-
 
 ifdef CONFIG_HTML
   LIBQHTML:= $(DEPTH)/.objs/$(TARGET_OS)-$(TARGET_ARCH)-$(CC)/libqhtml$(DEBUG_SUFFIX).a
@@ -299,8 +253,6 @@ $(TARGET)$(EXE): $(TARGET)_g$(EXE) Makefile
 	cp $< $@
 	-$(STRIP) $@
 	@ls -l $@
-	@echo `$(SIZE) $@` `wc -c $@` $(TARGET) $(OPTIONS) \
-		| cut -d ' ' -f 7-10,13,15-40 >> STATS
 endif
 
 ifeq (1,$(TOP))
@@ -308,9 +260,6 @@ ifeq (1,$(TOP))
 # targets that require recursion
 tqe:		force;	$(MAKE) TARGET=tqe TARGET_TINY=1
 tqe1:		force;	$(MAKE) TARGET=tqe TARGET_TINY=1 tqe1$(EXE)
-asan qe_asan:	force;	$(MAKE) TARGET=qe ASAN=1
-msan qe_msan:	force;	$(MAKE) TARGET=qe MSAN=1
-ubsan qe_ubsan:	force;	$(MAKE) TARGET=qe UBSAN=1
 debug qe_debug:	force;	$(MAKE) TARGET=qe DEBUG=1
 tqe_debug:	force;	$(MAKE) TARGET=tqe TARGET_TINY=1 DEBUG=1
 
@@ -330,8 +279,6 @@ tqe1$(EXE): tqe1_g$(EXE) Makefile
 	cp $< $@
 	-$(STRIP) $@
 	@ls -l $@
-	@echo `$(SIZE) $@` `wc -c $@` tqe1 $(OPTIONS) \
-		| cut -d ' ' -f 7-10,13,15-40 >> STATS
 endif
 
 $(OBJS_DIR)/$(TARGET)_modules.o: $(OBJS_DIR)/$(TARGET)_modules.c Makefile
@@ -378,13 +325,6 @@ $(OBJS_DIR)/%.o: %.c $(DEPENDS) Makefile
 	$(cmd)  mkdir -p $(dir $@)
 	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -o $@ -c $<
 
-# debugging targets
-%.s: %.c $(DEPENDS) Makefile
-	$(CC) $(DEFINES) $(CFLAGS) -o $@ -S $<
-
-%.s: %.cpp $(DEPENDS) Makefile
-	g++ $(DEFINES) $(CFLAGS) -Wno-multichar -o $@ -S $<
-
 #
 # Host utilities
 #
@@ -420,8 +360,6 @@ KMAPS=Arabic.kmap ArmenianEast.kmap ArmenianWest.kmap Chinese-CJ.kmap       \
       Thai.kmap VietnameseTelex.kmap Welsh.kmap                             \
       Hebrew.kmap HebrewIsraeli.kmap HebrewP.kmap Israeli.kmap Yiddish.kmap \
       Kana.kmap
-#     Hangul.kmap Hangul2.kmap Hangul3.kmap Unicode2.kmap
-#KMAPS_DIR=$(datadir)/yudit/data
 KMAPS_DIR=kmap
 KMAPS:=$(addprefix $(KMAPS_DIR)/, $(KMAPS))
 
@@ -499,9 +437,6 @@ unitable.txt: $(BINDIR)/unitable$(EXE) Makefile
 
 unicode_width: $(BINDIR)/unitable$(EXE) Makefile
 	$(BINDIR)/unitable -V $(UNICODE_VER) -W -a > unicode_width.h
-#
-#libunicode_table: $(BINDIR)/unicode_gen$(EXE) Makefile
-#	$(BINDIR)/unicode_gen libunicode-table.h
 
 # autotest target
 test: config.h
@@ -525,9 +460,8 @@ qe-doc.pdf: qe-doc.texi Makefile
 	LANGUAGE=en_US LC_ALL=en_US.UTF-8 texi2pdf -o $@ $<
 
 #
-# Cosmopolitan build targets
-#
 # Install cosmocc toolchain if not already present
+#
 install-cosmocc:
 	@if [ ! -x "$(COSMOCC_DIR)/bin/cosmocc" ]; then \
 		echo "Installing cosmocc..."; \
@@ -536,34 +470,16 @@ install-cosmocc:
 		unzip -q /tmp/cosmocc/cosmocc.zip -d $(COSMOCC_DIR); \
 	fi
 
-# Build and test with cosmocc (auto-detect or use COSMOCC_DIR)
-cosmo:
-	@cosmocc="$$(dirname $$(which cosmocc 2>/dev/null) 2>/dev/null)"; \
-	if [ -z "$$cosmocc" ] && [ -x "$(COSMOCC_DIR)/bin/cosmocc" ]; then \
-		cosmocc="$(COSMOCC_DIR)/bin"; \
-	fi; \
-	if [ -z "$$cosmocc" ]; then \
-		echo "error: cosmocc not found. Run 'make install-cosmocc' or add cosmocc to PATH" >&2; \
-		exit 1; \
-	fi; \
-	PATH="$$cosmocc:$$PATH" $(MAKE) \
-		CC=cosmocc HOST_CC=cc AR=cosmoar \
-		EXTRA_CFLAGS="-mcosmo" STRIP=true \
-		SESSION_DETACH_LIBS= \
-		-j$$(nproc 2>/dev/null || echo 4) && \
-	PATH="$$cosmocc:$$PATH" $(MAKE) test \
-		CC=cosmocc \
-		EXTRA_CFLAGS="-mcosmo" \
-		SESSION_DETACH_LIBS=
-
-# CI target: install cosmocc, build, and verify binaries
-ci: install-cosmocc cosmo
+# CI target: install cosmocc, build, test, and verify
+ci: install-cosmocc
+	PATH="$(COSMOCC_DIR)/bin:$$PATH" $(MAKE) all test
 	file qe tqe
 	test -f qe && test -f tqe
 
 # Release target: build and create a GitHub release
 # Requires GH_TOKEN, GITHUB_SHA, and optionally RELEASE to be set
-release: install-cosmocc cosmo
+release: install-cosmocc
+	PATH="$(COSMOCC_DIR)/bin:$$PATH" $(MAKE) all
 	mkdir -p release
 	cp qe release/qe
 	cp tqe release/tqe
@@ -582,7 +498,7 @@ clean:
 	$(MAKE) -C libqhtml clean
 	rm -rf *.dSYM *.gch .objs* .tobjs* .xobjs* bin release
 	rm -f *~ *.o *.a *.exe *_g *_debug TAGS gmon.out core *.exe.stackdump \
-           qe tqe tqe1 qe_asan qe_msan qe_ubsan config.h \
+           qe tqe tqe1 config.h \
            qe-doc.aux qe-doc.info qe-doc.log qe-doc.pdf qe-doc.toc
 
 distclean: clean
@@ -613,23 +529,19 @@ TAGS: force
 	etags *.[ch]
 
 help:
-	@echo "Usage: make [targets] [CC=cosmocc] [DEBUG=1] [VERBOSE=1]"
+	@echo "Usage: make [targets] [VERBOSE=1]"
+	@echo ""
+	@echo "Requires cosmocc in PATH. Install via: make install-cosmocc"
 	@echo ""
 	@echo "Build targets:"
-	@echo "  all           build qe + tqe with system compiler [default]"
-	@echo "  cosmo         build with cosmocc (APE binaries)"
-	@echo "  ci            install cosmocc + build + verify"
-	@echo "  release       build + create GitHub release"
+	@echo "  all           build qe + tqe [default]"
 	@echo "  tqe           build tiny version only"
 	@echo "  test          run unit tests"
-	@echo ""
-	@echo "Variants:"
+	@echo "  ci            install cosmocc + build + test"
+	@echo "  release       build + create GitHub release"
 	@echo "  debug         debug build (qe_debug)"
-	@echo "  asan          address sanitizer build"
-	@echo "  ubsan         undefined behavior sanitizer build"
 	@echo ""
 	@echo "Flags:"
-	@echo "  CC=cosmocc    use cosmocc compiler directly"
 	@echo "  VERBOSE=1     show full compiler commands"
 	@echo "  BUILD_ALL=1   rebuild generated tables (ligatures, kmaps, charsets)"
 
@@ -641,4 +553,4 @@ archive:
 	git archive --prefix=$(FILE)/ HEAD | gzip > ../$(FILE).tar.gz
 
 .PHONY: all test clean distclean install uninstall rebuild help force \
-        cosmo ci release install-cosmocc archive
+        ci release install-cosmocc archive

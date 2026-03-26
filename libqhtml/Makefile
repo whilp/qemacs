@@ -23,8 +23,9 @@
 
 DEPTH=..
 
-CC ?= cc
-AR ?= ar
+CC = cosmocc
+AR = cosmoar
+HOST_CC ?= cc
 TARGET_OS ?= $(shell uname -s)
 TARGET_ARCH ?= $(shell uname -m)
 EXE ?=
@@ -39,16 +40,10 @@ else
     cmd  :=
 endif
 
-ifeq ($(CC),gcc)
-  CFLAGS  += -g -O2 -funsigned-char -Wall
-  CFLAGS  += -Wno-format-zero-length
-  LDFLAGS += -g
-endif
-
 -include $(DEPTH)/cflags.mk
 
-CFLAGS += -Wno-unused-result
-CFLAGS+=-I$(DEPTH)
+CFLAGS += -mcosmo -Wno-unused-result
+CFLAGS += -I$(DEPTH)
 
 HOST_CFLAGS:=$(CFLAGS)
 
@@ -58,27 +53,6 @@ DEBUG_SUFFIX:=_debug
 ECHO_CFLAGS += -DCONFIG_DEBUG
 CFLAGS += -g -O0
 LDFLAGS += -g -O0
-endif
-ifdef ASAN
-DEBUG_SUFFIX:=_asan
-ECHO_CFLAGS += -DCONFIG_ASAN
-CFLAGS += -D__ASAN__
-CFLAGS += -fsanitize=address -fno-sanitize-recover=all -fno-omit-frame-pointer
-LDFLAGS += -fsanitize=address -fno-sanitize-recover=all -fno-omit-frame-pointer
-endif
-ifdef MSAN
-DEBUG_SUFFIX:=_msan
-ECHO_CFLAGS += -DCONFIG_MSAN
-CFLAGS += -D__MSAN__
-CFLAGS += -fsanitize=memory -fno-sanitize-recover=all -fno-omit-frame-pointer
-LDFLAGS += -fsanitize=memory -fno-sanitize-recover=all -fno-omit-frame-pointer
-endif
-ifdef UBSAN
-DEBUG_SUFFIX:=_ubsan
-ECHO_CFLAGS += -DCONFIG_UBSAN
-CFLAGS += -D__UBSAN__
-CFLAGS += -fsanitize=undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
-LDFLAGS += -fsanitize=undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
 endif
 
 LIB= $(DEPTH)/.objs/$(TARGET_OS)-$(TARGET_ARCH)-$(CC)/libqhtml$(DEBUG_SUFFIX).a

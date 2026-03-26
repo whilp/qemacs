@@ -1,13 +1,9 @@
-# Build defaults — override on command line (e.g., make CC=cosmocc)
-CC ?= cc
+CC = cosmocc
 CONFIG_SESSION_DETACH ?= yes
-SESSION_DETACH_LIBS ?= -lutil
 
-# Optional config.mak for local overrides
 -include ../config.mak
 
-EXTRA_CFLAGS ?=
-TEST_CFLAGS = -g -O2 -Wall -I.. -DHAVE_QE_CONFIG_H $(EXTRA_CFLAGS)
+TEST_CFLAGS = -g -O2 -mcosmo -Wall -I.. -DHAVE_QE_CONFIG_H
 
 TESTS = test_cutils test_buffer test_unix test_cosmo
 
@@ -41,7 +37,7 @@ test_cosmo: test_cosmo.c testlib.h
 	$(CC) $(TEST_CFLAGS) -o $@ test_cosmo.c
 
 test_session: test_session.c ../session.c ../session.h testlib.h ../config.h
-	$(CC) $(TEST_CFLAGS) -o $@ test_session.c $(SESSION_DETACH_LIBS)
+	$(CC) $(TEST_CFLAGS) -o $@ test_session.c
 
 # Terminal integration tests (requires qe binary with test_display driver)
 test_terminal: test_terminal.c testlib.h
