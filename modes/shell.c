@@ -3291,15 +3291,12 @@ static void do_shell_toggle_input(EditState *e)
             e->interactive = 0;
             return;
         }
-        if ((s->shell_flags & SF_INTERACTIVE) && e->offset >= e->b->total_size) {
+        if (s->shell_flags & SF_INTERACTIVE) {
+            /* Move to end of buffer and re-enter interactive mode */
+            e->offset = e->b->total_size;
             e->interactive = 1;
             if (s->grab_keys)
                 qe_grab_keys(s->base.qs, shell_key, s);
-#if 0
-            if (e->interactive) {
-                qe_term_update_cursor(s);
-            }
-#endif
             return;
         }
     }
