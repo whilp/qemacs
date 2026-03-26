@@ -20,6 +20,7 @@ bin
 # cosmocc build artifacts
 *.aarch64.elf
 *.com.dbg
+*.zip
 html2png
 qe
 tqe
@@ -31,6 +32,7 @@ tests/test_html
 tests/bench_buffer
 tqe1
 xqe
+.embed
 # temp-directories
 copilot
 doc
@@ -61,3 +63,4 @@ TAGS
 cflags.mk
 tests/test_cosmo
 tests/test_unix
+tests/test_embed
