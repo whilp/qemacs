@@ -8647,13 +8647,19 @@ void canonicalize_absolute_buffer_path(EditBuffer *b, int offset, char *buf, int
                     path1 = path;
                 }
             } else {
-                /* CG: should get info from getpwnam */
-#ifdef CONFIG_DARWIN
-                pstrcpy(path, sizeof(path), "/Users/");
-#else
-                pstrcpy(path, sizeof(path), "/home/");
-#endif
-                pstrcat(path, sizeof(path), path1 + 1);
+                const char *username = path1 + 1;
+                size_t ulen = strcspn(username, "/");
+                char uname[128];
+                struct passwd *pw;
+                pstrncpy(uname, sizeof(uname), username, ulen);
+                pw = getpwnam(uname);
+                if (pw) {
+                    pstrcpy(path, sizeof(path), pw->pw_dir);
+                } else {
+                    pstrcpy(path, sizeof(path), "/home/");
+                    pstrncat(path, sizeof(path), username, ulen);
+                }
+                pstrcat(path, sizeof(path), username + ulen);
                 path1 = path;
             }
         } else {
@@ -10906,12 +10912,12 @@ static void qe_set_user_option(QEmacsState *qs, const char *user)
     /* put user directory before standard list */
     if (user) {
         /* use ~USER/.qe instead of ~/.qe */
-        /* CG: should get user homedir */
-#ifdef CONFIG_DARWIN
-        snprintf(path, sizeof(path), "/Users/%s", user);
-#else
-        snprintf(path, sizeof(path), "/home/%s", user);
-#endif
+        struct passwd *pw = getpwnam(user);
+        if (pw) {
+            pstrcpy(path, sizeof(path), pw->pw_dir);
+        } else {
+            snprintf(path, sizeof(path), "/home/%s", user);
+        }
         home_path = path;
     } else {
         home_path = getenv("HOME");

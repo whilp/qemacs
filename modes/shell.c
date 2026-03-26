@@ -240,9 +240,7 @@ static int run_process(ShellState *s,
         argv[argc] = NULL;
 
         /* detach controlling terminal */
-#ifndef CONFIG_DARWIN
         setsid();
-#endif
         /* close all files */
         nb_fds = sysconf(_SC_OPEN_MAX);
         for (i = 0; i < nb_fds; i++)
@@ -263,9 +261,6 @@ static int run_process(ShellState *s,
         if (fd0 != 0 || fd1 != 1 || fd2 != 2) {
             setenv("QESTATUS", "invalid handles", 1);
         }
-#ifdef CONFIG_DARWIN
-        setsid();
-#endif
         if (shell_flags & SF_INFINITE) {
             rows += QE_TERM_YSIZE_INFINITE;
         }

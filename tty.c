@@ -397,11 +397,6 @@ static int tty_dpy_init(QEditScreen *s, QEmacsState *qs,
     case TERM_APPLE_TERMINAL:
         if (tty_mouse < 0)
             tty_mouse = 1;
-#ifdef CONFIG_DARWIN
-        /* use pbcopy / pbpaste if running natively */
-        if (tty_clipboard < 0)
-            tty_clipboard = 2;
-#endif
         break;
     case TERM_QEMACS:
     case TERM_SCREEN:
@@ -876,47 +871,6 @@ static int tty_request_clipboard(QEditScreen *s)
         }
         return 0;  /* timeout or no response */
     }
-#ifdef CONFIG_DARWIN
-    if (tty_clipboard == 2) {
-        QEmacsState *qs = s->qs;
-        TTYState *ts = s->priv_data;
-        FILE *fp;
-        char *contents = NULL;
-        size_t size = 0, allocated_size = 0;
-        int c;
-        EditBuffer *b;
-        qe_trace_bytes(qs, "pbpaste", -1, EB_TRACE_COMMAND);
-        fp = popen("pbpaste", "r");
-        if (fp == NULL) {
-            qe_trace_bytes(qs, "failed", -1, EB_TRACE_COMMAND);
-            qe_free(&contents);
-            return -1;
-        }
-        // FIXME: should have a timeout?
-        while ((c = getc(fp)) != EOF) {
-            if (size == allocated_size) {
-                allocated_size += allocated_size / 2 + 32;
-                qe_realloc_array(&contents, allocated_size);
-            }
-            contents[size++] = (char)c;
-        }
-        pclose(fp);
-        if (qs->trace_buffer)
-            qe_trace_bytes(qs, contents, size, EB_TRACE_CLIPBOARD);
-        if (size == ts->clipboard_size && !memcmp(ts->clipboard, contents, size)) {
-            qe_free(&contents);
-            return 0;
-        }
-        qe_free(&ts->clipboard);
-        ts->clipboard = contents;
-        ts->clipboard_size = size;
-        /* copy terminal selection a new yank buffer */
-        b = qe_new_yank_buffer(qs, NULL);
-        eb_set_charset(b, &charset_utf8, EOL_UNIX);
-        eb_write(b, 0, contents, size);
-        return 1;
-    }
-#endif
     return -1;
 }
 
@@ -940,20 +894,6 @@ static int tty_set_clipboard(QEditScreen *s)
         qe_free(&contents);
         return 0;
     }
-#ifdef CONFIG_DARWIN
-    if (tty_clipboard == 2) {
-        FILE *fp;
-        qe_trace_bytes(qs, "pbcopy", -1, EB_TRACE_COMMAND);
-        fp = popen("pbcopy", "w");
-        if (fp == NULL) {
-            qe_trace_bytes(qs, "failed", -1, EB_TRACE_COMMAND);
-            qe_free(&contents);
-            return -1;
-        }
-        fwrite(contents, 1, size, fp);
-        pclose(fp);
-    }
-#endif
     if (tty_clipboard == 1) {
         size_t encoded_size;
         char *encoded_contents = qe_encode64(contents, size, &encoded_size);

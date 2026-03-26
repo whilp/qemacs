@@ -40,6 +40,7 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <pwd.h>
 
 #include "config.h"
 
