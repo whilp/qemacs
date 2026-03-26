@@ -35,7 +35,6 @@ SIZE ?= size
 STRIP ?= strip -s -R .comment -R .note
 INSTALL ?= install
 MAKE ?= make
-GCC_MAJOR ?= 3
 CFLAGS ?= -O2
 LDFLAGS ?=
 LIBS ?=
@@ -56,6 +55,11 @@ CONFIG_ALL_KMAPS ?= yes
 CONFIG_MMAP ?= yes
 CONFIG_ALL_MODES ?= yes
 CONFIG_UNICODE_JOIN ?= yes
+
+# Cosmopolitan toolchain (for cosmo/ci/release targets)
+COSMOCC_VERSION := cosmocc-2026.03.15-bbe7b3cf4
+COSMOCC_URL := https://github.com/whilp/cosmopolitan/releases/download/$(COSMOCC_VERSION)/cosmocc.zip
+COSMOCC_DIR := /opt/cosmocc
 
 # Optional config.mak for local overrides
 -include $(DEPTH)/config.mak
@@ -80,21 +84,7 @@ endif
 
 CFLAGS += -Wno-unused-result
 
-ifdef TARGET_GPROF
-  CFLAGS  += -p
-  LDFLAGS += -p
-endif
-
 CFLAGS+=-I$(DEPTH)
-
-ifdef TARGET_ARCH_X86
-  #CFLAGS+=-fomit-frame-pointer
-  ifeq ($(GCC_MAJOR),2)
-    CFLAGS += -m386 -malign-functions=0
-  else
-    CFLAGS += -march=i386 -falign-functions=0
-  endif
-endif
 
 ifeq ($(CC),$(HOST_CC))
   HOST_CFLAGS:=$(CFLAGS)
@@ -160,11 +150,6 @@ endif
 OBJS:= qe.o cutils.o util.o color.o charset.o buffer.o search.o input.o display.o \
        qescript.o modes/hex.o test_display.o
 
-ifdef CONFIG_32BIT
-CFLAGS += -m32
-LDFLAGS += -m32
-endif
-
 ifdef TARGET_TINY
 ECHO_CFLAGS += -DCONFIG_TINY
 CFLAGS += -DCONFIG_TINY -Os
@@ -172,18 +157,6 @@ CFLAGS += -DCONFIG_TINY -Os
 #LDFLAGS += -m32
 else
 OBJS+= extras.o variables.o
-endif
-
-#ifdef CONFIG_DARWIN
-#  LDFLAGS += -L/opt/local/lib/
-#endif
-
-ifdef CONFIG_PNG_OUTPUT
-  HTMLTOPPM_LIBS += -lpng
-endif
-
-ifdef CONFIG_DOC
-  TARGETS += qe-doc.html
 endif
 
 OBJS+= unix.o tty.o
@@ -194,10 +167,6 @@ endif
 LIBS+= $(EXTRALIBS)
 
 ifndef TARGET_TINY
-
-ifdef CONFIG_QSCRIPT
-  OBJS+= qscript.o eval.o
-endif
 
 ifdef CONFIG_ALL_KMAPS
   OBJS+= kmap.o
@@ -336,12 +305,12 @@ endif
 ifeq (1,$(TOP))
 
 # targets that require recursion
-tqe:		force;	$(MAKE) -f Makefile TARGET=tqe TARGET_TINY=1
-tqe1:		force;	$(MAKE) -f Makefile TARGET=tqe TARGET_TINY=1 tqe1$(EXE)
-asan qe_asan:	force;	$(MAKE) -f Makefile TARGET=qe ASAN=1
-msan qe_msan:	force;	$(MAKE) -f Makefile TARGET=qe MSAN=1
-ubsan qe_ubsan:	force;	$(MAKE) -f Makefile TARGET=qe UBSAN=1
-debug qe_debug:	force;	$(MAKE) -f Makefile TARGET=qe DEBUG=1
+tqe:		force;	$(MAKE) TARGET=tqe TARGET_TINY=1
+tqe1:		force;	$(MAKE) TARGET=tqe TARGET_TINY=1 tqe1$(EXE)
+asan qe_asan:	force;	$(MAKE) TARGET=qe ASAN=1
+msan qe_msan:	force;	$(MAKE) TARGET=qe MSAN=1
+ubsan qe_ubsan:	force;	$(MAKE) TARGET=qe UBSAN=1
+debug qe_debug:	force;	$(MAKE) TARGET=qe DEBUG=1
 tqe_debug:	force;	$(MAKE) TARGET=tqe TARGET_TINY=1 DEBUG=1
 
 else
@@ -362,11 +331,6 @@ tqe1$(EXE): tqe1_g$(EXE) Makefile
 	@ls -l $@
 	@echo `$(SIZE) $@` `wc -c $@` tqe1 $(OPTIONS) \
 		| cut -d ' ' -f 7-10,13,15-40 >> STATS
-endif
-
-ifdef CONFIG_FFMPEG
-ffplay$(EXE): qe$(EXE) Makefile
-	ln -sf $< $@
 endif
 
 $(OBJS_DIR)/$(TARGET)_modules.o: $(OBJS_DIR)/$(TARGET)_modules.c Makefile
@@ -560,16 +524,60 @@ qe-doc.pdf: qe-doc.texi Makefile
 	LANGUAGE=en_US LC_ALL=en_US.UTF-8 texi2pdf -o $@ $<
 
 #
+# Cosmopolitan build targets
+#
+# Install cosmocc toolchain if not already present
+install-cosmocc:
+	@if [ ! -x "$(COSMOCC_DIR)/bin/cosmocc" ]; then \
+		echo "Installing cosmocc..."; \
+		mkdir -p /tmp/cosmocc; \
+		curl -sSL -o /tmp/cosmocc/cosmocc.zip $(COSMOCC_URL); \
+		unzip -q /tmp/cosmocc/cosmocc.zip -d $(COSMOCC_DIR); \
+	fi
+
+# Build with cosmocc (auto-detect or use COSMOCC_DIR)
+cosmo:
+	@cosmocc="$$(dirname $$(which cosmocc 2>/dev/null) 2>/dev/null)"; \
+	if [ -z "$$cosmocc" ] && [ -x "$(COSMOCC_DIR)/bin/cosmocc" ]; then \
+		cosmocc="$(COSMOCC_DIR)/bin"; \
+	fi; \
+	if [ -z "$$cosmocc" ]; then \
+		echo "error: cosmocc not found. Run 'make install-cosmocc' or add cosmocc to PATH" >&2; \
+		exit 1; \
+	fi; \
+	PATH="$$cosmocc:$$PATH" $(MAKE) \
+		CC=cosmocc HOST_CC=cc AR=cosmoar \
+		CFLAGS="-O2 -mcosmo" STRIP=true \
+		-j$$(nproc 2>/dev/null || echo 4)
+
+# CI target: install cosmocc, build, and verify binaries
+ci: install-cosmocc cosmo
+	file qe tqe
+	test -f qe && test -f tqe
+
+# Release target: build and create a GitHub release
+# Requires GH_TOKEN, GITHUB_SHA, and optionally RELEASE to be set
+release: install-cosmocc cosmo
+	mkdir -p release
+	cp qe release/qe
+	cp tqe release/tqe
+	chmod +x release/qe release/tqe
+	tag="$$(date -u +%Y-%m-%d)-$$(printf '%.7s' "$$GITHUB_SHA")" && \
+	(cd release && sha256sum qe tqe > SHA256SUMS && cat SHA256SUMS) && \
+	gh release create "$$tag" \
+		$$([ -z "$(RELEASE)" ] && echo --prerelease) \
+		--title "$$tag" \
+		release/qe release/tqe release/SHA256SUMS
+
+#
 # Maintenance targets
 #
 clean:
 	$(MAKE) -C libqhtml clean
-	rm -f qe-doc.aux qe-doc.info qe-doc.log qe-doc.pdf qe-doc.toc
-	rm -rf *.dSYM *.gch .objs* .tobjs* .xobjs* bin
+	rm -rf *.dSYM *.gch .objs* .tobjs* .xobjs* bin release
 	rm -f *~ *.o *.a *.exe *_g *_debug TAGS gmon.out core *.exe.stackdump \
-           qe tqe tqe1 kmaptoqe ligtoqe cptoqe jistoqe \
-           allmodules.txt basemodules.txt '.#'*[0-9] \
-           qe_asan qe_msan qe_ubsan config.h
+           qe tqe tqe1 qe_asan qe_msan qe_ubsan config.h \
+           qe-doc.aux qe-doc.info qe-doc.log qe-doc.pdf qe-doc.toc
 
 distclean: clean
 	$(MAKE) -C libqhtml distclean
@@ -579,11 +587,7 @@ install: $(TARGETS) qe.1
 	$(INSTALL) -m 755 -d $(DESTDIR)$(prefix)/bin
 	$(INSTALL) -m 755 -d $(DESTDIR)$(mandir)/man1
 	$(INSTALL) -m 755 -d $(DESTDIR)$(datadir)/qe
-ifdef CONFIG_TINY
-	$(INSTALL) -m 755 -s tqe$(EXE) $(DESTDIR)$(prefix)/bin/qemacs$(EXE)
-else
 	$(INSTALL) -m 755 -s qe$(EXE) $(DESTDIR)$(prefix)/bin/qemacs$(EXE)
-endif
 	ln -sf qemacs$(EXE) $(DESTDIR)$(prefix)/bin/qe$(EXE)
 	$(INSTALL) -m 644 kmaps ligatures $(DESTDIR)$(datadir)/qe
 	$(INSTALL) -m 644 qe.1 $(DESTDIR)$(mandir)/man1
@@ -602,42 +606,33 @@ rebuild:
 TAGS: force
 	etags *.[ch]
 
-colortest:
-	tests/16colors.pl
-	tests/256colors2.pl
-	tests/truecolors.sh
-	tests/color-spaces.pl
-	tests/mandelbrot.sh
-	tests/xterm-colour-chart.py
-	tests/7936-colors.sh
-
 help:
-	@echo "Usage: make [targets] [BUILD_ALL=1] [DEBUG=1] [VERBOSE=1]"
-	@echo "targets:"
-	@echo "  all [default]: build the distribution files for all configured versions"
-	@echo "  qe: build the terminal version qe"
-	@echo "  xqe: build the X11 version xqe"
-	@echo "  tqe: build the tiny version tqe"
-	@echo "  debug: build an unoptimized debug version of qe named qe_debug"
-	@echo "  xxx_debug: build an unoptimized debug version of the xxx target"
-	@echo "flags:"
-	@echo "  BUILD_ALL=1  rebuild some distribution files: ligatures kmaps charsets"
-	@echo "  VERBOSE=1    show complete commands instead of abbreviated ones"
+	@echo "Usage: make [targets] [CC=cosmocc] [DEBUG=1] [VERBOSE=1]"
+	@echo ""
+	@echo "Build targets:"
+	@echo "  all           build qe + tqe with system compiler [default]"
+	@echo "  cosmo         build with cosmocc (APE binaries)"
+	@echo "  ci            install cosmocc + build + verify"
+	@echo "  release       build + create GitHub release"
+	@echo "  tqe           build tiny version only"
+	@echo "  test          run unit tests"
+	@echo ""
+	@echo "Variants:"
+	@echo "  debug         debug build (qe_debug)"
+	@echo "  asan          address sanitizer build"
+	@echo "  ubsan         undefined behavior sanitizer build"
+	@echo ""
+	@echo "Flags:"
+	@echo "  CC=cosmocc    use cosmocc compiler directly"
+	@echo "  VERBOSE=1     show full compiler commands"
+	@echo "  BUILD_ALL=1   rebuild generated tables (ligatures, kmaps, charsets)"
 
 force:
 
-#
-# tar archive for distribution
-#
-FILE=qemacs-$(shell cat VERSION)
+FILE=qemacs-$(VERSION)
 
 archive:
 	git archive --prefix=$(FILE)/ HEAD | gzip > ../$(FILE).tar.gz
 
-SPLINTOPTS := -DSPLINT +posixlib -nestcomment +boolint +charintliteral -mayaliasunique
-SPLINTOPTS += -nullstate -unqualifiedtrans +charint
-# extra options that will be removed later
-SPLINTOPTS += -mustfreeonly -temptrans -kepttrans -DSTBI_NO_SIMD
-
-splint:
-	splint $(SPLINTOPTS) -I. -Ilibqhtml -I$(OBJS_DIR) $(SRCS)
+.PHONY: all test clean distclean install uninstall rebuild help force \
+        cosmo ci release install-cosmocc archive

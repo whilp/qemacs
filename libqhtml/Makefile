@@ -23,7 +23,13 @@
 
 DEPTH=..
 
-include $(DEPTH)/config.mak
+CC ?= cc
+AR ?= ar
+TARGET_OS ?= $(shell uname -s)
+TARGET_ARCH ?= $(shell uname -m)
+EXE ?=
+
+-include $(DEPTH)/config.mak
 
 ifeq (,$(V)$(VERBOSE))
     echo := @echo
@@ -35,35 +41,13 @@ endif
 
 ifeq ($(CC),gcc)
   CFLAGS  += -g -O2 -funsigned-char -Wall
-  # do not warn about zero-length formats.
   CFLAGS  += -Wno-format-zero-length
   LDFLAGS += -g
 endif
 
-#include local compiler configuration file
 -include $(DEPTH)/cflags.mk
 
-ifdef CONFIG_DARWIN
-  CFLAGS += -Wno-string-plus-int
-  CFLAGS += -Wno-packed
-else
-  CFLAGS += -Wno-unused-result
-endif
-
-ifdef TARGET_GPROF
-  CFLAGS  += -p
-  LDFLAGS += -p
-endif
-
-ifdef TARGET_ARCH_X86
-  #CFLAGS+=-fomit-frame-pointer
-  ifeq ($(GCC_MAJOR),2)
-    CFLAGS += -m386 -malign-functions=0
-  else
-    CFLAGS += -march=i386 -falign-functions=0
-  endif
-endif
-
+CFLAGS += -Wno-unused-result
 CFLAGS+=-I$(DEPTH)
 
 HOST_CFLAGS:=$(CFLAGS)
@@ -100,7 +84,7 @@ endif
 LIB= $(DEPTH)/.objs/$(TARGET_OS)-$(TARGET_ARCH)-$(CC)/libqhtml$(DEBUG_SUFFIX).a
 OBJS= css.o xmlparse.o cssparse.o html_style.o docbook_style.o
 
-DEPENDS:= config.h config.mak charset.h color.h cutils.h display.h \
+DEPENDS:= config.h charset.h color.h cutils.h display.h \
 		unicode_join.h util.h
 DEPENDS:= $(addprefix $(DEPTH)/, $(DEPENDS))
 DEPENDS+= css.h cssid.h htmlent.h

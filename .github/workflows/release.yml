@@ -24,4 +24,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_SHA: ${{ github.sha }}
           RELEASE: ${{ inputs.release && '1' || '' }}
-        run: make -f Makefile.cosmo release
+        run: make release
