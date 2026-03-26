@@ -1,6 +1,6 @@
 # QEmacs Codebase Cleanup Plan
 
-Status: **In Progress** (4 of 8 items complete)
+Status: **In Progress** (5 of 8 items complete)
 
 ## Overview
 
@@ -21,29 +21,39 @@ The 57 language modules in `lang/` duplicated identical parsing logic.
   - `colorize_skip_block_comment(str, i, n, statep, bit)` — scan for `*/` end
   - `colorize_parse_number(str, i, n, allow_sep)` — parse number literals
     with 0x/0o/0b radix prefixes, decimal point, and exponent
-- Applied to 17 language modules: scad, rust, nim, falcon, elm, icon, swift,
-  jai, virgil, coffee, julia, groovy, crystal, magpie, python, ruby, sql
-- Net result: -69 lines
+- Applied escape helpers to 25 modules: scad, rust, nim, falcon, elm, icon,
+  swift, jai, virgil, coffee, julia, groovy, crystal, magpie, python, ruby,
+  sql, clang (8 instances)
+- Applied number parsing to: rust, elm, jai, haskell
+- Applied block comment helper to: scad, rust, falcon, crystal, groovy,
+  virgil, ruby, sql
+- Net result: -139 lines
 
 ### Remaining opportunity
-- More lang/ files could adopt these helpers (ada, rebol, haskell, etc.)
+- Several lang/ files have `parse_decimal:` goto labels preventing clean
+  replacement (ruby, crystal, python, falcon, coffee)
 - Nested comment variants (magpie, swift, tiger) need custom logic
 
 ---
 
 ## 2. Add Unit Tests for buffer.c and search.c
-**Priority:** High | **Effort:** Medium | **Status:** Not Started
+**Priority:** High | **Effort:** Medium | **Status:** Partial (buffer done)
 
-Only 4 test files exist for ~100K LOC. Core modules have zero coverage:
-- `buffer.c` (2,918 LOC) — buffer insert/delete/encoding
-- `search.c` (1,684 LOC) — search/replace
-- `charset.c` (1,622 LOC) — character encoding
-- `color.c` (1,556 LOC) — color management
+### Completed
+- Added `tests/test_buffer.c` with 22 tests covering:
+  - Insert (beginning, middle, end, large buffers)
+  - Delete (beginning, middle, all, in large buffers)
+  - Read (partial, past-end, single byte)
+  - Line navigation (goto_bol, goto_eol, next_line, prev_line)
+  - Character operations (insert_char32, nextc, prevc, insert_str)
+  - Replace (same size, different size)
+  - UTF-8 insert/read, clear, get_line_length
+- Updated `tests/Makefile` with compilation rule
 
-### Plan
-- Add `tests/test_buffer.c` — test eb_insert, eb_delete, eb_read, encoding round-trips
-- Add `tests/test_search.c` — test search_string, replace patterns
-- Update `tests/Makefile` with new test targets
+### Remaining
+- `search.c` tests (search_string, replace patterns)
+- `charset.c` tests (encoding round-trips)
+- `color.c` tests (color parsing, matching)
 
 ---
 
@@ -133,13 +143,16 @@ Removed 19 dead code blocks (~250 lines) from core files:
 
 | Item | Lines Removed | Lines Added | Net |
 |------|--------------|-------------|-----|
-| 1. Colorize helpers | 200 | 131 | -69 |
+| 1. Colorize helpers | 280 | 141 | -139 |
+| 2. Buffer tests | 0 | 425 | +425 |
 | 3. Safety fixes | 4 | 8 | +4 |
 | 4. Module init macro | 333 | 68 | -265 |
 | 7. Dead code removal | 318 | 4 | -314 |
-| **Total** | **855** | **211** | **-644** |
+| **Total** | **935** | **646** | **-289** |
 
 ## Changelog
 
 - **2026-03-26**: Initial analysis and plan created
 - **2026-03-26**: Completed items 1, 3, 4, 7. Removed 644 net lines.
+- **2026-03-26**: Added 22 buffer unit tests. Expanded colorize helpers to
+  clang.c (8 escape patterns), jai.c and haskell.c (number parsing).
