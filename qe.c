@@ -2053,8 +2053,10 @@ void do_quoted_insert(EditState *s, int argval) {
     QEmacsState *qs = s->qs;
     struct QuoteKeyArgument *qa = qe_mallocz(struct QuoteKeyArgument);
 
-    if (qa == NULL) // FIXME: error message?
+    if (qa == NULL) {
+        put_status(s, "Out of memory");
         return;
+    }
 
     qa->s = s;
     qa->has_arg = (argval != NO_ARG);
@@ -6407,6 +6409,8 @@ void do_define_kbd_macro(EditState *s, const char *name, const char *keys,
 
     size = 2 + strlen(keys) + 3;
     buf = qe_malloc_array(char, size);
+    if (buf == NULL)
+        return;
 
     // XXX: should special case "last-kbd-macro"
 
@@ -6837,7 +6841,7 @@ static void qe_key_process(QEmacsState *qs, int key)
         if (d->action.ESsi == do_describe_key_briefly) {
             c->describe_key = 1 + (c->has_arg != 0);
             qe_key_init(c);
-            strcpy(c->buf, "Describe key: ");
+            pstrcpy(c->buf, sizeof(c->buf), "Describe key: ");
             key = -1;
             goto next;
         } else
@@ -8752,7 +8756,7 @@ void canonicalize_absolute_buffer_path(EditBuffer *b, int offset, char *buf, int
             /* CG: not sufficient for windows drives */
             if (!b || !get_default_path(b, offset, cwd, sizeof(cwd))) {
                 if (!getcwd(cwd, sizeof(cwd)))
-                    strcpy(cwd, ".");
+                    pstrcpy(cwd, sizeof(cwd), ".");
 #ifdef CONFIG_WIN32
                 path_win_to_unix(cwd);
 #endif
@@ -11062,7 +11066,7 @@ static void qe_set_user_option(QEmacsState *qs, const char *user)
     /* put current directory first if qe invoked as ./qe */
     if (stristart(qs->argv[0], "./qe", NULL)) {
         if (!getcwd(path, sizeof(path)))
-            strcpy(path, ".");
+            pstrcpy(path, sizeof(path), ".");
         pstrcat(qs->res_path, sizeof(qs->res_path), path);
         pstrcat(qs->res_path, sizeof(qs->res_path), ":");
         pstrcat(qs->res_path, sizeof(qs->res_path), path);
