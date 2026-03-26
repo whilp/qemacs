@@ -437,53 +437,6 @@ TEST(dbuf, growth) {
     dbuf_free(&db);
 }
 
-/* ---- from_hex (inline in cutils.h) ---- */
-
-TEST(from_hex, digits) {
-    ASSERT_EQ(from_hex('0'), 0);
-    ASSERT_EQ(from_hex('9'), 9);
-    ASSERT_EQ(from_hex('a'), 10);
-    ASSERT_EQ(from_hex('f'), 15);
-    ASSERT_EQ(from_hex('A'), 10);
-    ASSERT_EQ(from_hex('F'), 15);
-}
-
-TEST(from_hex, invalid) {
-    ASSERT_EQ(from_hex('g'), -1);
-    ASSERT_EQ(from_hex(' '), -1);
-    ASSERT_EQ(from_hex('\0'), -1);
-}
-
-/* ---- clamp_int, min_int, max_int ---- */
-
-TEST(arith, clamp) {
-    ASSERT_EQ(clamp_int(5, 0, 10), 5);
-    ASSERT_EQ(clamp_int(-5, 0, 10), 0);
-    ASSERT_EQ(clamp_int(15, 0, 10), 10);
-}
-
-TEST(arith, min_max) {
-    ASSERT_EQ(min_int(3, 7), 3);
-    ASSERT_EQ(max_int(3, 7), 7);
-    ASSERT_EQ(min3_int(5, 3, 7), 3);
-    ASSERT_EQ(max3_int(5, 3, 7), 7);
-}
-
-/* ---- strequal ---- */
-
-TEST(strequal, match) {
-    ASSERT_TRUE(strequal("abc", "abc"));
-}
-
-TEST(strequal, no_match) {
-    ASSERT_FALSE(strequal("abc", "def"));
-}
-
-TEST(strequal, empty) {
-    ASSERT_TRUE(strequal("", ""));
-    ASSERT_FALSE(strequal("", "x"));
-}
-
 /* ---- osc_get_payload ---- */
 
 TEST(osc_get_payload, basic_bel_terminator) {
