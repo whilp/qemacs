@@ -24,6 +24,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #include "qe.h"
 
@@ -53,10 +54,23 @@ typedef struct TestDisplayState {
     FILE *dump_file;           /* file for screen dumps */
     char dump_path[256];       /* path to dump file (for reopen in "last" mode) */
     int dump_mode_last;        /* 1 = rewrite file each flush */
+    char resize_path[256];     /* path to file containing "WxH" for resize */
 } TestDisplayState;
+
+static QEditScreen *test_screen;  /* for signal handler */
 
 /*--- Forward declarations ---*/
 static void test_dpy_invalidate(QEditScreen *s);
+
+/*--- SIGWINCH handler for mid-session resize ---*/
+static void test_term_resize(qe__unused__ int sig)
+{
+    QEditScreen *s = test_screen;
+    if (s) {
+        test_dpy_invalidate(s);
+        url_redisplay();
+    }
+}
 
 /*--- Probe: activate when QE_TEST_DISPLAY=1 ---*/
 
@@ -152,6 +166,22 @@ static int test_dpy_init(QEditScreen *s, QEmacsState *qs,
     }
 
     ts->flush_count = 0;
+
+    /* Set up resize file path (parent writes "WxH\n", we read on SIGWINCH) */
+    ts->resize_path[0] = '\0';
+    p = getenv("QE_TEST_RESIZE_FILE");
+    if (p)
+        pstrcpy(ts->resize_path, sizeof(ts->resize_path), p);
+
+    /* Install SIGWINCH handler for resize support */
+    test_screen = s;
+    {
+        struct sigaction sig;
+        sig.sa_handler = test_term_resize;
+        sigemptyset(&sig.sa_mask);
+        sig.sa_flags = 0;
+        sigaction(SIGWINCH, &sig, NULL);
+    }
 
     /* Allocate screen buffer */
     ts->screen_size = s->width * s->height;
@@ -488,9 +518,24 @@ static void test_dpy_suspend(qe__unused__ QEditScreen *s) {}
 static void test_dpy_invalidate(QEditScreen *s)
 {
     TestDisplayState *ts = s->priv_data;
-    int new_size, i;
+    int new_w, new_h, new_size, i;
 
-    /* Recalculate from env (no ioctl in headless mode) */
+    /* Read new dimensions from resize file if available */
+    new_w = s->width;
+    new_h = s->height;
+    if (ts->resize_path[0]) {
+        FILE *f = fopen(ts->resize_path, "r");
+        if (f) {
+            if (fscanf(f, "%dx%d", &new_w, &new_h) == 2) {
+                if (new_w >= 10 && new_w <= MAX_SCREEN_WIDTH)
+                    s->width = new_w;
+                if (new_h >= 3 && new_h <= MAX_SCREEN_LINES)
+                    s->height = new_h;
+            }
+            fclose(f);
+        }
+    }
+
     new_size = s->width * s->height;
     if (new_size != ts->screen_size) {
         qe_free(&ts->screen);
@@ -506,6 +551,12 @@ static void test_dpy_invalidate(QEditScreen *s)
             ts->screen[i].attrs = 0;
         }
     }
+
+    /* Update clip region to match new dimensions */
+    s->clip_x1 = 0;
+    s->clip_y1 = 0;
+    s->clip_x2 = s->width;
+    s->clip_y2 = s->height;
 }
 
 /*--- Display driver vtable ---*/

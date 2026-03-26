@@ -48,6 +48,7 @@ typedef struct TestSession {
     int input_pipe_write;   /* write end: we send keystrokes here */
     int input_pipe_read;    /* read end: child reads from here */
     char dump_path[256];    /* path to screen dump file */
+    char resize_path[256];  /* path to resize control file */
     char test_file[256];    /* path to temp file being edited */
     char *dump_buf;         /* contents of dump file after session ends */
     size_t dump_len;
@@ -75,6 +76,19 @@ static void session_ctrl(TestSession *sess, char c)
     session_send_keys(sess, &ch, 1);
 }
 
+/* Resize the terminal: write new dimensions to the resize file,
+ * then send SIGWINCH to the child process. */
+static void session_resize(TestSession *sess, int new_width, int new_height)
+{
+    FILE *f = fopen(sess->resize_path, "w");
+    if (f) {
+        fprintf(f, "%dx%d\n", new_width, new_height);
+        fclose(f);
+    }
+    kill(sess->child_pid, SIGWINCH);
+    usleep(200000);  /* 200ms for qe to process resize and redraw */
+}
+
 /* Start a qe session with the test display driver.
  * If initial_file is non-NULL, qe opens that file.
  * Returns 0 on success. */
@@ -91,6 +105,10 @@ static int session_start(TestSession *sess, const char *initial_file)
     /* Create temp file for screen dumps */
     snprintf(sess->dump_path, sizeof(sess->dump_path),
              "/tmp/qe_test_dump_%d.txt", (int)getpid());
+
+    /* Create resize control file path */
+    snprintf(sess->resize_path, sizeof(sess->resize_path),
+             "/tmp/qe_test_resize_%d.txt", (int)getpid());
 
     /* Create pipe for keystroke input */
     if (pipe(pipefds) < 0) {
@@ -137,6 +155,7 @@ static int session_start(TestSession *sess, const char *initial_file)
         setenv("QE_TEST_HEIGHT", height_str, 1);
         setenv("QE_TEST_DUMP_FILE", sess->dump_path, 1);
         setenv("QE_TEST_DUMP_MODE", "last", 1);
+        setenv("QE_TEST_RESIZE_FILE", sess->resize_path, 1);
         /* Suppress config file loading */
         setenv("HOME", "/nonexistent", 1);
 
@@ -202,6 +221,7 @@ static int session_stop(TestSession *sess)
 
     /* Clean up temp files */
     unlink(sess->dump_path);
+    unlink(sess->resize_path);
 
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
@@ -662,6 +682,170 @@ TEST(terminal, split_vertical)
     ASSERT_TRUE(hello_count >= 1);
 
     free_snapshot(snap);
+    session_stop(&sess);
+    session_cleanup(&sess);
+}
+
+/*--- Resize tests ---*/
+
+TEST(terminal, resize_basic)
+{
+    TestSession sess;
+    if (session_start(&sess, NULL) != 0) {
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    /* Verify initial dimensions */
+    ScreenSnap *snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+    ASSERT_EQ(snap->width, 80);
+    ASSERT_EQ(snap->height, 24);
+    ASSERT_TRUE(snap_any_line_contains(snap, "Hello"));
+    free_snapshot(snap);
+
+    /* Resize to a smaller terminal */
+    session_resize(&sess, 60, 20);
+
+    snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+    ASSERT_EQ(snap->width, 60);
+    ASSERT_EQ(snap->height, 20);
+    /* Content should still be visible after resize */
+    ASSERT_TRUE(snap_any_line_contains(snap, "Hello"));
+    free_snapshot(snap);
+
+    /* Resize to a larger terminal */
+    session_resize(&sess, 120, 40);
+
+    snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+    ASSERT_EQ(snap->width, 120);
+    ASSERT_EQ(snap->height, 40);
+    ASSERT_TRUE(snap_any_line_contains(snap, "Hello"));
+    free_snapshot(snap);
+
+    session_stop(&sess);
+    session_cleanup(&sess);
+}
+
+TEST(terminal, resize_split_horizontal)
+{
+    TestSession sess;
+    if (session_start(&sess, NULL) != 0) {
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    /* Split horizontally first */
+    session_ctrl(&sess, 'x');
+    usleep(50000);
+    session_type(&sess, "2");
+    usleep(200000);
+
+    /* Find the separator row in the initial 80x24 layout */
+    ScreenSnap *snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+    int initial_sep = -1;
+    for (int row = 3; row < snap->num_lines - 3; row++) {
+        if (strstr(snap->lines[row], "\xe2\x94\xa4") != NULL) {
+            initial_sep = row;
+            break;
+        }
+    }
+    ASSERT_TRUE(initial_sep >= 0);
+    free_snapshot(snap);
+
+    /* Resize to a taller terminal */
+    session_resize(&sess, 80, 40);
+
+    snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+    ASSERT_EQ(snap->height, 40);
+
+    /* The separator should have moved proportionally to the new height */
+    int new_sep = -1;
+    for (int row = 3; row < snap->num_lines - 3; row++) {
+        if (strstr(snap->lines[row], "\xe2\x94\xa4") != NULL) {
+            new_sep = row;
+            break;
+        }
+    }
+    ASSERT_TRUE(new_sep >= 0);
+    /* Separator should be further down in a taller window */
+    ASSERT_TRUE(new_sep > initial_sep);
+
+    /* Both panes should still show content */
+    int above = 0, below = 0;
+    for (int row = 0; row < new_sep; row++) {
+        if (snap_line_contains(snap, row, "Hello")) above = 1;
+    }
+    for (int row = new_sep + 1; row < snap->num_lines - 1; row++) {
+        if (snap_line_contains(snap, row, "Hello")) below = 1;
+    }
+    ASSERT_TRUE(above);
+    ASSERT_TRUE(below);
+    free_snapshot(snap);
+
+    session_stop(&sess);
+    session_cleanup(&sess);
+}
+
+TEST(terminal, resize_split_vertical)
+{
+    TestSession sess;
+    if (session_start(&sess, NULL) != 0) {
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    /* Split vertically */
+    session_ctrl(&sess, 'x');
+    usleep(50000);
+    session_type(&sess, "3");
+    usleep(200000);
+
+    /* Verify vertical separator exists at 80 cols */
+    ScreenSnap *snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+    ASSERT_EQ(snap->width, 80);
+
+    /* Find the separator column position in a content row */
+    int initial_sep_col = -1;
+    for (int row = 0; row < snap->num_lines - 2; row++) {
+        char *sep = strstr(snap->lines[row], "\xe2\x94\x82");
+        if (sep) {
+            initial_sep_col = sep - snap->lines[row];
+            break;
+        }
+    }
+    ASSERT_TRUE(initial_sep_col >= 0);
+    free_snapshot(snap);
+
+    /* Resize to a wider terminal */
+    session_resize(&sess, 120, 24);
+
+    snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+    ASSERT_EQ(snap->width, 120);
+
+    /* Separator should have moved further right proportionally */
+    int new_sep_col = -1;
+    for (int row = 0; row < snap->num_lines - 2; row++) {
+        char *sep = strstr(snap->lines[row], "\xe2\x94\x82");
+        if (sep) {
+            new_sep_col = sep - snap->lines[row];
+            break;
+        }
+    }
+    ASSERT_TRUE(new_sep_col >= 0);
+    /* Separator should be further right in a wider window */
+    ASSERT_TRUE(new_sep_col > initial_sep_col);
+
+    /* Content should still be visible */
+    ASSERT_TRUE(snap_any_line_contains(snap, "Hello"));
+    free_snapshot(snap);
+
     session_stop(&sess);
     session_cleanup(&sess);
 }
