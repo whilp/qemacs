@@ -120,7 +120,7 @@ static void ruby_colorize_line(QEColorizeContext *cp,
         i = n;
         SET_STYLE(sbuf, start, i, RUBY_STYLE_HEREDOC);
     } else {
-        if (state & IN_RUBY_COMMENT)
+        if (state & IN_RUBY_COMMENT);
             goto parse_c_comment;
 
         if (state & IN_RUBY_REGEX)
@@ -166,13 +166,8 @@ static void ruby_colorize_line(QEColorizeContext *cp,
                 i++;
             parse_c_comment:
                 state = IN_RUBY_COMMENT;
-                for (; i < n; i++) {
-                    if (str[i] == '*' && str[i + 1] == '/') {
-                        i += 2;
-                        state &= ~IN_RUBY_COMMENT;
-                        break;
-                    }
-                }
+                i = colorize_skip_block_comment(str, i, n,
+                                                &state, IN_RUBY_COMMENT);
                 goto comment;
             }
             if (start == indent

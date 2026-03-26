@@ -157,9 +157,7 @@ static void nim_colorize_line(QEColorizeContext *cp,
                 while (i < n) {
                     c = str[i++];
                     if (!(state & IN_NIM_RAW_STRING) && c == '\\') {
-                        if (i < n) {
-                            i += 1;
-                        }
+                        i = colorize_skip_escape(str, i, n);
                     } else
                     if (c == sep && str[i] == sep
                     &&  str[i + 1] == sep && str[i + 2] != sep) {
@@ -174,9 +172,7 @@ static void nim_colorize_line(QEColorizeContext *cp,
                 while (i < n) {
                     c = str[i++];
                     if (!(state & IN_NIM_RAW_STRING) && c == '\\') {
-                        if (i < n) {
-                            i += 1;
-                        }
+                        i = colorize_skip_escape(str, i, n);
                         continue;
                     }
                     if (c == sep) {

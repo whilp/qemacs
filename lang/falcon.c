@@ -93,13 +93,8 @@ static void falcon_colorize_line(QEColorizeContext *cp,
                 i++;
                 state |= IN_FALCON_COMMENT;
             parse_comment:
-                for (; i < n; i++) {
-                    if (str[i] == '*' && str[i + 1] == '/') {
-                        i += 2;
-                        state &= ~IN_FALCON_COMMENT;
-                        break;
-                    }
-                }
+                i = colorize_skip_block_comment(str, i, n,
+                                                &state, IN_FALCON_COMMENT);
                 style = FALCON_STYLE_COMMENT;
                 break;
             }
@@ -117,9 +112,7 @@ static void falcon_colorize_line(QEColorizeContext *cp,
             while (i < n) {
                 c = str[i++];
                 if (c == '\\') {
-                    if (i < n) {
-                        i += 1;
-                    }
+                    i = colorize_skip_escape(str, i, n);
                 } else
                 if (c == '\'') {
                     state &= ~IN_FALCON_STRING1;
@@ -137,9 +130,7 @@ static void falcon_colorize_line(QEColorizeContext *cp,
             while (i < n) {
                 c = str[i++];
                 if (c == '\\') {
-                    if (i < n) {
-                        i += 1;
-                    }
+                    i = colorize_skip_escape(str, i, n);
                 } else
                 if (c == '\"') {
                     state &= ~IN_FALCON_STRING2;

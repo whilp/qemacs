@@ -115,9 +115,7 @@ static void icon_colorize_line(QEColorizeContext *cp,
             while (i < n) {
                 c = str[i++];
                 if (c == '\\') {
-                    if (i >= n)
-                        break;
-                    i++;
+                    i = colorize_skip_escape(str, i, n);
                 } else
                 if (c == delim) {
                     state &= ~(IN_ICON_STRING | IN_ICON_STRING_Q);

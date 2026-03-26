@@ -280,13 +280,8 @@ static void virgil_colorize_line(QEColorizeContext *cp,
                 i++;
             parse_comment:
                 state |= IN_VIRGIL_COMMENT;
-                for (; i < n; i++) {
-                    if (str[i] == '*' && str[i + 1] == '/') {
-                        i += 2;
-                        state &= ~IN_VIRGIL_COMMENT;
-                        break;
-                    }
-                }
+                i = colorize_skip_block_comment(str, i, n,
+                                                &state, IN_VIRGIL_COMMENT);
                 style = VIRGIL_STYLE_COMMENT;
                 break;
             } else
@@ -314,9 +309,7 @@ static void virgil_colorize_line(QEColorizeContext *cp,
                 while (i < n) {
                     c = str[i++];
                     if (c == '\\') {
-                        if (i < n) {
-                            i += 1;
-                        }
+                        i = colorize_skip_escape(str, i, n);
                     } else
                     if (c == sep && str[i] == sep && str[i + 1] == sep) {
                         i += 2;
@@ -331,9 +324,7 @@ static void virgil_colorize_line(QEColorizeContext *cp,
                 while (i < n) {
                     c = str[i++];
                     if (c == '\\') {
-                        if (i < n) {
-                            i += 1;
-                        }
+                        i = colorize_skip_escape(str, i, n);
                     } else
                     if (c == sep) {
                         state &= (sep == '\"') ? ~IN_VIRGIL_STRING2 : ~IN_VIRGIL_STRING;

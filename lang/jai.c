@@ -147,9 +147,7 @@ static void jai_colorize_line(QEColorizeContext *cp,
             while (i < n) {
                 c = str[i++];
                 if (c == '\\') {
-                    if (i >= n)
-                        break;
-                    i++;
+                    i = colorize_skip_escape(str, i, n);
                 } else
                 if (c == delim) {
                     state &= ~(IN_JAI_STRING | IN_JAI_STRING_Q);

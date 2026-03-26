@@ -869,6 +869,91 @@ static inline char32_t qe_wtoupper(char32_t c) {
     return c >= 0x80 ? qe_wctoupper(c) : qe_toupper(c);
 }
 
+/*---- Colorize helpers for language modes ----*/
+
+/* Skip a backslash escape sequence. Call after consuming the backslash.
+ * Returns the updated index past the escaped character.
+ */
+static inline int colorize_skip_escape(const char32_t *str, int i, int n) {
+    if (i < n)
+        i++;
+    return i;
+}
+
+/* Scan for the end of a C-style block comment.
+ * Returns the updated index. If the comment end was found,
+ * clears the comment bit(s) in *statep.
+ */
+static inline int colorize_skip_block_comment(const char32_t *str,
+                                              int i, int n,
+                                              int *statep, int comment_bit)
+{
+    for (; i < n; i++) {
+        if (str[i] == '*' && str[i + 1] == '/') {
+            i += 2;
+            *statep &= ~comment_bit;
+            break;
+        }
+    }
+    return i;
+}
+
+/* Parse a number literal with optional radix prefix (0x, 0o, 0b),
+ * decimal point, and exponent. Handles underscores in digits when
+ * allow_sep is true. Returns the index past the end of the number.
+ * Call when str[start-1] is a digit.
+ */
+static inline int colorize_parse_number(const char32_t *str, int i, int n,
+                                        int allow_sep)
+{
+    char32_t c = str[i - 1];  /* the digit that triggered this */
+
+    if (c == '0') {
+        char32_t radix = qe_tolower(str[i]);
+        if (radix == 'x' && (allow_sep ? qe_isxdigit_(str[i + 1])
+                                       : qe_isxdigit(str[i + 1]))) {
+            for (i += 2; allow_sep ? qe_isxdigit_(str[i])
+                                   : qe_isxdigit(str[i]); i++)
+                continue;
+            return i;
+        }
+        if (radix == 'o' && (allow_sep ? qe_isoctdigit_(str[i + 1])
+                                       : qe_isoctdigit(str[i + 1]))) {
+            for (i += 2; allow_sep ? qe_isoctdigit_(str[i])
+                                   : qe_isoctdigit(str[i]); i++)
+                continue;
+            return i;
+        }
+        if (radix == 'b' && (allow_sep ? qe_isbindigit_(str[i + 1])
+                                       : qe_isbindigit(str[i + 1]))) {
+            for (i += 2; allow_sep ? qe_isbindigit_(str[i])
+                                   : qe_isbindigit(str[i]); i++)
+                continue;
+            return i;
+        }
+    }
+    /* decimal number */
+    while (allow_sep ? qe_isdigit_(str[i]) : qe_isdigit(str[i]))
+        i++;
+    if (str[i] == '.' && (allow_sep ? qe_isdigit_(str[i + 1])
+                                    : qe_isdigit(str[i + 1]))) {
+        for (i += 2; allow_sep ? qe_isdigit_(str[i])
+                               : qe_isdigit(str[i]); i++)
+            continue;
+    }
+    if (qe_tolower(str[i]) == 'e') {
+        int j = i + 1;
+        if (str[j] == '+' || str[j] == '-')
+            j++;
+        if (qe_isdigit(str[j])) {
+            for (i = j + 1; allow_sep ? qe_isdigit_(str[i])
+                                      : qe_isdigit(str[i]); i++)
+                continue;
+        }
+    }
+    return i;
+}
+
 /*---- Completion types used for enumerations ----*/
 
 typedef struct CompleteState CompleteState;

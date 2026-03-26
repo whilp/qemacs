@@ -106,7 +106,7 @@ static void sql_colorize_line(QEColorizeContext *cp,
     char32_t c;
     int state = cp->colorize_state;
 
-    if (state & IN_SQL_COMMENT)
+    if (state & IN_SQL_COMMENT);
         goto parse_c_comment;
 
     while (i < n) {
@@ -121,13 +121,8 @@ static void sql_colorize_line(QEColorizeContext *cp,
                 i++;
             parse_c_comment:
                 state |= IN_SQL_COMMENT;
-                for (; i < n; i++) {
-                    if (str[i] == '*' && str[i + 1] == '/') {
-                        i += 2;
-                        state &= ~IN_SQL_COMMENT;
-                        break;
-                    }
-                }
+                i = colorize_skip_block_comment(str, i, n,
+                                                &state, IN_SQL_COMMENT);
                 goto comment;
             }
             break;

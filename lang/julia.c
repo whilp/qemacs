@@ -210,9 +210,7 @@ static void julia_colorize_line(QEColorizeContext *cp,
                 while (i < n) {
                     c = str[i++];
                     if (c == '\\') {
-                        if (i < n) {
-                            i += 1;
-                        }
+                        i = colorize_skip_escape(str, i, n);
                     } else
                     if (c == sep && str[i] == sep && str[i + 1] == sep) {
                         i += 2;
@@ -225,9 +223,7 @@ static void julia_colorize_line(QEColorizeContext *cp,
                 while (i < n) {
                     c = str[i++];
                     if (c == '\\') {
-                        if (i < n) {
-                            i += 1;
-                        }
+                        i = colorize_skip_escape(str, i, n);
                     } else
                     if (c == sep) {
                         state = 0;

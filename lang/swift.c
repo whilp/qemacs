@@ -273,9 +273,7 @@ static void swift_colorize_line(QEColorizeContext *cp,
                 c = str[i++];
                 if (c == '\\') {
                     /* Should colorize \(expr) interpolation */
-                    if (i >= n)
-                        break;
-                    i++;
+                    i = colorize_skip_escape(str, i, n);
                 } else
                 if (c == '\"') {
                     break;

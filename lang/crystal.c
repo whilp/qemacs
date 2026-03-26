@@ -176,13 +176,8 @@ static void crystal_colorize_line(QEColorizeContext *cp,
                 i++;
             parse_c_comment:
                 state = IN_CRYSTAL_COMMENT;
-                for (; i < n; i++) {
-                    if (str[i] == '*' && str[i + 1] == '/') {
-                        i += 2;
-                        state &= ~IN_CRYSTAL_COMMENT;
-                        break;
-                    }
-                }
+                i = colorize_skip_block_comment(str, i, n,
+                                                &state, IN_CRYSTAL_COMMENT);
                 goto comment;
             }
             if (start == indent
@@ -198,9 +193,7 @@ static void crystal_colorize_line(QEColorizeContext *cp,
                     /* XXX: should ignore / inside char classes */
                     c = str[i++];
                     if (c == '\\') {
-                        if (i < n) {
-                            i += 1;
-                        }
+                        i = colorize_skip_escape(str, i, n);
                     } else
                     if (c == '#' && str[i] == '{') {
                         /* should parse full syntax */
@@ -264,9 +257,7 @@ static void crystal_colorize_line(QEColorizeContext *cp,
                             continue;
                     } else
                     if (c == '\\') {
-                        if (i < n) {
-                            i += 1;
-                        }
+                        i = colorize_skip_escape(str, i, n);
                     }
                 }
                 style = CRYSTAL_STYLE_STRING4;
@@ -320,9 +311,7 @@ static void crystal_colorize_line(QEColorizeContext *cp,
             while (i < n) {
                 c = str[i++];
                 if (c == '\\') {
-                    if (i < n) {
-                        i += 1;
-                    }
+                    i = colorize_skip_escape(str, i, n);
                 } else
                 if (c == '#' && str[i] == '{') {
                     /* should parse full syntax */
