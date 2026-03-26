@@ -28,6 +28,8 @@
 #include "variables.h"
 #ifdef __COSMOPOLITAN__
 extern void ShowCrashReports(void);
+extern void CheckForMemoryLeaks(void);
+extern void CheckForFileLeaks(void);
 #endif
 #ifdef CONFIG_SESSION_DETACH
 #include <dirent.h>
@@ -11898,6 +11900,20 @@ static int qe_init(void *opaque)
 #endif
     qe_display(qs);
     qs->ec.function = NULL;
+
+#ifdef __COSMOPOLITAN__
+    /* Restrict syscalls after initialization is complete.
+     * stdio: basic I/O
+     * rpath/wpath/cpath: filesystem access for editing files
+     * tty: terminal control
+     * proc/exec: fork/exec for shell mode
+     * unix: unix domain sockets for session detach
+     * fattr: file attribute operations (chmod)
+     * id: getpwnam for ~ expansion
+     */
+    pledge("stdio rpath wpath cpath tty proc exec unix fattr id", NULL);
+#endif
+
     return 0;
 }
 

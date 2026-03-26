@@ -2,7 +2,7 @@ include ../config.mak
 
 TEST_CFLAGS = -g -O2 -Wall -I.. -DHAVE_QE_CONFIG_H
 
-TESTS = test_cutils test_buffer test_unix
+TESTS = test_cutils test_buffer test_unix test_cosmo
 
 ifdef CONFIG_SESSION_DETACH
 TESTS += test_session
@@ -29,6 +29,9 @@ test_buffer: test_buffer.c $(BUFFER_SRCS) testlib.h ../qe.h ../cutils.h ../confi
 
 test_unix: test_unix.c testlib.h
 	$(CC) $(TEST_CFLAGS) -o $@ test_unix.c
+
+test_cosmo: test_cosmo.c testlib.h
+	$(CC) $(TEST_CFLAGS) -o $@ test_cosmo.c
 
 test_session: test_session.c ../session.c ../session.h testlib.h ../config.h
 	$(CC) $(TEST_CFLAGS) -o $@ test_session.c $(SESSION_DETACH_LIBS)

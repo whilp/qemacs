@@ -45,6 +45,7 @@ configure:
 	PATH="$$cosmocc:$$PATH" ./configure \
 		--cc=cosmocc \
 		--host-cc=$(HOST_CC) \
+		--extra-cflags="-mcosmo" \
 		--disable-x11 \
 		--disable-html \
 		--disable-plugins \
