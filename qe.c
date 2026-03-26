@@ -706,8 +706,10 @@ void do_cd(EditState *s, const char *path)
     } else {
         if (!getcwd(buf, sizeof(buf)))
             put_error(s, "Cannot get current directory");
-        else
+        else {
             put_status(s, "Current directory: %s", buf);
+            dpy_set_cwd(s->qs->screen, buf);
+        }
     }
 }
 

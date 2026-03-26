@@ -96,6 +96,7 @@ typedef struct ShellState {
     int shell_flags;
     int last_char;  /* last char sent to the process */
     char curpath[MAX_FILENAME_SIZE]; /* should keep a list with validity ranges */
+    char osc_title[256];  /* window title from OSC 0/1/2 */
 } ShellState;
 
 /* CG: these variables should be encapsulated in a global structure */
@@ -322,6 +323,11 @@ static void qe_trace_term(ShellState *s, const char *msg) {
         s->base.qs->trace_buffer_state = 0; \
     } \
 } while(0)
+
+/* Extract the string parameter from an OSC sequence stored in term_buf. */
+static const char *shell_osc_get_string(ShellState *s, int *slen) {
+    return osc_get_payload(cs8(s->term_buf), s->term_pos, slen);
+}
 
 static void qe_term_init(ShellState *s)
 {
@@ -1772,53 +1778,73 @@ static void qe_term_emulate(ShellState *s, int c)
             break;
         }
         s->state = QE_TERM_STATE_NORM;
-        /* OSC / PM / APC / DCS string has been received. Should handle these cases:
-           - OSC 0; Pt ST  Change Icon Name and Window Title to Pt.
-           - OSC 1; Pt ST  Change Icon Name to Pt.
-           - OSC 2; Pt ST  Change Window Title to Pt.
-           - OSC 3; Pt ST  Set X property on top-level window: Pt should
-           be in the form "prop=value", or just "prop" to delete the property
-           - OSC 4; c; name... ST  xterm's define extended color (executeXtermSetRgb)
-           Change Color #c to name. Any number of c / name pairs may be given.
-           example: "\033]4;16;rgb:0000/00000/0000\033\134"
+        /* Dispatch OSC sequences */
+        {
+            int slen;
+            const char *str = shell_osc_get_string(s, &slen);
 
-           iTerm2 reports the current rgb value with "<index>;?",
-           e.g. "\033]4;105;?" -> report as \033]4;105;rgb:0000/cccc/ffff\007"
-
-           iTerm2 has a specific behavior for colors 16 to 22:
-                16: terminalSetForegroundColor
-                17: terminalSetBackgroundColor
-                18: terminalSetBoldColor
-                19: terminalSetSelectionColor
-                20: terminalSetSelectedTextColor
-                21: terminalSetCursorColor
-                22: terminalSetCursorTextColor
-
-           xterm has the following set extended attribute:
-           - OSC 10; c; name... ST    Change color names starting with
-           text foreground (a list of one or more color names or RGB
-           specifications, separated by semicolon, up to eight, name as
-           as per XParseColor.
-
-           - OSC 11; c; name... ST  Change colors starting with text background
-           - OSC 12; c; name... ST  Change colors starting with text cursor
-           - OSC 13; c; name... ST  Change colors starting with mouse foreground
-           - OSC 14; c; name... ST  Change colors starting with mouse background
-           - OSC 15; c; name... ST  Change colors starting with Tek foreground
-           - OSC 16; c; name... ST  Change colors starting with Tek background
-           - OSC 17; c; name... ST  Change colors starting with highlight
-           - OSC 46; Pt ST  Change Log File to Pt (normally disabled by a
-           compile-time option)
-           - OSC 50; Pt ST  Set Font to Pt. If Pt begins with a "#", index in
-           the font menu, relative (if the next character is a plus or minus
-           sign) or absolute. A number is expected but not required after the
-           sign (the default is the current entry for relative, zero for
-           absolute indexing).
-           - OSC W; Pt ST   word-set (define char wordness)
-           xterm has a file download and image display protocol:
-           - OSC 1337; Pt ST
-         */
-        TRACE_PRINTF(s, "unhandled string: %.*s", min_int(s->term_pos, 20), s->term_buf);
+            switch (s->params[0]) {
+            case 0:   /* OSC 0: Change Icon Name and Window Title */
+            case 2:   /* OSC 2: Change Window Title */
+                pstrncpy(s->osc_title, sizeof(s->osc_title), str, slen);
+                TRACE_PRINTF(s, "title: %.*s", slen, str);
+                break;
+            case 1:   /* OSC 1: Change Icon Name (ignored) */
+                TRACE_MSG(s, "icon name (ignored)");
+                break;
+            case 7:   /* OSC 7: Current Working Directory */
+                /* Format: file://hostname/path or file:///path */
+                if (slen > 7 && !memcmp(str, "file://", 7)) {
+                    const char *path = memchr(str + 7, '/', slen - 7);
+                    if (path) {
+                        int pathlen = slen - (int)(path - str);
+                        pstrncpy(s->curpath, sizeof(s->curpath), path, pathlen);
+                        append_slash(s->curpath, sizeof(s->curpath));
+                        TRACE_PRINTF(s, "cwd: %s", s->curpath);
+                    }
+                }
+                break;
+            case 8:   /* OSC 8: Hyperlinks (params;uri) */
+                /* Hyperlink start: OSC 8 ; params ; uri ST
+                 * Hyperlink end:   OSC 8 ; ; ST (empty uri)
+                 * Full support requires buffer annotations; just trace for now.
+                 */
+                TRACE_PRINTF(s, "hyperlink: %.*s", min_int(slen, 60), str);
+                break;
+            case 133: /* OSC 133: Shell integration / prompt marking */
+                /* A = prompt start, B = prompt end (command input),
+                 * C = command executed, D[;exitcode] = command finished
+                 */
+                if (slen >= 1) {
+                    switch (str[0]) {
+                    case 'A': /* Prompt start */
+                        TRACE_MSG(s, "prompt-start");
+                        break;
+                    case 'B': /* Prompt end / command input area */
+                        s->cur_prompt = s->cur_offset;
+                        TRACE_MSG(s, "prompt-end");
+                        break;
+                    case 'C': /* Command started executing */
+                        TRACE_MSG(s, "command-start");
+                        break;
+                    case 'D': /* Command finished */
+                        TRACE_PRINTF(s, "command-done: %.*s", min_int(slen, 20), str);
+                        break;
+                    }
+                }
+                break;
+            default:
+                /* Unhandled OSC sequences include:
+                 * OSC 3: Set X property, OSC 4: define extended colors,
+                 * OSC 10-17: xterm color attributes,
+                 * OSC 46: log file, OSC 50: set font,
+                 * OSC 1337: iTerm2 file/image protocol
+                 */
+                TRACE_PRINTF(s, "unhandled string: %.*s",
+                             min_int(s->term_pos, 20), s->term_buf);
+                break;
+            }
+        }
         break;
     case QE_TERM_STATE_CSI:
         if (c >= '<' && c <= '?') {

@@ -252,6 +252,34 @@ const char *get_relativename(const char *filename, const char *dirname) {
     return filename;
 }
 
+const char *osc_get_payload(const char *buf, int buf_len, int *out_len) {
+    const char *p = buf;
+    const char *end = buf + buf_len;
+
+    /* Skip ESC ] prefix */
+    p += 2;
+    if (p >= end) { *out_len = 0; return buf; }
+
+    /* Skip number digits */
+    while (p < end && *p >= '0' && *p <= '9')
+        p++;
+
+    /* Skip ; separator if present */
+    if (p < end && *p == ';')
+        p++;
+
+    /* Strip terminator from end: BEL (0x07), 8-bit ST (0x9C), or ESC \ */
+    if (end > p) {
+        if (end[-1] == '\\' && end - 1 > p && end[-2] == '\033')
+            end -= 2;
+        else if (end[-1] == '\007' || end[-1] == (char)0x9C)
+            end -= 1;
+    }
+
+    *out_len = (int)(end - p);
+    return p;
+}
+
 /* Dynamic buffer package */
 
 static void *dbuf_default_realloc(void *opaque, void *ptr, size_t size) {
