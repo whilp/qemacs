@@ -569,6 +569,247 @@ TEST(terminal, color_annotations_present)
     session_cleanup(&sess);
 }
 
+/*--- Split window tests ---*/
+
+TEST(terminal, split_horizontal)
+{
+    TestSession sess;
+    if (session_start(&sess, NULL) != 0) {
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    /* C-x 2: split window horizontally (stacked) */
+    session_ctrl(&sess, 'x');
+    usleep(50000);
+    session_type(&sess, "2");
+    usleep(200000);
+
+    ScreenSnap *snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+
+    /* After horizontal split, there should be a mode line separator
+     * in the middle of the screen (row ~11 for a 24-line screen).
+     * The separator uses box-drawing char U+2500 (─) rendered as UTF-8. */
+    int found_separator = 0;
+    int sep_row = -1;
+    for (int row = 3; row < snap->num_lines - 3; row++) {
+        /* Mode line starts with ┤ (U+2524) */
+        if (strstr(snap->lines[row], "\xe2\x94\xa4") != NULL) {
+            found_separator = 1;
+            sep_row = row;
+            break;
+        }
+    }
+    ASSERT_TRUE(found_separator);
+
+    /* Both panes should show the file content */
+    int content_above = 0, content_below = 0;
+    for (int row = 0; row < sep_row; row++) {
+        if (snap_line_contains(snap, row, "Hello"))
+            content_above = 1;
+    }
+    for (int row = sep_row + 1; row < snap->num_lines - 1; row++) {
+        if (snap_line_contains(snap, row, "Hello"))
+            content_below = 1;
+    }
+    ASSERT_TRUE(content_above);
+    ASSERT_TRUE(content_below);
+
+    free_snapshot(snap);
+    session_stop(&sess);
+    session_cleanup(&sess);
+}
+
+TEST(terminal, split_vertical)
+{
+    TestSession sess;
+    if (session_start(&sess, NULL) != 0) {
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    /* C-x 3: split window vertically (side by side) */
+    session_ctrl(&sess, 'x');
+    usleep(50000);
+    session_type(&sess, "3");
+    usleep(200000);
+
+    ScreenSnap *snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+
+    /* After vertical split, there should be a vertical separator (│, U+2502)
+     * roughly in the middle columns of the content rows */
+    int found_separator = 0;
+    for (int row = 0; row < snap->num_lines - 2; row++) {
+        /* Look for │ (U+2502, UTF-8: E2 94 82) in the line */
+        if (strstr(snap->lines[row], "\xe2\x94\x82") != NULL) {
+            found_separator = 1;
+            break;
+        }
+    }
+    ASSERT_TRUE(found_separator);
+
+    /* The file content "Hello" should appear on both sides of the split.
+     * Since both panes show the same file, the text should appear twice
+     * on the same line (once per pane). */
+    int hello_count = 0;
+    for (int row = 0; row < snap->num_lines; row++) {
+        if (snap_line_contains(snap, row, "Hello"))
+            hello_count++;
+    }
+    /* At least one row should have Hello visible */
+    ASSERT_TRUE(hello_count >= 1);
+
+    free_snapshot(snap);
+    session_stop(&sess);
+    session_cleanup(&sess);
+}
+
+/*--- Mode line tests ---*/
+
+TEST(terminal, modeline_shows_filename)
+{
+    /* Create a file with a distinctive name */
+    char filepath[256];
+    snprintf(filepath, sizeof(filepath),
+             "/tmp/qe_test_modeline_%d.txt", (int)getpid());
+    FILE *f = fopen(filepath, "w");
+    if (f) {
+        fprintf(f, "modeline test content\n");
+        fclose(f);
+    }
+
+    TestSession sess;
+    if (session_start(&sess, filepath) != 0) {
+        unlink(filepath);
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    ScreenSnap *snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+
+    /* The mode line should be at row height-2 (second to last line,
+     * last line is status/minibuffer).
+     * It should contain the filename. */
+    int modeline_row = snap->num_lines - 2;
+    char basename[64];
+    snprintf(basename, sizeof(basename), "qe_test_modeline_%d.txt", (int)getpid());
+    ASSERT_TRUE(snap_line_contains(snap, modeline_row, basename));
+
+    free_snapshot(snap);
+    session_stop(&sess);
+    unlink(filepath);
+    session_cleanup(&sess);
+}
+
+TEST(terminal, modeline_shows_line_column)
+{
+    TestSession sess;
+    if (session_start(&sess, NULL) != 0) {
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    /* Default position should be L1 C1 */
+    ScreenSnap *snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+    int modeline_row = snap->num_lines - 2;
+    ASSERT_TRUE(snap_line_contains(snap, modeline_row, "L1"));
+    ASSERT_TRUE(snap_line_contains(snap, modeline_row, "C1"));
+    free_snapshot(snap);
+
+    /* Move cursor down and right to change line/column */
+    session_ctrl(&sess, 'e');  /* C-e: end of line */
+    usleep(100000);
+
+    snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+    modeline_row = snap->num_lines - 2;
+    /* Should still be L1 but column should be > 1 */
+    ASSERT_TRUE(snap_line_contains(snap, modeline_row, "L1"));
+    ASSERT_TRUE(snap_line_contains(snap, modeline_row, "C14"));  /* "Hello, World!" is 13 chars, cursor at 14 */
+    free_snapshot(snap);
+
+    session_stop(&sess);
+    session_cleanup(&sess);
+}
+
+/*--- Syntax highlighting tests ---*/
+
+TEST(terminal, syntax_highlight_c_file)
+{
+    /* Create a small C file with keyword, string, and comment */
+    char filepath[256];
+    snprintf(filepath, sizeof(filepath),
+             "/tmp/qe_test_syntax_%d.c", (int)getpid());
+    FILE *f = fopen(filepath, "w");
+    if (f) {
+        fprintf(f, "int main(void) {\n");
+        fprintf(f, "    return 0;\n");
+        fprintf(f, "}\n");
+        fclose(f);
+    }
+
+    TestSession sess;
+    if (session_start(&sess, filepath) != 0) {
+        unlink(filepath);
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    usleep(200000);  /* let syntax highlighting settle */
+
+    session_stop(&sess);
+
+    ASSERT_TRUE(sess.dump_buf != NULL);
+
+    ScreenSnap *snap = get_last_snapshot(sess.dump_buf, sess.dump_len);
+    ASSERT_TRUE(snap != NULL);
+    ASSERT_TRUE(snap_any_line_contains(snap, "int"));
+    ASSERT_TRUE(snap_any_line_contains(snap, "return"));
+
+    /* Find the row containing "int main" */
+    int keyword_row = -1;
+    for (int row = 0; row < snap->num_lines; row++) {
+        if (snap_line_contains(snap, row, "int")) {
+            keyword_row = row;
+            break;
+        }
+    }
+    ASSERT_TRUE(keyword_row >= 0);
+
+    /* Find the column of "int" keyword and "main" identifier */
+    int int_col = strstr(snap->lines[keyword_row], "int") - snap->lines[keyword_row];
+    /* Find "main" which should be after "int " */
+    char *main_ptr = strstr(snap->lines[keyword_row], "main");
+    ASSERT_TRUE(main_ptr != NULL);
+    int main_col = main_ptr - snap->lines[keyword_row];
+
+    /* Get colors for the keyword "int" and the identifier "main" */
+    int int_fg = -1, int_bg = -1;
+    int main_fg = -1, main_bg = -1;
+    char attrs[16];
+
+    int got_int = find_cell_color(sess.dump_buf, snap->flush_num,
+                                   keyword_row, int_col, &int_fg, &int_bg, attrs);
+    int got_main = find_cell_color(sess.dump_buf, snap->flush_num,
+                                    keyword_row, main_col, &main_fg, &main_bg, attrs);
+
+    /* Both should have color info */
+    ASSERT_TRUE(got_int);
+    ASSERT_TRUE(got_main);
+
+    /* The keyword "int" should have a DIFFERENT fg color than "main"
+     * (syntax highlighting distinguishes keywords from identifiers) */
+    ASSERT_NE(int_fg, main_fg);
+
+    free_snapshot(snap);
+    unlink(filepath);
+    session_cleanup(&sess);
+}
+
 /*--- Shell mode tests ---*/
 
 /* Helper: wait for a substring to appear on screen, with timeout.

@@ -1514,8 +1514,20 @@ static void tty_dpy_xor_rectangle(QEditScreen *s,
     for (y = y1; y < y2; y++) {
         ts->line_updated[y] = 1;
         for (x = x1; x < x2; x++) {
-            /* XXX: should reverse fg and bg */
-            *ptr ^= TTY_CHAR(0, 7, 7);
+            /* Reverse video: swap fg and bg colors, preserving attrs */
+            TTYChar cc = *ptr;
+            char32_t ch = TTY_CHAR_GET_CH(cc);
+            uint32_t col = TTY_CHAR_GET_COL(cc);
+            int fg = TTY_CHAR_GET_FG(cc);
+            int bg = TTY_CHAR_GET_BG(cc);
+#if TTY_STYLE_BITS == 32
+            /* 32-bit: col = fg[7:0] | attr[11:8] | bg[15:12] */
+            uint32_t new_col = (bg & 0xFF) | (col & 0x0F00) | ((fg & 0xF) << 12);
+#else
+            /* 64-bit: col = fg[12:0] | attr[16:13] | bg[29:17] */
+            uint32_t new_col = bg | (col & 0x1E000) | ((uint32_t)fg << 17);
+#endif
+            *ptr = TTY_CHAR2(ch, new_col);
             ptr++;
         }
         ptr += wrap;
