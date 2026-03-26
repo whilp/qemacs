@@ -403,40 +403,6 @@ void bmp_free(QEditScreen *s, QEBitmap **bp)
     }
 }
 
-#if 0
-/* bitmap cache */
-typedef struct QECachedBitmap {
-    QEBitmap *bitmap;
-    char url[1];
-    int refcount;
-    struct QECachedBitmap *next;
-} QECachedBitmap;
-
-/* dst_w or dst_h can be zero if unspecified */
-/* XXX: add scaling for printing */
-QECachedBitmap *cbmp_open(QEditScreen *s,
-                          const char *url,
-                          int dst_w, int dst_h)
-{
-}
-
-/* return the DESTINATION size of the bitmap. return non zero if
-   unknown size */
-int cbmp_get_size(QECachedBitmap *bitmap, int *w_ptr, int *h_ptr)
-{
-}
-
-void cbmp_draw(QEditScreen *s, QECachedBitmap *bitmap,
-               int dst_x, int dst_y, int dst_w, int dst_h,
-               int offset_x, int offset_y, int flags)
-{
-}
-
-void cbmp_close(QEditScreen *cbmp)
-{
-}
-#endif
-
 /*---------------- QEPicture handling functions ----------------*/
 
 int qe_draw_picture(QEditScreen *s, int dst_x, int dst_y, int dst_w, int dst_h,

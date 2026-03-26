@@ -525,16 +525,6 @@ int unicode_to_utf8(uint8_t *buf, unsigned int c) {
     return q - buf;
 }
 
-#if 0
-static const int utf8_min_code[5] = {
-    0x80, 0x800, 0x10000, 0x200000, 0x4000000,
-    //0x80, 0x20, 0x400, 0x8000, 0x100000,
-    //0x80, 0x20, 0x10, 0x200, 0x4000,
-    //0x80, 0x20, 0x10, 0x8, 0x100,
-    //0x80, 0x20, 0x10, 0x8, 0x4,
-};
-#endif
-
 int unicode_from_utf8(const uint8_t *p, int max_len, const uint8_t **pp) {
     /*@API utils
        Decode a codepoint from a UTF-8 encoded array

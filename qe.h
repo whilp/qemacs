@@ -441,13 +441,6 @@ struct EditBuffer {
     OWNED EditBufferCallbackList *first_callback;
     OWNED QEProperty *property_list;
 
-#if 0
-    /* asynchronous loading/saving support */
-    struct BufferIOState *io_state;
-    /* used during loading */
-    int probed;
-#endif
-
     ModeDef *default_mode;
 
     /* Saved window data from the last closed window attached to this buffer.
@@ -1311,11 +1304,6 @@ struct DisplayState {
     int eol_reached;
     EditState *edit_state;
     QETermStyle style;   /* current style for display_printf... */
-
-#if 0
-    QEFont *font;
-    QEStyleDef style_cache;
-#endif
 
     /* fragment buffers */
     TextFragment fragments[MAX_SCREEN_WIDTH];

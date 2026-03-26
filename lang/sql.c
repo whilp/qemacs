@@ -106,7 +106,7 @@ static void sql_colorize_line(QEColorizeContext *cp,
     char32_t c;
     int state = cp->colorize_state;
 
-    if (state & IN_SQL_COMMENT);
+    if (state & IN_SQL_COMMENT)
         goto parse_c_comment;
 
     while (i < n) {

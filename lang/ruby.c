@@ -120,7 +120,7 @@ static void ruby_colorize_line(QEColorizeContext *cp,
         i = n;
         SET_STYLE(sbuf, start, i, RUBY_STYLE_HEREDOC);
     } else {
-        if (state & IN_RUBY_COMMENT);
+        if (state & IN_RUBY_COMMENT)
             goto parse_c_comment;
 
         if (state & IN_RUBY_REGEX)
