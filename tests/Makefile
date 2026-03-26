@@ -33,7 +33,17 @@ test-terminal: test_terminal
 	@echo "--- Running test_terminal ---"
 	./test_terminal
 
-clean:
-	rm -f $(TESTS) test_terminal
+BENCH_SRCS = ../buffer.c ../cutils.c ../charset.c ../libunicode.c ../util.c \
+             ../unix.c ../charsetmore.c ../unicode_join.c ../indic.c ../arabic.c
 
-.PHONY: all test clean
+bench_buffer: bench_buffer.c $(BENCH_SRCS) ../qe.h ../cutils.h ../config.h
+	$(CC) $(TEST_CFLAGS) -Wno-format-truncation -o $@ bench_buffer.c $(BENCH_SRCS)
+
+bench: bench_buffer
+	@echo "--- Running bench_buffer ---"
+	./bench_buffer
+
+clean:
+	rm -f $(TESTS) test_terminal bench_buffer
+
+.PHONY: all test bench clean
