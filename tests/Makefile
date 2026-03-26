@@ -5,7 +5,7 @@ CONFIG_SESSION_DETACH ?= yes
 
 TEST_CFLAGS = -g -O2 -mcosmo -Wall -I.. -DHAVE_QE_CONFIG_H
 
-TESTS = test_cutils test_buffer test_unix test_cosmo
+TESTS = test_cutils test_buffer test_unix test_cosmo test_embed
 
 ifdef CONFIG_SESSION_DETACH
 TESTS += test_session
@@ -39,6 +39,19 @@ test_cosmo: test_cosmo.c testlib.h
 test_session: test_session.c ../session.c ../session.h testlib.h ../config.h
 	$(CC) $(TEST_CFLAGS) -o $@ test_session.c
 
+# Embed test: validates resource files are accessible via /zip/ paths
+# The test binary itself must have resources embedded (same as qe)
+EMBED_FILES = ../kmaps ../ligatures ../config.eg ../qe-manual.md ../qe.1
+
+test_embed: test_embed.c testlib.h $(EMBED_FILES)
+	$(CC) $(TEST_CFLAGS) -o $@ test_embed.c
+	mv $@ $@.com
+	mkdir -p .embed/share/qe
+	for f in $(EMBED_FILES); do cp "$$f" .embed/share/qe/$$(basename "$$f"); done
+	cd .embed && zip -qr0 ../$@.com share/qe/
+	mv $@.com $@
+	rm -rf .embed
+
 # Terminal integration tests (requires qe binary with test_display driver)
 test_terminal: test_terminal.c testlib.h
 	$(CC) $(TEST_CFLAGS) -o $@ test_terminal.c
@@ -68,6 +81,6 @@ bench: bench_buffer
 	./bench_buffer
 
 clean:
-	rm -f $(TESTS) test_terminal test_html bench_buffer
+	rm -rf $(TESTS) test_terminal test_html bench_buffer .embed
 
 .PHONY: all test bench clean

@@ -94,6 +94,9 @@ endif
 
 TARGETLIBS:=
 
+# Files to embed in the APE executable via zip (accessible at /zip/share/qe/)
+EMBED_FILES:=kmaps ligatures config.eg qe-manual.md qe.1
+
 TOP:=0
 ifeq (,$(TARGET))
 TARGET:=qe
@@ -243,6 +246,7 @@ ifneq (,$(DEBUG_SUFFIX))
 $(TARGET)$(DEBUG_SUFFIX)$(EXE): $(OBJS) $(DEP_LIBS)
 	$(echo) LD $@
 	$(cmd)  $(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+	$(call embed-resources,$@)
 else
 $(TARGET)_g$(EXE): $(OBJS) $(DEP_LIBS)
 	$(echo) LD $@
@@ -252,8 +256,25 @@ $(TARGET)$(EXE): $(TARGET)_g$(EXE) Makefile
 	@rm -f $@
 	cp $< $@
 	-$(STRIP) $@
+	$(call embed-resources,$@)
 	@ls -l $@
 endif
+
+# Embed resource files into APE binary via zip
+# Cosmopolitan makes these accessible at /zip/ paths at runtime
+# The binary is temporarily renamed to .com so zip modifies it in-place
+# (without an extension, zip creates a separate .zip file instead)
+define embed-resources
+	$(echo) ZIP $1
+	$(cmd)  mkdir -p .embed/share/qe
+	$(cmd)  for f in $(EMBED_FILES); do \
+		if [ -f "$$f" ]; then cp "$$f" .embed/share/qe/; fi; \
+	done
+	$(cmd)  mv $(1) $(1).com
+	$(cmd)  cd .embed && zip -qr0 ../$(1).com share/qe/
+	$(cmd)  mv $(1).com $(1)
+	$(cmd)  rm -rf .embed
+endef
 
 ifeq (1,$(TOP))
 
@@ -496,7 +517,7 @@ release: install-cosmocc
 #
 clean:
 	$(MAKE) -C libqhtml clean
-	rm -rf *.dSYM *.gch .objs* .tobjs* .xobjs* bin release
+	rm -rf *.dSYM *.gch .objs* .tobjs* .xobjs* .embed bin release
 	rm -f *~ *.o *.a *.exe *_g *_debug TAGS gmon.out core *.exe.stackdump \
            qe tqe tqe1 config.h \
            qe-doc.aux qe-doc.info qe-doc.log qe-doc.pdf qe-doc.toc
