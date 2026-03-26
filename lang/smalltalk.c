@@ -194,10 +194,4 @@ static ModeDef smalltalk_mode = {
     .colorize_func = smalltalk_colorize_line,
 };
 
-static int smalltalk_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &smalltalk_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(smalltalk_init);
+qe_module_init_mode(smalltalk_mode, MODEF_SYNTAX);

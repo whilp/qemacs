@@ -441,13 +441,6 @@ struct EditBuffer {
     OWNED EditBufferCallbackList *first_callback;
     OWNED QEProperty *property_list;
 
-#if 0
-    /* asynchronous loading/saving support */
-    struct BufferIOState *io_state;
-    /* used during loading */
-    int probed;
-#endif
-
     ModeDef *default_mode;
 
     /* Saved window data from the last closed window attached to this buffer.
@@ -665,6 +658,21 @@ void qe_exit_all_modules(QEmacsState *qs);
         void qe_module_##fn(QEmacsState *qs) { fn(qs); }
 
 #endif /* QE_MODULE */
+
+/* Convenience macro for modules that register a single mode.
+ * Replaces the common boilerplate:
+ *   static int foo_init(QEmacsState *qs) {
+ *       qe_register_mode(qs, &foo_mode, MODEF_SYNTAX);
+ *       return 0;
+ *   }
+ *   qe_module_init(foo_init);
+ */
+#define qe_module_init_mode(mode, flags)                          \
+    static int mode##__init(QEmacsState *qs) {                    \
+        qe_register_mode(qs, &mode, flags);                      \
+        return 0;                                                 \
+    }                                                             \
+    qe_module_init(mode##__init)
 
 /* qe.c */
 
@@ -1296,11 +1304,6 @@ struct DisplayState {
     int eol_reached;
     EditState *edit_state;
     QETermStyle style;   /* current style for display_printf... */
-
-#if 0
-    QEFont *font;
-    QEStyleDef style_cache;
-#endif
 
     /* fragment buffers */
     TextFragment fragments[MAX_SCREEN_WIDTH];

@@ -1928,111 +1928,6 @@ int eb_replace(EditBuffer *b, int offset, int size,
 
 #define IOBUF_SIZE 32768
 
-#if 0
-
-typedef struct BufferIOState {
-    URLContext *handle;
-    void (*progress_cb)(void *opaque, int size);
-    void (*completion_cb)(void *opaque, int err);
-    void *opaque;
-    int offset;
-    int saved_flags;
-    int saved_log;
-    int nolog;
-    unsigned char buffer[IOBUF_SIZE];
-} BufferIOState;
-
-static void load_connected_cb(void *opaque, int err);
-static void load_read_cb(void *opaque, int size);
-static void eb_io_stop(EditBuffer *b, int err);
-
-/* load a buffer asynchronously and launch the callback. The buffer
-   stays in 'loading' state while begin loaded. It is also marked
-   readonly. */
-int load_buffer(EditBuffer *b, const char *filename,
-                int offset, int nolog,
-                void (*progress_cb)(void *opaque, int size),
-                void (*completion_cb)(void *opaque, int err), void *opaque)
-{
-    URLContext *h;
-    BufferIOState *s;
-
-    /* cannot load a buffer if already I/Os or readonly */
-    if (b->flags & (BF_LOADING | BF_SAVING | BF_READONLY))
-        return -1;
-    s = qe_mallocz(BufferIOState);
-    if (!s)
-        return -1;
-    b->io_state = s;
-    h = url_new();
-    if (!h) {
-        qe_free(&b->io_state);
-        return -1;
-    }
-    s->handle = h;
-    s->saved_flags = b->flags;
-    s->nolog = nolog;
-    if (s->nolog) {
-        s->saved_log = b->save_log;
-        b->save_log = 0;
-    }
-    b->flags |= BF_LOADING | BF_READONLY;
-    s->handle = h;
-    s->progress_cb = progress_cb;
-    s->completion_cb = completion_cb;
-    s->opaque = opaque;
-    s->offset = offset;
-    printf("connect_async: '%s'\n", filename);
-    url_connect_async(s->handle, filename, URL_RDONLY,
-                      load_connected_cb, b);
-    return 0;
-}
-
-static void load_connected_cb(void *opaque, int err)
-{
-    EditBuffer *b = opaque;
-    BufferIOState *s = b->io_state;
-    printf("connect_cb: err=%d\n", err);
-    if (err) {
-        eb_io_stop(b, err);
-        return;
-    }
-    url_read_async(s->handle, s->buffer, IOBUF_SIZE, load_read_cb, b);
-}
-
-static void load_read_cb(void *opaque, int size)
-{
-    EditBuffer *b = opaque;
-    BufferIOState *s = b->io_state;
-
-    printf("read_cb: size=%d\n", size);
-    if (size < 0) {
-        eb_io_stop(b, -EIO);
-    } else if (size == 0) {
-        /* end of file */
-        eb_io_stop(b, 0);
-    } else {
-        s->offset += eb_insert(b, s->offset, s->buffer, size);
-        /* launch next read request */
-        url_read_async(s->handle, s->buffer, IOBUF_SIZE, load_read_cb, b);
-    }
-}
-
-static void eb_io_stop(EditBuffer *b, int err)
-{
-    BufferIOState *s = b->io_state;
-
-    b->flags = s->saved_flags;
-    if (s->nolog) {
-        b->modified = 0;
-        b->save_log = s->saved_log;
-    }
-    url_close(s->handle);
-    s->completion_cb(s->opaque, err);
-    qe_free(&b->io_state);
-}
-#endif
-
 /* CG: returns number of bytes read, or -1 upon read error */
 int eb_raw_buffer_load1(EditBuffer *b, FILE *f, int offset)
 {
@@ -2406,17 +2301,6 @@ int eb_printf(EditBuffer *b, const char *fmt, ...) {
     va_end(ap);
     return written;
 }
-
-#if 0
-/* pad current line with spaces so that it reaches column n */
-void eb_line_pad(EditBuffer *b, int offset, int n) {
-    /* Compute visual column visual column */
-    int tw = b->tab_width > 0 ? b->tab_width : 8;
-    int col = text_screen_width(b, eb_goto_bol(b, offset), offset, tw);
-    if (n > col)
-        eb_insert_spaces(b, offset, n - col);
-}
-#endif
 
 /* Read the contents of a buffer region encoded in a utf8 string */
 int eb_get_region_contents(EditBuffer *b, int start, int stop,

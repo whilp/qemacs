@@ -226,10 +226,4 @@ static ModeDef ats_mode = {
     .colorize_func = ats_colorize_line,
 };
 
-static int ats_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &ats_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(ats_init);
+qe_module_init_mode(ats_mode, MODEF_SYNTAX);

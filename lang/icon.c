@@ -115,9 +115,7 @@ static void icon_colorize_line(QEColorizeContext *cp,
             while (i < n) {
                 c = str[i++];
                 if (c == '\\') {
-                    if (i >= n)
-                        break;
-                    i++;
+                    i = colorize_skip_escape(str, i, n);
                 } else
                 if (c == delim) {
                     state &= ~(IN_ICON_STRING | IN_ICON_STRING_Q);
@@ -205,10 +203,4 @@ static ModeDef icon_mode = {
     .fallback = &c_mode,
 };
 
-static int icon_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &icon_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(icon_init);
+qe_module_init_mode(icon_mode, MODEF_SYNTAX);

@@ -166,13 +166,8 @@ static void ruby_colorize_line(QEColorizeContext *cp,
                 i++;
             parse_c_comment:
                 state = IN_RUBY_COMMENT;
-                for (; i < n; i++) {
-                    if (str[i] == '*' && str[i + 1] == '/') {
-                        i += 2;
-                        state &= ~IN_RUBY_COMMENT;
-                        break;
-                    }
-                }
+                i = colorize_skip_block_comment(str, i, n,
+                                                &state, IN_RUBY_COMMENT);
                 goto comment;
             }
             if (start == indent
@@ -506,10 +501,4 @@ static ModeDef ruby_mode = {
     .colorize_func = ruby_colorize_line,
 };
 
-static int ruby_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &ruby_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(ruby_init);
+qe_module_init_mode(ruby_mode, MODEF_SYNTAX);

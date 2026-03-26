@@ -366,9 +366,4 @@ static ModeDef tcl_mode = {
     .mode_probe = tcl_mode_probe,
 };
 
-static int tcl_init(QEmacsState *qs) {
-    qe_register_mode(qs, &tcl_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(tcl_init);
+qe_module_init_mode(tcl_mode, MODEF_SYNTAX);

@@ -198,10 +198,4 @@ ModeDef xml_mode = {
     .colorize_func = xml_colorize_line,
 };
 
-static int xml_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &xml_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(xml_init);
+qe_module_init_mode(xml_mode, MODEF_SYNTAX);

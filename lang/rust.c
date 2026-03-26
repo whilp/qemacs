@@ -103,13 +103,8 @@ static void rust_colorize_line(QEColorizeContext *cp,
             parse_comment:
                 style = RUST_STYLE_COMMENT;
                 state |= IN_RUST_COMMENT;
-                for (; i < n; i++) {
-                    if (str[i] == '*' && str[i + 1] == '/') {
-                        i += 2;
-                        state &= ~IN_RUST_COMMENT;
-                        break;
-                    }
-                }
+                i = colorize_skip_block_comment(str, i, n,
+                                                &state, IN_RUST_COMMENT);
                 break;
             } else
             if (str[i] == '/') {
@@ -151,9 +146,7 @@ static void rust_colorize_line(QEColorizeContext *cp,
             while (i < n) {
                 c = str[i++];
                 if (c == '\\') {
-                    if (i >= n)
-                        break;
-                    i++;
+                    i = colorize_skip_escape(str, i, n);
                 } else
                 if (c == delim) {
                     state &= ~(IN_RUST_STRING | IN_RUST_STRING_Q);
@@ -165,47 +158,11 @@ static void rust_colorize_line(QEColorizeContext *cp,
         normal:
             if (qe_isdigit(c)) {
                 int j;
-                // Integers:
-                // 0x[0-9a-fA-F_]+      //
-                // 0o[0-8_]+            //
-                // 0b[01_]+             //
-                // [0-9][0-9_]*         //
-                // Floats:
-                // [0-9][0-9_]*\.[0-9_]*([eE][-\+]?[0-9_]+)?
-                // [0-9][0-9_]*(\.[0-9_]*)?[eE][-\+]?[0-9_]+
-                // number suffixes:
                 static const char * const suffixes[] = {
                     "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64",
                     "f32", "f64",
                 };
-                if (c == '0' && str[i] == 'x' && qe_isxdigit_(str[i + 1])) {
-                    for (i += 3; qe_isxdigit_(str[i]); i++)
-                        continue;
-                } else
-                if (c == '0' && str[i] == 'o' && qe_isoctdigit_(str[i + 1])) {
-                    for (i += 3; qe_isoctdigit_(str[i]); i++)
-                        continue;
-                } else
-                if (c == '0' && str[i] == 'b' && qe_isbindigit_(str[i + 1])) {
-                    for (i += 3; qe_isbindigit_(str[i]); i++)
-                        continue;
-                } else {
-                    while (qe_isdigit_(str[i]))
-                        i++;
-                    if (str[i] == '.' && qe_isdigit_(str[i + 1])) {
-                        for (i += 2; qe_isdigit_(str[i]); i++)
-                            continue;
-                    }
-                    if (str[i] == 'e' || str[i] == 'E') {
-                        j = i + 1;
-                        if (str[j] == '+' || str[j] == '-')
-                            j++;
-                        if (qe_isdigit_(str[j])) {
-                            for (i = j + 1; qe_isdigit_(str[i]); i++)
-                                continue;
-                        }
-                    }
-                }
+                i = colorize_parse_number(str, i, n, 1);
                 if (qe_isalpha(str[i])) {
                     for (j = 0; j < countof(suffixes); j++) {
                         if (ustr_match_keyword(str + i, suffixes[j], &klen)) {
@@ -278,10 +235,4 @@ static ModeDef rust_mode = {
     .fallback = &c_mode,
 };
 
-static int rust_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &rust_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(rust_init);
+qe_module_init_mode(rust_mode, MODEF_SYNTAX);

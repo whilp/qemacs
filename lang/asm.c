@@ -164,10 +164,4 @@ static ModeDef asm_mode = {
     .colorize_func = asm_colorize_line,
 };
 
-static int asm_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &asm_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(asm_init);
+qe_module_init_mode(asm_mode, MODEF_SYNTAX);

@@ -370,13 +370,18 @@ $(OBJS_DIR)/$(TARGET)_modules.c: $(SRCS) Makefile config.mak
 	@echo '/* This file was generated automatically */' > $@
 	@echo '#include "qe.h"'                             >> $@
 	@echo '#undef qe_module_init'                       >> $@
+	@echo '#undef qe_module_init_mode'                  >> $@
 	@echo '#define qe_module_init(fn)  extern int qe_module_##fn(QEmacsState *qs)' >> $@
+	@echo '#define qe_module_init_mode(mode, flags)  extern int qe_module_##mode##__init(QEmacsState *qs)' >> $@
 	-@grep -h ^qe_module_init $(SRCS)                   >> $@
 	@echo '#undef qe_module_init'                       >> $@
+	@echo '#undef qe_module_init_mode'                  >> $@
 	@echo 'void qe_init_all_modules(QEmacsState *qs) {' >> $@
 	@echo '#define qe_module_init(fn)  qe_module_##fn(qs)' >> $@
+	@echo '#define qe_module_init_mode(mode, flags)  qe_module_##mode##__init(qs)' >> $@
 	-@grep -h ^qe_module_init $(SRCS)                   >> $@
 	@echo '#undef qe_module_init'                       >> $@
+	@echo '#undef qe_module_init_mode'                  >> $@
 	@echo '}'                                           >> $@
 	@echo '#undef qe_module_exit'                       >> $@
 	@echo '#define qe_module_exit(fn)  extern void qe_module_##fn(QEmacsState *qs)' >> $@

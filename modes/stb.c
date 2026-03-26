@@ -159,10 +159,4 @@ static ModeDef stb_mode = {
     .display = image_display,
 };
 
-static int stb_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &stb_mode, MODEF_VIEW);
-    return 0;
-}
-
-qe_module_init(stb_init);
+qe_module_init_mode(stb_mode, MODEF_VIEW);

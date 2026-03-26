@@ -88,13 +88,8 @@ static void scad_colorize_line(QEColorizeContext *cp,
                 colstate |= IN_SCAD_COMMENT;
                 i++;
             in_comment:
-                for (; i < n; i++) {
-                    if (str[i] == '*' && str[i + 1] == '/') {
-                        i += 2;
-                        colstate &= ~IN_SCAD_COMMENT;
-                        break;
-                    }
-                }
+                i = colorize_skip_block_comment(str, i, n,
+                                                &colstate, IN_SCAD_COMMENT);
                 style = SCAD_STYLE_COMMENT;
                 break;
             }
@@ -196,10 +191,4 @@ static ModeDef scad_mode = {
     //.auto_indent = 1,
 };
 
-static int scad_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &scad_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(scad_init);
+qe_module_init_mode(scad_mode, MODEF_SYNTAX);

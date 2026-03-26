@@ -364,9 +364,7 @@ static void c_colorize_line(QEColorizeContext *cp,
                     while (i < n) {
                         c = str[i++];
                         if (c == '\\') {
-                            if (i < n) {
-                                i += 1;
-                            }
+                            i = colorize_skip_escape(str, i, n);
                         } else
                         if (state & IN_C_CHARCLASS) {
                             if (c == ']') {
@@ -1927,9 +1925,7 @@ static void js_colorize_line(QEColorizeContext *cp,
                     while (i < n) {
                         c = str[i++];
                         if (c == '\\') {
-                            if (i < n) {
-                                i += 1;
-                            }
+                            i = colorize_skip_escape(str, i, n);
                         } else
                         if (state & IN_C_CHARCLASS) {
                             if (c == ']') {
@@ -2019,9 +2015,7 @@ static void js_colorize_line(QEColorizeContext *cp,
             while (i < n) {
                 c = str[i++];
                 if (c == '\\') {
-                    if (i >= n)
-                        break;
-                    i++;
+                    i = colorize_skip_escape(str, i, n);
                 } else
                 if (c == delim) {
                     state &= ~IN_C_STRING;
@@ -2036,9 +2030,7 @@ static void js_colorize_line(QEColorizeContext *cp,
             while (i < n) {
                 c = str[i++];
                 if (c == '\\') {
-                    if (i >= n)
-                        break;
-                    i++;
+                    i = colorize_skip_escape(str, i, n);
                 } else
                 if (c == delim && str[i] == delim && str[i + 1] == delim) {
                     i += 2;
@@ -3804,9 +3796,7 @@ static void salmon_colorize_line(QEColorizeContext *cp,
             while (i < n) {
                 c = str[i++];
                 if (c == '\\') {
-                    if (i < n) {
-                        i += 1;
-                    }
+                    i = colorize_skip_escape(str, i, n);
                 } else
                 if (state & IN_C_CHARCLASS) {
                     if (c == ']') {
@@ -3842,9 +3832,7 @@ static void salmon_colorize_line(QEColorizeContext *cp,
             while (i < n) {
                 c = str[i++];
                 if (c == '\\') {
-                    if (i >= n)
-                        break;
-                    i++;
+                    i = colorize_skip_escape(str, i, n);
                 } else
                 if (c == delim) {
                     state &= ~IN_C_STRING;
@@ -4189,9 +4177,7 @@ static void ppl_colorize_line(QEColorizeContext *cp,
             while (i < n) {
                 c = str[i++];
                 if (c == '\\') {
-                    if (i >= n)
-                        break;
-                    i++;
+                    i = colorize_skip_escape(str, i, n);
                 } else
                 if (c == delim) {
                     state &= ~IN_PPL_STRING;
@@ -4590,9 +4576,7 @@ static void c3_colorize_line(QEColorizeContext *cp,
             while (i < n) {
                 c = str[i++];
                 if (c == '\\') {
-                    if (i >= n)
-                        break;
-                    i++;
+                    i = colorize_skip_escape(str, i, n);
                 } else
                 if (c == delim) {
                     break;

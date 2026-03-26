@@ -736,18 +736,7 @@ static void color_complete(CompleteState *cp, CompleteFunc enumerate) {
                 enumerate(cp, buf, CT_GLOB);
             }
         }
-    } else
-#if 0
-    if (name[0] == 'g' && name[1] == 'r' && (name[2] == 'a' || name[2] == 'e') && name[3] == 'y') {
-        snprintf(buf, sizeof buf, "%.4s", name);
-        enumerate(cp, buf, CT_GLOB);
-        for (i = 0; i < 100; i++) {
-            snprintf(buf + 4, sizeof(buf) - 4, "%d", i);
-            enumerate(cp, buf, CT_GLOB);
-        }
-    } else
-#endif
-    {
+    } else {
         ColorDef const *def = qe_colors;
         int count = nb_qe_colors;
         while (count > 0) {
@@ -1191,10 +1180,6 @@ static int cursor_func(DisplayState *ds,
         m->cursor_width = w;
         m->cursor_height = h;
         m->linec = line_num;
-#if 0
-        printf("cursor_func: xc=%d yc=%d linec=%d offset: %d<=%d<%d\n",
-               m->xc, m->yc, m->linec, offset1, m->offsetc, offset2);
-#endif
         return -1;
     } else {
         return 0;
@@ -2053,8 +2038,10 @@ void do_quoted_insert(EditState *s, int argval) {
     QEmacsState *qs = s->qs;
     struct QuoteKeyArgument *qa = qe_mallocz(struct QuoteKeyArgument);
 
-    if (qa == NULL) // FIXME: error message?
+    if (qa == NULL) {
+        put_status(s, "Out of memory");
         return;
+    }
 
     qa->s = s;
     qa->has_arg = (argval != NO_ARG);
@@ -2287,17 +2274,6 @@ void do_open_line(EditState *s)
     /* preserve s->offset */
     eb_insert_char32(s->b, s->offset, '\n');
 }
-
-#if 0
-void do_space(EditState *s, int key, int argval)
-{
-    if (s->b->flags & BF_READONLY) {
-        do_scroll_up_down(s, 1, argval);
-        return;
-    }
-    do_char(s, key, argval);
-}
-#endif
 
 static void do_unknown_key(EditState *s) {
     QEmacsState *qs = s->qs;
@@ -2787,36 +2763,6 @@ int edit_set_mode(EditState *s, ModeDef *m)
         s->mode = NULL;  /* XXX: should instead use fundamental_mode */
         set_colorize_mode(s, NULL);
 
-        /* XXX: this code makes no sense, if must be reworked! */
-#if 0
-        int data_count;
-        EditState *e;
-
-        /* try to remove the raw or mode specific data if it is no
-           longer used. */
-        data_count = 0;
-        for (e = s->qs->first_window; e != NULL; e = e->next_window) {
-            if (e != s && e->b == b) {
-                if (e->mode && e->mode->data_type != &raw_data_type)
-                    data_count++;
-            }
-        }
-        /* we try to remove mode specific data if it is redundant with
-           the buffer raw data */
-        if (data_count == 0 && !b->modified) {
-            /* close mode specific buffer representation because it is
-               always redundant if it was not modified */
-            /* XXX: move this to reset buffer data: eb_free or changing
-             * data_type */
-            if (b->data_type != &raw_data_type) {
-                b->data_type->buffer_close(b);
-                b->data_data = NULL;
-                b->data_type = &raw_data_type;
-                eb_delete(b, 0, b->total_size);
-                b->modified = 0;
-            }
-        }
-#endif
     }
 
     /* if a new mode is wanted, open it */
@@ -4282,10 +4228,6 @@ static void flush_line(DisplayState *ds,
         }
         ds->x_line = x;
     }
-#if 0
-    printf("y=%d line_num=%d line_height=%d baseline=%d\n",
-           ds->y, ds->line_num, line_height, baseline);
-#endif
     if (last != -1) {
         /* bump to next line */
         ds->x_line = ds->x_start;
@@ -5451,10 +5393,6 @@ static void generic_text_display(EditState *s)
         }
     }
     s->cur_rtl = (m->dirc == DIR_RTL);
-#if 0
-    printf("cursor1: xc=%d yc=%d w=%d h=%d linec=%d\n",
-           m->xc, m->yc, m->cursor_width, m->cursor_height, m->linec);
-#endif
 }
 
 typedef struct ExecCmdState {
@@ -6407,6 +6345,8 @@ void do_define_kbd_macro(EditState *s, const char *name, const char *keys,
 
     size = 2 + strlen(keys) + 3;
     buf = qe_malloc_array(char, size);
+    if (buf == NULL)
+        return;
 
     // XXX: should special case "last-kbd-macro"
 
@@ -6837,7 +6777,7 @@ static void qe_key_process(QEmacsState *qs, int key)
         if (d->action.ESsi == do_describe_key_briefly) {
             c->describe_key = 1 + (c->has_arg != 0);
             qe_key_init(c);
-            strcpy(c->buf, "Describe key: ");
+            pstrcpy(c->buf, sizeof(c->buf), "Describe key: ");
             key = -1;
             goto next;
         } else
@@ -7108,19 +7048,6 @@ void put_status(EditState *s, const char *fmt, ...)
     if (flush)
         dpy_flush(s->screen);
 }
-
-#if 0
-EditState *qe_find_file_window(QEmacsState *qs, const char *filename)
-{
-    EditState *s;
-
-    for (s = qs->first_window; s; s = s->next_window) {
-        if (strequal(s->b->filename, filename))
-            return s;
-    }
-    return NULL;
-}
-#endif
 
 void switch_to_buffer(EditState *s, EditBuffer *b)
 {
@@ -7733,11 +7660,6 @@ void do_minibuffer_complete(EditState *s, int type, int key, int argval) {
     count = cs.cs.nb_items;
     outputs = cs.cs.items;
     mb->completion_count = count;
-#if 0
-    printf("count=%d\n", count);
-    for (i = 0; i < count; i++)
-        printf("out[%d]=%s\n", i, outputs[i]->str);
-#endif
     /* compute the longest match len */
     match_len = cs.len;
 
@@ -8752,7 +8674,7 @@ void canonicalize_absolute_buffer_path(EditBuffer *b, int offset, char *buf, int
             /* CG: not sufficient for windows drives */
             if (!b || !get_default_path(b, offset, cwd, sizeof(cwd))) {
                 if (!getcwd(cwd, sizeof(cwd)))
-                    strcpy(cwd, ".");
+                    pstrcpy(cwd, sizeof(cwd), ".");
 #ifdef CONFIG_WIN32
                 path_win_to_unix(cwd);
 #endif
@@ -9186,38 +9108,6 @@ void qe_save_open_files(EditState *s, EditBuffer *b)
             eb_printf(b, "find_file(\"%s\");\n", b1->filename);
     }
     eb_putc(b, '\n');
-}
-#endif
-
-#if 0
-static void load_progress_cb(void *opaque, int size)
-{
-    EditState *s = opaque;
-    EditBuffer *b = s->b;
-
-    if (size >= 1024 && !b->probed) {
-        qe_set_next_mode(s, 0, 0);
-    }
-}
-
-static void load_completion_cb(void *opaque, int err)
-{
-    EditState *s = opaque;
-
-    /* CG: potential problem: EXXX may be negative, as in Haiku */
-    if (err == -ENOENT || err == -ENOTDIR) {
-        put_status(s, "(New file)");
-    } else
-    if (err == -EISDIR) {
-        s->b->st_mode = S_IFDIR;
-    } else
-    if (err < 0) {
-        put_error(s, "Could not read file");
-    }
-    if (!s->b->probed) {
-        qe_set_next_mode(s, 0, 0);
-    }
-    qe_display(s->qs);
 }
 #endif
 
@@ -10704,28 +10594,6 @@ void qe_handle_event(QEmacsState *qs, QEEvent *ev)
 
 /* text mode */
 
-#if 0
-int detect_binary(const u8 *buf, int size)
-{
-    int i, c;
-
-    for (i = 0; i < size; i++) {
-        c = buf[i];
-        if (c < 32 && (c != '\r' && c != '\n' && c != '\t' && c != '\e'))
-            return 1;
-    }
-    /* Treat very long sequences of identical characters as binary */
-    for (i = 0; i < size; i++) {
-        if (buf[i] != buf[0])
-            break;
-    }
-    if (i == size && size >= 2048 && buf[0] != '\n')
-        return 1;
-
-    return 0;
-}
-#endif
-
 static int text_mode_probe(ModeDef *mode, ModeProbeData *p)
 {
     if (mode->extensions) {
@@ -10734,13 +10602,7 @@ static int text_mode_probe(ModeDef *mode, ModeProbeData *p)
         else
             return 1;
     }
-#if 0
-    /* text mode inappropriate for huge binary files */
-    if (detect_binary(p->buf, p->buf_size) && p->total_size > 1000000)
-        return 0;
-    else
-#endif
-        return 20;
+    return 20;
 }
 
 static int generic_mode_init(EditState *s)
@@ -11062,7 +10924,7 @@ static void qe_set_user_option(QEmacsState *qs, const char *user)
     /* put current directory first if qe invoked as ./qe */
     if (stristart(qs->argv[0], "./qe", NULL)) {
         if (!getcwd(path, sizeof(path)))
-            strcpy(path, ".");
+            pstrcpy(path, sizeof(path), ".");
         pstrcat(qs->res_path, sizeof(qs->res_path), path);
         pstrcat(qs->res_path, sizeof(qs->res_path), ":");
         pstrcat(qs->res_path, sizeof(qs->res_path), path);

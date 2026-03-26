@@ -121,13 +121,8 @@ static void sql_colorize_line(QEColorizeContext *cp,
                 i++;
             parse_c_comment:
                 state |= IN_SQL_COMMENT;
-                for (; i < n; i++) {
-                    if (str[i] == '*' && str[i + 1] == '/') {
-                        i += 2;
-                        state &= ~IN_SQL_COMMENT;
-                        break;
-                    }
-                }
+                i = colorize_skip_block_comment(str, i, n,
+                                                &state, IN_SQL_COMMENT);
                 goto comment;
             }
             break;
@@ -205,10 +200,4 @@ ModeDef sql_mode = {
     .colorize_func = sql_colorize_line,
 };
 
-static int sql_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &sql_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(sql_init);
+qe_module_init_mode(sql_mode, MODEF_SYNTAX);

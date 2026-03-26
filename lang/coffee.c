@@ -141,9 +141,7 @@ static void coffee_colorize_line(QEColorizeContext *cp,
                 while (i < n) {
                     c = str[i++];
                     if (c == '\\') {
-                        if (i < n) {
-                            i += 1;
-                        }
+                        i = colorize_skip_escape(str, i, n);
                     } else
                     if (c == sep && str[i] == sep && str[i + 1] == sep) {
                         i += 2;
@@ -157,9 +155,7 @@ static void coffee_colorize_line(QEColorizeContext *cp,
                 while (i < n) {
                     c = str[i++];
                     if (c == '\\') {
-                        if (i < n) {
-                            i += 1;
-                        }
+                        i = colorize_skip_escape(str, i, n);
                     } else
                     if (c == sep) {
                         state = 0;
@@ -184,9 +180,7 @@ static void coffee_colorize_line(QEColorizeContext *cp,
             while (i < n) {
                 c = str[i++];
                 if (c == '\\') {
-                    if (i < n) {
-                        i += 1;
-                    }
+                    i = colorize_skip_escape(str, i, n);
                 } else
                 if (c == '`') {
                     state = 0;
@@ -238,9 +232,7 @@ static void coffee_colorize_line(QEColorizeContext *cp,
                 while (i < n) {
                     c = str[i++];
                     if (c == '\\') {
-                        if (i < n) {
-                            i += 1;
-                        }
+                        i = colorize_skip_escape(str, i, n);
                     } else
                     if (state & IN_COFFEE_REGEX_CCLASS) {
                         if (c == ']') {
@@ -375,10 +367,4 @@ static ModeDef coffee_mode = {
     .colorize_func = coffee_colorize_line,
 };
 
-static int coffee_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &coffee_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(coffee_init);
+qe_module_init_mode(coffee_mode, MODEF_SYNTAX);

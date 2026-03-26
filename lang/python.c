@@ -176,9 +176,7 @@ static void python_colorize_line(QEColorizeContext *cp,
                      while (i < n) {
                          c = str[i++];
                          if (c == '\\') {
-                             if (i < n) {
-                                 i += 1;
-                             }
+                             i = colorize_skip_escape(str, i, n);
                          } else
                          if (in_charclass) {
                              if (c == ']') {
