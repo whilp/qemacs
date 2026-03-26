@@ -158,33 +158,7 @@ static void jai_colorize_line(QEColorizeContext *cp,
         default:
         normal:
             if (qe_isdigit(c)) {
-                int j;
-                // Integers:
-                // 0x[0-9a-fA-F]+
-                // [0-9]+
-                // Floats:
-                // [0-9]+\.[0-9]+([eE][-\+]?[0-9]+)?
-                // [0-9]+(\.[0-9]+)?[eE][-\+]?[0-9]+
-                if (c == '0' && str[i] == 'x' && qe_isxdigit_(str[i + 1])) {
-                    for (i += 3; qe_isxdigit_(str[i]); i++)
-                        continue;
-                } else {
-                    while (qe_isdigit_(str[i]))
-                        i++;
-                    if (str[i] == '.' && qe_isdigit_(str[i + 1])) {
-                        for (i += 2; qe_isdigit_(str[i]); i++)
-                            continue;
-                    }
-                    if (str[i] == 'e' || str[i] == 'E') {
-                        j = i + 1;
-                        if (str[j] == '+' || str[j] == '-')
-                            j++;
-                        if (qe_isdigit_(str[j])) {
-                            for (i = j + 1; qe_isdigit_(str[i]); i++)
-                                continue;
-                        }
-                    }
-                }
+                i = colorize_parse_number(str, i, n, 1);
                 style = JAI_STYLE_NUMBER;
                 break;
             }

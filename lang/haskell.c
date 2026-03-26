@@ -173,35 +173,7 @@ static void haskell_colorize_line(QEColorizeContext *cp,
 
         default:
             if (qe_isdigit(c)) {
-                if (c == '0' && qe_tolower(str[i]) == 'o') {
-                    /* octal numbers */
-                    for (i += 1; qe_isoctdigit(str[i]); i++)
-                        continue;
-                } else
-                if (c == '0' && qe_tolower(str[i]) == 'x') {
-                    /* hexadecimal numbers */
-                    for (i += 1; qe_isxdigit(str[i]); i++)
-                        continue;
-                } else {
-                    /* decimal numbers */
-                    for (; qe_isdigit(str[i]); i++)
-                        continue;
-                    if (str[i] == '.' && qe_isdigit(str[i + 1])) {
-                        /* decimal floats require a digit after the '.' */
-                        for (i += 2; qe_isdigit(str[i]); i++)
-                            continue;
-                        if (qe_tolower(str[i]) == 'e') {
-                            int k = i + 1;
-                            if (str[k] == '+' || str[k] == '-')
-                                k++;
-                            if (qe_isdigit(str[k])) {
-                                for (i = k + 1; qe_isdigit(str[i]); i++)
-                                    continue;
-                            }
-                        }
-                    }
-                }
-                /* XXX: should detect malformed number constants */
+                i = colorize_parse_number(str, i, n, 0);
                 style = HASKELL_STYLE_NUMBER;
                 break;
             }
