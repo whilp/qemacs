@@ -218,6 +218,13 @@ static inline void strip_extension(char *filename) {
 char *get_dirname(char *dest, int size, const char *file);
 const char *get_relativename(const char *filename, const char *dirname);
 
+/* Extract the string payload from an OSC escape sequence buffer.
+ * buf format: ESC ] <number> [; <string>] <terminator>
+ * Returns pointer to start of string content and sets *out_len.
+ * The number prefix and terminator (BEL, 8-bit ST, or ESC \) are excluded.
+ */
+const char *osc_get_payload(const char *buf, int buf_len, int *out_len);
+
 static inline long strtol_c(const char *str, const char **endptr, int base) {
     /*@API utils.string
        Convert the number in the string pointed to by `str` as a `long`.

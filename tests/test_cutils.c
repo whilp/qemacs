@@ -484,6 +484,89 @@ TEST(strequal, empty) {
     ASSERT_FALSE(strequal("", "x"));
 }
 
+/* ---- osc_get_payload ---- */
+
+TEST(osc_get_payload, basic_bel_terminator) {
+    /* OSC 0 ; hello BEL */
+    const char buf[] = "\033]0;hello\007";
+    int len;
+    const char *p = osc_get_payload(buf, sizeof(buf) - 1, &len);
+    ASSERT_EQ(len, 5);
+    ASSERT_TRUE(memcmp(p, "hello", 5) == 0);
+}
+
+TEST(osc_get_payload, esc_backslash_terminator) {
+    /* OSC 2 ; title ESC \ */
+    const char buf[] = "\033]2;title\033\\";
+    int len;
+    const char *p = osc_get_payload(buf, sizeof(buf) - 1, &len);
+    ASSERT_EQ(len, 5);
+    ASSERT_TRUE(memcmp(p, "title", 5) == 0);
+}
+
+TEST(osc_get_payload, eight_bit_st_terminator) {
+    /* OSC 0 ; text 0x9C */
+    const char buf[] = "\033]0;text\x9C";
+    int len;
+    const char *p = osc_get_payload(buf, sizeof(buf) - 1, &len);
+    ASSERT_EQ(len, 4);
+    ASSERT_TRUE(memcmp(p, "text", 4) == 0);
+}
+
+TEST(osc_get_payload, multi_digit_osc_number) {
+    /* OSC 133 ; A BEL */
+    const char buf[] = "\033]133;A\007";
+    int len;
+    const char *p = osc_get_payload(buf, sizeof(buf) - 1, &len);
+    ASSERT_EQ(len, 1);
+    ASSERT_TRUE(p[0] == 'A');
+}
+
+TEST(osc_get_payload, osc7_file_url) {
+    /* OSC 7 ; file://host/tmp BEL */
+    const char buf[] = "\033]7;file://host/tmp\007";
+    int len;
+    const char *p = osc_get_payload(buf, sizeof(buf) - 1, &len);
+    ASSERT_EQ(len, 15);
+    ASSERT_TRUE(memcmp(p, "file://host/tmp", 15) == 0);
+}
+
+TEST(osc_get_payload, no_semicolon) {
+    /* OSC with just a number and terminator, no payload */
+    const char buf[] = "\033]0\007";
+    int len;
+    const char *p = osc_get_payload(buf, sizeof(buf) - 1, &len);
+    ASSERT_EQ(len, 0);
+    (void)p;
+}
+
+TEST(osc_get_payload, empty_payload) {
+    /* OSC 8 ; ; BEL (hyperlink close — empty params and uri) */
+    const char buf[] = "\033]8;;\007";
+    int len;
+    const char *p = osc_get_payload(buf, sizeof(buf) - 1, &len);
+    /* payload is ";" (the second semicolon is part of the content) */
+    ASSERT_EQ(len, 1);
+    ASSERT_TRUE(p[0] == ';');
+}
+
+TEST(osc_get_payload, osc133_with_exit_code) {
+    /* OSC 133 ; D;0 BEL */
+    const char buf[] = "\033]133;D;0\007";
+    int len;
+    const char *p = osc_get_payload(buf, sizeof(buf) - 1, &len);
+    ASSERT_EQ(len, 3);
+    ASSERT_TRUE(memcmp(p, "D;0", 3) == 0);
+}
+
+TEST(osc_get_payload, too_short) {
+    /* Buffer too short — just ESC ] */
+    const char buf[] = "\033]";
+    int len;
+    osc_get_payload(buf, sizeof(buf) - 1, &len);
+    ASSERT_EQ(len, 0);
+}
+
 int main(void) {
     return testlib_run_all();
 }

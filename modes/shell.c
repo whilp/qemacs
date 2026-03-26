@@ -324,37 +324,9 @@ static void qe_trace_term(ShellState *s, const char *msg) {
     } \
 } while(0)
 
-/* Extract the string parameter from an OSC sequence stored in term_buf.
- * term_buf format: ESC ] <number> [; <string>] <terminator>
- * Returns pointer to start of string content and sets *slen.
- * The terminator (BEL, 8-bit ST, or ESC \) is excluded.
- */
+/* Extract the string parameter from an OSC sequence stored in term_buf. */
 static const char *shell_osc_get_string(ShellState *s, int *slen) {
-    const char *p = cs8(s->term_buf);
-    const char *end = p + s->term_pos;
-
-    /* Skip ESC ] */
-    p += 2;
-    if (p >= end) { *slen = 0; return cs8(s->term_buf); }
-
-    /* Skip number digits */
-    while (p < end && *p >= '0' && *p <= '9')
-        p++;
-
-    /* Skip ; separator if present */
-    if (p < end && *p == ';')
-        p++;
-
-    /* Strip terminator from end: BEL (0x07), 8-bit ST (0x9C), or ESC \ */
-    if (end > p) {
-        if (end[-1] == '\\' && end - 1 > p && end[-2] == '\033')
-            end -= 2;
-        else if (end[-1] == '\007' || end[-1] == (char)0x9C)
-            end -= 1;
-    }
-
-    *slen = (int)(end - p);
-    return p;
+    return osc_get_payload(cs8(s->term_buf), s->term_pos, slen);
 }
 
 static void qe_term_init(ShellState *s)
