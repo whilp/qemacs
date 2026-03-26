@@ -251,10 +251,4 @@ static ModeDef cobol_mode = {
     .colorize_func = cobol_colorize_line,
 };
 
-static int cobol_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &cobol_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(cobol_init);
+qe_module_init_mode(cobol_mode, MODEF_SYNTAX);

@@ -269,9 +269,4 @@ static ModeDef rye_mode = {
     .fallback = &c_mode,
 };
 
-static int rye_init(QEmacsState *qs) {
-    qe_register_mode(qs, &rye_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(rye_init);
+qe_module_init_mode(rye_mode, MODEF_SYNTAX);

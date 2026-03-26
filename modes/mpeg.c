@@ -174,10 +174,4 @@ static ModeDef mpeg_mode = {
     .write_char = hex_write_char,
 };
 
-static int mpeg_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &mpeg_mode, MODEF_MAJOR | MODEF_VIEW);
-    return 0;
-}
-
-qe_module_init(mpeg_init);
+qe_module_init_mode(mpeg_mode, MODEF_MAJOR | MODEF_VIEW);

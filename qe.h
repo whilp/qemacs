@@ -666,6 +666,21 @@ void qe_exit_all_modules(QEmacsState *qs);
 
 #endif /* QE_MODULE */
 
+/* Convenience macro for modules that register a single mode.
+ * Replaces the common boilerplate:
+ *   static int foo_init(QEmacsState *qs) {
+ *       qe_register_mode(qs, &foo_mode, MODEF_SYNTAX);
+ *       return 0;
+ *   }
+ *   qe_module_init(foo_init);
+ */
+#define qe_module_init_mode(mode, flags)                          \
+    static int mode##__init(QEmacsState *qs) {                    \
+        qe_register_mode(qs, &mode, flags);                      \
+        return 0;                                                 \
+    }                                                             \
+    qe_module_init(mode##__init)
+
 /* qe.c */
 
 extern int disable_crc;      /* Prevent CRC based display cacheing */

@@ -141,10 +141,4 @@ static ModeDef ps_mode = {
     .colorize_func = ps_colorize_line,
 };
 
-static int ps_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &ps_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(ps_init);
+qe_module_init_mode(ps_mode, MODEF_SYNTAX);

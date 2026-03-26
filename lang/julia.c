@@ -286,10 +286,4 @@ static ModeDef julia_mode = {
     .colorize_func = julia_colorize_line,
 };
 
-static int julia_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &julia_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(julia_init);
+qe_module_init_mode(julia_mode, MODEF_SYNTAX);

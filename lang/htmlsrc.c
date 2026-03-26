@@ -398,11 +398,4 @@ ModeDef htmlsrc_mode = {
     .colorize_func = htmlsrc_colorize_line,
 };
 
-static int htmlsrc_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &htmlsrc_mode, MODEF_SYNTAX);
-    //qe_register_commands(qs, &htmlsrc_mode, htmlsrc_commands, countof(htmlsrc_commands));
-    return 0;
-}
-
-qe_module_init(htmlsrc_init);
+qe_module_init_mode(htmlsrc_mode, MODEF_SYNTAX);

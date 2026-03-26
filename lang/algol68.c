@@ -400,10 +400,4 @@ static ModeDef algol68_mode = {
     .colorize_func = algol68_colorize_line,
 };
 
-static int algol68_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &algol68_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(algol68_init);
+qe_module_init_mode(algol68_mode, MODEF_SYNTAX);

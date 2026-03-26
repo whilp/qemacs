@@ -152,10 +152,4 @@ static ModeDef ini_mode = {
     .colorize_func = ini_colorize_line,
 };
 
-static int ini_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &ini_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(ini_init);
+qe_module_init_mode(ini_mode, MODEF_SYNTAX);

@@ -461,10 +461,4 @@ static ModeDef groovy_mode = {
     .fallback = &c_mode,
 };
 
-static int groovy_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &groovy_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(groovy_init);
+qe_module_init_mode(groovy_mode, MODEF_SYNTAX);

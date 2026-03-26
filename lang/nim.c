@@ -329,10 +329,4 @@ static ModeDef nim_mode = {
     .colorize_func = nim_colorize_line,
 };
 
-static int nim_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &nim_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(nim_init);
+qe_module_init_mode(nim_mode, MODEF_SYNTAX);

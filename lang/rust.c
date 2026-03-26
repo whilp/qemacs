@@ -278,10 +278,4 @@ static ModeDef rust_mode = {
     .fallback = &c_mode,
 };
 
-static int rust_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &rust_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(rust_init);
+qe_module_init_mode(rust_mode, MODEF_SYNTAX);

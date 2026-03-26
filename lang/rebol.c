@@ -306,10 +306,4 @@ static ModeDef rebol_mode = {
     .colorize_func = rebol_colorize_line,
 };
 
-static int rebol_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &rebol_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(rebol_init);
+qe_module_init_mode(rebol_mode, MODEF_SYNTAX);

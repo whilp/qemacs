@@ -400,10 +400,4 @@ static ModeDef perl_mode = {
     .auto_indent = 1,
 };
 
-static int perl_init(QEmacsState *qs)
-{
-    qe_register_mode(qs, &perl_mode, MODEF_SYNTAX);
-    return 0;
-}
-
-qe_module_init(perl_init);
+qe_module_init_mode(perl_mode, MODEF_SYNTAX);
