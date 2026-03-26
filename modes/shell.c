@@ -3798,7 +3798,7 @@ static const CmdDef shell_commands[] = {
     CMD3( "shell-kill-word", "M-d",
           "Shell buffer delete word",
           do_shell_kill_word, ESi, "v", 1)
-    CMD3( "shell-backward-kill-word", "M-DEL, M-C-h",
+    CMD3( "shell-backward-kill-word", "M-DEL, M-C-h, C-w",
           "Shell buffer delete word backward",
           do_shell_kill_word, ESi, "v", -1)
     CMD1( "shell-previous", "M-p",

@@ -569,6 +569,103 @@ TEST(terminal, color_annotations_present)
     session_cleanup(&sess);
 }
 
+/*--- Shell mode tests ---*/
+
+/* Helper: wait for a substring to appear on screen, with timeout.
+ * Returns 1 if found, 0 if timed out. */
+static int session_wait_for(TestSession *sess, const char *substr, int timeout_ms)
+{
+    int waited = 0;
+    while (waited < timeout_ms) {
+        ScreenSnap *snap = session_take_screenshot(sess);
+        if (snap) {
+            int found = snap_any_line_contains(snap, substr);
+            free_snapshot(snap);
+            if (found) return 1;
+        }
+        usleep(100000);  /* 100ms */
+        waited += 100;
+    }
+    return 0;
+}
+
+TEST(shell, ctrl_w_kills_word)
+{
+    TestSession sess;
+    if (session_start(&sess, NULL) != 0) {
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    /* Open a shell: M-x shell RET
+     * We send ESC (0x1b) then 'x' to get M-x, then type "shell" and RET */
+    char esc = 0x1b;
+    session_send_keys(&sess, &esc, 1);
+    usleep(50000);
+    session_type(&sess, "x");
+    usleep(100000);
+    session_type(&sess, "shell\r");
+
+    /* Wait for shell prompt to appear (look for $ or # or >) */
+    int got_prompt = session_wait_for(&sess, "$", 5000);
+    if (!got_prompt)
+        got_prompt = session_wait_for(&sess, "#", 2000);
+    if (!got_prompt)
+        got_prompt = session_wait_for(&sess, ">", 2000);
+
+    if (!got_prompt) {
+        /* Debug output */
+        ScreenSnap *snap = session_take_screenshot(&sess);
+        if (snap) {
+            fprintf(stderr, "DEBUG: shell prompt not found. Screen:\n");
+            for (int i = 0; i < snap->num_lines && i < 10; i++)
+                fprintf(stderr, "  [%d]: '%s'\n", i, snap->lines[i]);
+            free_snapshot(snap);
+        }
+        session_stop(&sess);
+        session_cleanup(&sess);
+        ASSERT_TRUE(got_prompt);
+        return;
+    }
+
+    /* Type two words with a space between them.
+     * Use distinctive marker words to avoid matching prompt text.
+     * Type slowly with delays to ensure the shell processes each chunk. */
+    session_type(&sess, "echo ALPHA");
+    usleep(500000);  /* wait for shell to echo */
+    session_type(&sess, " BRAVO");
+    usleep(500000);  /* wait for shell to echo */
+
+    /* Verify both words are visible */
+    ScreenSnap *snap_before = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap_before != NULL);
+    ASSERT_TRUE(snap_any_line_contains(snap_before, "ALPHA"));
+    ASSERT_TRUE(snap_any_line_contains(snap_before, "BRAVO"));
+    free_snapshot(snap_before);
+
+    /* Send C-w (0x17) which bash interprets as unix-word-rubout */
+    session_ctrl(&sess, 'w');
+    usleep(500000);  /* wait for shell to process and redraw */
+
+    /* Take screenshot and verify BRAVO is gone but ALPHA remains */
+    ScreenSnap *snap_after = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap_after != NULL);
+
+    /* ALPHA should still be on screen */
+    ASSERT_TRUE(snap_any_line_contains(snap_after, "ALPHA"));
+    /* BRAVO should be gone (killed by C-w) */
+    ASSERT_TRUE(!snap_any_line_contains(snap_after, "BRAVO"));
+
+    free_snapshot(snap_after);
+
+    /* Clean up: send C-c to cancel command, then quit */
+    session_ctrl(&sess, 'c');
+    usleep(100000);
+
+    session_stop(&sess);
+    session_cleanup(&sess);
+}
+
 /*--- Main ---*/
 
 int main(void)
