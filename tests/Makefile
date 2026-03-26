@@ -6,7 +6,8 @@ SESSION_DETACH_LIBS ?= -lutil
 # Optional config.mak for local overrides
 -include ../config.mak
 
-TEST_CFLAGS = -g -O2 -Wall -I.. -DHAVE_QE_CONFIG_H
+EXTRA_CFLAGS ?=
+TEST_CFLAGS = -g -O2 -Wall -I.. -DHAVE_QE_CONFIG_H $(EXTRA_CFLAGS)
 
 TESTS = test_cutils test_buffer test_unix test_cosmo
 

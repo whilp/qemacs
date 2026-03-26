@@ -536,7 +536,7 @@ install-cosmocc:
 		unzip -q /tmp/cosmocc/cosmocc.zip -d $(COSMOCC_DIR); \
 	fi
 
-# Build with cosmocc (auto-detect or use COSMOCC_DIR)
+# Build and test with cosmocc (auto-detect or use COSMOCC_DIR)
 cosmo:
 	@cosmocc="$$(dirname $$(which cosmocc 2>/dev/null) 2>/dev/null)"; \
 	if [ -z "$$cosmocc" ] && [ -x "$(COSMOCC_DIR)/bin/cosmocc" ]; then \
@@ -550,7 +550,11 @@ cosmo:
 		CC=cosmocc HOST_CC=cc AR=cosmoar \
 		EXTRA_CFLAGS="-mcosmo" STRIP=true \
 		SESSION_DETACH_LIBS= \
-		-j$$(nproc 2>/dev/null || echo 4)
+		-j$$(nproc 2>/dev/null || echo 4) && \
+	PATH="$$cosmocc:$$PATH" $(MAKE) test \
+		CC=cosmocc \
+		EXTRA_CFLAGS="-mcosmo" \
+		SESSION_DETACH_LIBS=
 
 # CI target: install cosmocc, build, and verify binaries
 ci: install-cosmocc cosmo
