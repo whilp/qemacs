@@ -96,9 +96,20 @@ Drop all non-cosmopolitan platform support. Use cosmo features to simplify code.
 - [x] Update CLAUDE.md
 - [x] Commit
 
+## Phase 12: Require cosmocc — remove system compiler fallback
+
+- [x] Set CC=cosmocc, AR=cosmoar as hard defaults (no ?= fallback)
+- [x] Remove sanitizer targets (asan/msan/ubsan)
+- [x] Remove gcc-specific CFLAGS block, EXTRA_CFLAGS, SIZE/STATS logging
+- [x] Remove SESSION_DETACH_LIBS (cosmo has forkpty built-in)
+- [x] Remove intermediate `cosmo` target — ci/release use PATH directly
+- [x] Update tests/Makefile and libqhtml/Makefile to match
+- [x] Update CLAUDE.md
+- [x] Commit
+
 ## Summary
 
-- **Single Makefile** — no configure, no GNUmakefile, no Makefile.cosmo
+- **Single Makefile** — cosmocc-only, no configure, no alternative compiler paths
 - **~9,400 lines deleted** across all changes
 - **15 dead files removed** (configure, GNUmakefile, Makefile.cosmo, win32.c, x11.c, haiku.cpp, cfb.c/h, fbfrender.c/h, libfbf.c/h, html2png.c, modes/video.c, modes/image.c)
 - **8 new tests added** (test_unix.c, test_cosmo.c)

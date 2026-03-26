@@ -34,7 +34,7 @@ kmap/                Keyboard mapping files for input methods
 cp/                  Character set data files (ISO 8859-x)
 fonts/               Bitmap font files (.fbf format)
 plugins/             Plugin development examples
-Makefile             Single build file (system compiler + cosmocc targets)
+Makefile             Single build file (cosmocc-only)
 .github/workflows/   CI configuration (ci.yml, release.yml)
 ```
 
@@ -44,29 +44,24 @@ language modules are built.
 
 ## Building
 
-Everything is in a single `Makefile`. No configure step needed — `config.h`
-is generated automatically.
+Requires **cosmocc** in PATH. Everything is in a single `Makefile`. No
+configure step needed — `config.h` is generated automatically.
 
 ```bash
-make                 # Build with system compiler (gcc/clang)
-make cosmo           # Build with cosmocc (APE binaries)
-make ci              # Install cosmocc + build + verify
-make release         # Build + create GitHub release
-make test            # Run unit tests
-make debug           # Debug build
-make asan            # Address Sanitizer build
-make clean           # Clean build artifacts
-```
+make install-cosmocc    # Install cosmocc to /opt/cosmocc (one-time)
+export PATH="/opt/cosmocc/bin:$PATH"
 
-Override defaults on the command line:
-```bash
-make CC=cosmocc CFLAGS="-O2 -mcosmo"   # Use cosmocc directly
-make prefix=/opt/qe                      # Custom install prefix
+make                    # Build qe + tqe (APE binaries)
+make test               # Run unit tests
+make ci                 # Install cosmocc + build + test + verify
+make release            # Build + create GitHub release
+make debug              # Debug build
+make clean              # Clean build artifacts
 ```
 
 Output binaries:
-- `qe` — full-featured terminal editor
-- `tqe` — tiny/minimal variant
+- `qe` — full-featured terminal editor (APE — runs on Linux/macOS/Windows/BSD)
+- `tqe` — tiny/minimal variant (APE)
 
 ## Testing
 
@@ -88,8 +83,7 @@ This delegates to `tests/Makefile`, which compiles and runs unit test binaries.
 ### CI
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR:
-1. **Unit tests** — `make test` on Ubuntu
-2. **Cosmopolitan build** — `make ci` (installs cosmocc, builds, verifies)
+- `make ci` — installs cosmocc, builds with cosmocc, runs tests, verifies APE binaries
 
 Releases (`.github/workflows/release.yml`):
 - Nightly pre-releases at 6 AM UTC
@@ -125,8 +119,9 @@ int main() { return testlib_run_all(); }
 
 ## Dependencies
 
-Any C compiler (gcc, clang) + GNU make. For cosmocc builds, the toolchain
-is auto-installed by `make install-cosmocc`.
+**Required:** cosmocc toolchain + GNU make. Install cosmocc via `make install-cosmocc`
+or from the [cosmopolitan releases](https://github.com/whilp/cosmopolitan/releases).
+No other external dependencies — everything is compiled into the APE binary.
 
 ## Common Workflows
 
@@ -140,7 +135,7 @@ make ci
 2. Use `qe_module_init()` to register the mode
 3. Rebuild — the build system auto-discovers modules in `lang/`
 
-**Run just the unit tests (fast, uses system compiler):**
+**Run the unit tests:**
 ```bash
 make test
 ```
