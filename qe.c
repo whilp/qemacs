@@ -34,9 +34,6 @@ extern void ShowCrashReports(void);
 #include "session.h"
 #endif
 
-#ifdef CONFIG_DLL
-#include <dlfcn.h>
-#endif
 
 /* each history list */
 typedef struct HistoryEntry {
@@ -11691,68 +11688,6 @@ QEStyleDef qe_styles[QE_STYLE_NB] = {
 #undef STYLE_DEF
 };
 
-#ifdef CONFIG_DLL
-
-static void qe_load_all_modules(QEmacsState *qs)
-{
-    QErrorContext ec;
-    FindFileState *ffst;
-    char filename[MAX_FILENAME_SIZE];
-    void *h;
-    void *sym;
-    int (*init_func)(QEmacsState *);
-
-    ec = qs->ec;
-    qs->ec.function = "load-all-modules";
-
-    ffst = find_file_open(qs->res_path, "*.so", FF_PATH | FF_NODIR);
-    if (!ffst)
-        goto done;
-
-    while (!find_file_next(ffst, filename, sizeof(filename))) {
-        h = dlopen(filename, RTLD_LAZY);
-        if (!h) {
-            char *error = dlerror();
-            qe_put_error(qs, "Could not open module '%s': %s", filename, error);
-            continue;
-        }
-#if 0
-        /* Writing: init_func = (int (*)(void))dlsym(handle, "xxx");
-         * would seem more natural, but the C99 standard leaves
-         * casting from "void *" to a function pointer undefined.
-         * The assignment used below is the POSIX.1-2003 (Technical
-         * Corrigendum 1) workaround; see the Rationale for the
-         * POSIX specification of dlsym().
-         * XXX: this violates the strict aliasing rule. This syntax
-         * is known to cause incorrect code generation in gcc 12.2
-         * with optimizations enabled in other contexts.
-         */
-        *(void **)&init_func = dlsym(h, "__qe_module_init");
-        //init_func = (int (*)(void))dlsym(h, "__qe_module_init");
-#else
-        /* This kludge gets rid of compile and lint warnings.
-           The implicit assumption is that code and function pointers
-           have the same size and representation, which is a requirement
-           ofor POSIX targets */
-        sym = dlsym(h, "__qe_module_init");
-        memcpy(&init_func, &sym, sizeof(sym));
-#endif
-        if (!init_func) {
-            dlclose(h);
-            qe_put_error(qs, "Could not find qemacs initializer in module '%s'", filename);
-            continue;
-        }
-
-        /* all is OK: we can init the module now */
-        (*init_func)(qs);
-    }
-    find_file_close(&ffst);
-
-  done:
-    qs->ec = ec;
-}
-
-#endif
 
 static CompletionDef charset_completion = {
     .name = "charset",
@@ -11844,11 +11779,6 @@ static int qe_init(void *opaque)
 
     /* init all external modules in link order */
     qe_init_all_modules(qs);
-
-#ifdef CONFIG_DLL
-    /* load all dynamic modules */
-    qe_load_all_modules(qs);
-#endif
 
     /* create first buffer */
     b = qe_new_buffer(qs, "*scratch*", BF_SAVELOG | BF_UTF8);
