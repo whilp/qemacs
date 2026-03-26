@@ -3090,6 +3090,15 @@ static void do_shell_backspace(EditState *e)
     }
 }
 
+static void do_shell_undo(EditState *e)
+{
+    if (e->interactive) {
+        /* no-op: undo doesn't make sense for terminal output */
+        put_status(e, "Undo not available in shell interactive mode");
+    } else {
+        do_undo(e);
+    }
+}
 static void do_shell_backward_kill_region(EditState *e)
 {
     if (e->interactive) {
@@ -3824,6 +3833,9 @@ static const CmdDef shell_commands[] = {
     CMD0( "shell-backward-kill-region", "C-w",
           "Shell buffer backward kill word (send WERASE to shell)",
           do_shell_backward_kill_region)
+    CMD0( "shell-undo", "C-x u, C-_, C-/",
+          "Undo (disabled in shell interactive mode)",
+          do_shell_undo)
     CMD1( "shell-previous", "M-p",
           "Shell buffer previous command",
           shell_previous_next, -1)
