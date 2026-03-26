@@ -3077,6 +3077,16 @@ static void do_shell_backspace(EditState *e)
     }
 }
 
+static void do_shell_backward_kill_region(EditState *e)
+{
+    if (e->interactive) {
+        /* Send C-w (WERASE) to the shell for backward kill word */
+        shell_write_char(e, 'w' & 31);
+    } else {
+        do_kill_region(e);
+    }
+}
+
 static void do_shell_search(EditState *e, int dir)
 {
     if (e->interactive) {
@@ -3801,6 +3811,9 @@ static const CmdDef shell_commands[] = {
     CMD3( "shell-backward-kill-word", "M-DEL, M-C-h",
           "Shell buffer delete word backward",
           do_shell_kill_word, ESi, "v", -1)
+    CMD0( "shell-backward-kill-region", "C-w",
+          "Shell buffer backward kill word (send WERASE to shell)",
+          do_shell_backward_kill_region)
     CMD1( "shell-previous", "M-p",
           "Shell buffer previous command",
           shell_previous_next, -1)
