@@ -33,6 +33,15 @@ test-terminal: test_terminal
 	@echo "--- Running test_terminal ---"
 	./test_terminal
 
+# HTML rendering tests (requires qe binary with test_display driver)
+test_html: test_html.c testlib.h
+	$(CC) $(TEST_CFLAGS) -o $@ test_html.c
+
+# Run HTML rendering tests separately (they need qe built first)
+test-html: test_html
+	@echo "--- Running test_html ---"
+	./test_html
+
 BENCH_SRCS = ../buffer.c ../cutils.c ../charset.c ../libunicode.c ../util.c \
              ../unix.c ../charsetmore.c ../unicode_join.c ../indic.c ../arabic.c
 
@@ -44,6 +53,6 @@ bench: bench_buffer
 	./bench_buffer
 
 clean:
-	rm -f $(TESTS) test_terminal bench_buffer
+	rm -f $(TESTS) test_terminal test_html bench_buffer
 
 .PHONY: all test bench clean
