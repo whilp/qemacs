@@ -1,8 +1,11 @@
-include ../config.mak
+CC = cosmocc
+CONFIG_SESSION_DETACH ?= yes
 
-TEST_CFLAGS = -g -O2 -Wall -I.. -DHAVE_QE_CONFIG_H
+-include ../config.mak
 
-TESTS = test_cutils test_buffer
+TEST_CFLAGS = -g -O2 -mcosmo -Wall -I.. -DHAVE_QE_CONFIG_H
+
+TESTS = test_cutils test_buffer test_unix test_cosmo
 
 ifdef CONFIG_SESSION_DETACH
 TESTS += test_session
@@ -27,8 +30,14 @@ BUFFER_SRCS = ../buffer.c ../cutils.c ../charset.c ../libunicode.c ../util.c \
 test_buffer: test_buffer.c $(BUFFER_SRCS) testlib.h ../qe.h ../cutils.h ../config.h
 	$(CC) $(TEST_CFLAGS) -Wno-format-truncation -o $@ test_buffer.c $(BUFFER_SRCS)
 
+test_unix: test_unix.c testlib.h
+	$(CC) $(TEST_CFLAGS) -o $@ test_unix.c
+
+test_cosmo: test_cosmo.c testlib.h
+	$(CC) $(TEST_CFLAGS) -o $@ test_cosmo.c
+
 test_session: test_session.c ../session.c ../session.h testlib.h ../config.h
-	$(CC) $(TEST_CFLAGS) -o $@ test_session.c $(SESSION_DETACH_LIBS)
+	$(CC) $(TEST_CFLAGS) -o $@ test_session.c
 
 # Terminal integration tests (requires qe binary with test_display driver)
 test_terminal: test_terminal.c testlib.h

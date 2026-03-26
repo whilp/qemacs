@@ -23,7 +23,14 @@
 
 DEPTH=..
 
-include $(DEPTH)/config.mak
+CC = cosmocc
+AR = cosmoar
+HOST_CC ?= cc
+TARGET_OS ?= $(shell uname -s)
+TARGET_ARCH ?= $(shell uname -m)
+EXE ?=
+
+-include $(DEPTH)/config.mak
 
 ifeq (,$(V)$(VERBOSE))
     echo := @echo
@@ -33,38 +40,10 @@ else
     cmd  :=
 endif
 
-ifeq ($(CC),gcc)
-  CFLAGS  += -g -O2 -funsigned-char -Wall
-  # do not warn about zero-length formats.
-  CFLAGS  += -Wno-format-zero-length
-  LDFLAGS += -g
-endif
-
-#include local compiler configuration file
 -include $(DEPTH)/cflags.mk
 
-ifdef CONFIG_DARWIN
-  CFLAGS += -Wno-string-plus-int
-  CFLAGS += -Wno-packed
-else
-  CFLAGS += -Wno-unused-result
-endif
-
-ifdef TARGET_GPROF
-  CFLAGS  += -p
-  LDFLAGS += -p
-endif
-
-ifdef TARGET_ARCH_X86
-  #CFLAGS+=-fomit-frame-pointer
-  ifeq ($(GCC_MAJOR),2)
-    CFLAGS += -m386 -malign-functions=0
-  else
-    CFLAGS += -march=i386 -falign-functions=0
-  endif
-endif
-
-CFLAGS+=-I$(DEPTH)
+CFLAGS += -mcosmo -Wno-unused-result
+CFLAGS += -I$(DEPTH)
 
 HOST_CFLAGS:=$(CFLAGS)
 
@@ -75,32 +54,11 @@ ECHO_CFLAGS += -DCONFIG_DEBUG
 CFLAGS += -g -O0
 LDFLAGS += -g -O0
 endif
-ifdef ASAN
-DEBUG_SUFFIX:=_asan
-ECHO_CFLAGS += -DCONFIG_ASAN
-CFLAGS += -D__ASAN__
-CFLAGS += -fsanitize=address -fno-sanitize-recover=all -fno-omit-frame-pointer
-LDFLAGS += -fsanitize=address -fno-sanitize-recover=all -fno-omit-frame-pointer
-endif
-ifdef MSAN
-DEBUG_SUFFIX:=_msan
-ECHO_CFLAGS += -DCONFIG_MSAN
-CFLAGS += -D__MSAN__
-CFLAGS += -fsanitize=memory -fno-sanitize-recover=all -fno-omit-frame-pointer
-LDFLAGS += -fsanitize=memory -fno-sanitize-recover=all -fno-omit-frame-pointer
-endif
-ifdef UBSAN
-DEBUG_SUFFIX:=_ubsan
-ECHO_CFLAGS += -DCONFIG_UBSAN
-CFLAGS += -D__UBSAN__
-CFLAGS += -fsanitize=undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
-LDFLAGS += -fsanitize=undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
-endif
 
 LIB= $(DEPTH)/.objs/$(TARGET_OS)-$(TARGET_ARCH)-$(CC)/libqhtml$(DEBUG_SUFFIX).a
 OBJS= css.o xmlparse.o cssparse.o html_style.o docbook_style.o
 
-DEPENDS:= config.h config.mak charset.h color.h cutils.h display.h \
+DEPENDS:= config.h charset.h color.h cutils.h display.h \
 		unicode_join.h util.h
 DEPENDS:= $(addprefix $(DEPTH)/, $(DEPENDS))
 DEPENDS+= css.h cssid.h htmlent.h

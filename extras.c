@@ -1376,9 +1376,7 @@ void do_apropos(EditState *s, const char *str)
     }
 }
 
-#ifndef CONFIG_CYGWIN
 extern char **environ;
-#endif
 
 static void do_about_qemacs(EditState *s)
 {

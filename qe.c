@@ -28,15 +28,14 @@
 #include "variables.h"
 #ifdef __COSMOPOLITAN__
 extern void ShowCrashReports(void);
+extern void CheckForMemoryLeaks(void);
+extern void CheckForFileLeaks(void);
 #endif
 #ifdef CONFIG_SESSION_DETACH
 #include <dirent.h>
 #include "session.h"
 #endif
 
-#ifdef CONFIG_DLL
-#include <dlfcn.h>
-#endif
 
 /* each history list */
 typedef struct HistoryEntry {
@@ -8623,17 +8622,6 @@ static int is_abs_path(const char *path)
     return 0;
 }
 
-#ifdef CONFIG_WIN32
-/* convert '\' to '/' */
-static void path_win_to_unix(char *buf) {
-    char *p;
-
-    for (p = buf; *p; p++) {
-        if (*p == '\\')
-            *p = '/';
-    }
-}
-#endif
 
 /* canonicalize the path for a given window and make it absolute */
 void canonicalize_absolute_path(EditState *s, char *buf, int buf_size, const char *path1)
@@ -8653,31 +8641,30 @@ void canonicalize_absolute_buffer_path(EditBuffer *b, int offset, char *buf, int
                 homedir = getenv("HOME");
                 if (homedir) {
                     pstrcpy(path, sizeof(path), homedir);
-#ifdef CONFIG_WIN32
-                    path_win_to_unix(path);
-#endif
                     remove_slash(path);
                     pstrcat(path, sizeof(path), path1 + 1);
                     path1 = path;
                 }
             } else {
-                /* CG: should get info from getpwnam */
-#ifdef CONFIG_DARWIN
-                pstrcpy(path, sizeof(path), "/Users/");
-#else
-                pstrcpy(path, sizeof(path), "/home/");
-#endif
-                pstrcat(path, sizeof(path), path1 + 1);
+                const char *username = path1 + 1;
+                size_t ulen = strcspn(username, "/");
+                char uname[128];
+                struct passwd *pw;
+                pstrncpy(uname, sizeof(uname), username, ulen);
+                pw = getpwnam(uname);
+                if (pw) {
+                    pstrcpy(path, sizeof(path), pw->pw_dir);
+                } else {
+                    pstrcpy(path, sizeof(path), "/home/");
+                    pstrncat(path, sizeof(path), username, ulen);
+                }
+                pstrcat(path, sizeof(path), username + ulen);
                 path1 = path;
             }
         } else {
-            /* CG: not sufficient for windows drives */
             if (!b || !get_default_path(b, offset, cwd, sizeof(cwd))) {
                 if (!getcwd(cwd, sizeof(cwd)))
                     pstrcpy(cwd, sizeof(cwd), ".");
-#ifdef CONFIG_WIN32
-                path_win_to_unix(cwd);
-#endif
             }
             makepath(path, sizeof(path), cwd, path1);
             path1 = path;
@@ -10044,14 +10031,6 @@ void do_help_for_help(EditState *s)
     show_popup(s, b, "QEmacs help for help - Press q to quit:");
 }
 
-#ifdef CONFIG_WIN32
-
-void qe_event_init(QEmacsState *qs)
-{
-}
-
-#else
-
 /* we install a signal handler to set poll_flag to one so that we can
    avoid polling too often in some cases */
 
@@ -10089,8 +10068,6 @@ int qe__is_user_input_pending(void)
     QEditScreen *s = &global_screen;
     return s->dpy.dpy_is_user_input_pending(s);
 }
-
-#endif
 
 #ifndef CONFIG_TINY
 
@@ -10934,12 +10911,12 @@ static void qe_set_user_option(QEmacsState *qs, const char *user)
     /* put user directory before standard list */
     if (user) {
         /* use ~USER/.qe instead of ~/.qe */
-        /* CG: should get user homedir */
-#ifdef CONFIG_DARWIN
-        snprintf(path, sizeof(path), "/Users/%s", user);
-#else
-        snprintf(path, sizeof(path), "/home/%s", user);
-#endif
+        struct passwd *pw = getpwnam(user);
+        if (pw) {
+            pstrcpy(path, sizeof(path), pw->pw_dir);
+        } else {
+            snprintf(path, sizeof(path), "/home/%s", user);
+        }
         home_path = path;
     } else {
         home_path = getenv("HOME");
@@ -11713,68 +11690,6 @@ QEStyleDef qe_styles[QE_STYLE_NB] = {
 #undef STYLE_DEF
 };
 
-#ifdef CONFIG_DLL
-
-static void qe_load_all_modules(QEmacsState *qs)
-{
-    QErrorContext ec;
-    FindFileState *ffst;
-    char filename[MAX_FILENAME_SIZE];
-    void *h;
-    void *sym;
-    int (*init_func)(QEmacsState *);
-
-    ec = qs->ec;
-    qs->ec.function = "load-all-modules";
-
-    ffst = find_file_open(qs->res_path, "*.so", FF_PATH | FF_NODIR);
-    if (!ffst)
-        goto done;
-
-    while (!find_file_next(ffst, filename, sizeof(filename))) {
-        h = dlopen(filename, RTLD_LAZY);
-        if (!h) {
-            char *error = dlerror();
-            qe_put_error(qs, "Could not open module '%s': %s", filename, error);
-            continue;
-        }
-#if 0
-        /* Writing: init_func = (int (*)(void))dlsym(handle, "xxx");
-         * would seem more natural, but the C99 standard leaves
-         * casting from "void *" to a function pointer undefined.
-         * The assignment used below is the POSIX.1-2003 (Technical
-         * Corrigendum 1) workaround; see the Rationale for the
-         * POSIX specification of dlsym().
-         * XXX: this violates the strict aliasing rule. This syntax
-         * is known to cause incorrect code generation in gcc 12.2
-         * with optimizations enabled in other contexts.
-         */
-        *(void **)&init_func = dlsym(h, "__qe_module_init");
-        //init_func = (int (*)(void))dlsym(h, "__qe_module_init");
-#else
-        /* This kludge gets rid of compile and lint warnings.
-           The implicit assumption is that code and function pointers
-           have the same size and representation, which is a requirement
-           ofor POSIX targets */
-        sym = dlsym(h, "__qe_module_init");
-        memcpy(&init_func, &sym, sizeof(sym));
-#endif
-        if (!init_func) {
-            dlclose(h);
-            qe_put_error(qs, "Could not find qemacs initializer in module '%s'", filename);
-            continue;
-        }
-
-        /* all is OK: we can init the module now */
-        (*init_func)(qs);
-    }
-    find_file_close(&ffst);
-
-  done:
-    qs->ec = ec;
-}
-
-#endif
 
 static CompletionDef charset_completion = {
     .name = "charset",
@@ -11866,11 +11781,6 @@ static int qe_init(void *opaque)
 
     /* init all external modules in link order */
     qe_init_all_modules(qs);
-
-#ifdef CONFIG_DLL
-    /* load all dynamic modules */
-    qe_load_all_modules(qs);
-#endif
 
     /* create first buffer */
     b = qe_new_buffer(qs, "*scratch*", BF_SAVELOG | BF_UTF8);
@@ -11990,14 +11900,24 @@ static int qe_init(void *opaque)
 #endif
     qe_display(qs);
     qs->ec.function = NULL;
+
+#ifdef __COSMOPOLITAN__
+    /* Restrict syscalls after initialization is complete.
+     * stdio: basic I/O
+     * rpath/wpath/cpath: filesystem access for editing files
+     * tty: terminal control
+     * proc/exec: fork/exec for shell mode
+     * unix: unix domain sockets for session detach
+     * fattr: file attribute operations (chmod)
+     * id: getpwnam for ~ expansion
+     */
+    pledge("stdio rpath wpath cpath tty proc exec unix fattr id", NULL);
+#endif
+
     return 0;
 }
 
-#ifdef CONFIG_WIN32
-int main1(int argc, char **argv)
-#else
 int main(int argc, char **argv)
-#endif
 {
     QEmacsState *qs = &qe_state;
     QEArgs args;

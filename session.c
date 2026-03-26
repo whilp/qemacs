@@ -47,13 +47,7 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 
-#if defined(__linux__) || defined(__CYGWIN__)
-# include <pty.h>
-#elif defined(__FreeBSD__) || defined(__DragonFly__)
-# include <libutil.h>
-#elif defined(__OpenBSD__) || defined(__NetBSD__) || defined(__APPLE__)
-# include <util.h>
-#endif
+#include <pty.h>
 
 #include "session.h"
 

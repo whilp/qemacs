@@ -2767,10 +2767,8 @@ int eb_save_buffer(EditBuffer *b)
     if (ret < 0)
         return ret;
 
-#ifndef CONFIG_WIN32
     /* set correct file st_mode to old file permissions */
     chmod(filename, st_mode);
-#endif
     /* reset log */
     /* CG: should not do this! */
     //eb_free_log_buffer(b);

@@ -25,15 +25,7 @@
 
 #include "qe.h"
 
-#ifdef CONFIG_WIN32
-#include <winsock.h>
-#include <sys/timeb.h>
-/* Use a conditional typedef to avoid compilation warning */
-typedef u_int fdesc_t;
-#else
 #include <sys/wait.h>
-typedef int fdesc_t;
-#endif
 
 /* NOTE: it is strongly inspirated from the 'links' browser API */
 
@@ -81,9 +73,9 @@ void set_read_handler(int fd, void (*cb)(void *opaque), void *opaque)
     if (cb) {
         if (fd >= url_fdmax)
             url_fdmax = fd;
-        FD_SET((fdesc_t)fd, &url_rfds);
+        FD_SET(fd, &url_rfds);
     } else {
-        FD_CLR((fdesc_t)fd, &url_rfds);
+        FD_CLR(fd, &url_rfds);
     }
 }
 
@@ -94,9 +86,9 @@ void set_write_handler(int fd, void (*cb)(void *opaque), void *opaque)
     if (cb) {
         if (fd >= url_fdmax)
             url_fdmax = fd;
-        FD_SET((fdesc_t)fd, &url_wfds);
+        FD_SET(fd, &url_wfds);
     } else {
-        FD_CLR((fdesc_t)fd, &url_wfds);
+        FD_CLR(fd, &url_wfds);
     }
 }
 
@@ -295,7 +287,6 @@ static void url_block(void)
         }
     }
 
-#ifndef CONFIG_WIN32
     /* handle terminated children */
     for (;;) {
         int pid, status;
@@ -314,7 +305,6 @@ static void url_block(void)
             }
         }
     }
-#endif
 }
 
 int url_main_loop(int (*init)(void *opaque), void *opaque)
@@ -352,40 +342,13 @@ void url_redisplay(void)
 }
 
 int get_clock_ms(void) {
-#ifdef CONFIG_WIN32
-    struct _timeb tb;
-
-    _ftime(&tb);
-    return tb.time * 1000 + tb.millitm;
-#else
-    struct timeval tv;
-
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000 + (tv.tv_usec / 1000);
-#endif
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
 }
 
 int get_clock_usec(void) {
-#ifdef CONFIG_WIN32
-    struct _timeb tb;
-
-    _ftime(&tb);
-    return tb.time * 1000000 + tb.millitm * 1000;
-#else
-    struct timeval tv;
-
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000000 + tv.tv_usec;
-#endif
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int)(ts.tv_sec * 1000000 + ts.tv_nsec / 1000);
 }
-
-#ifdef __TINYC__
-
-/* the glibc folks use wrappers, but forgot to put a compatibility
-   function for non GCC compilers ! */
-int stat(__const char *__path,
-         struct stat *__statbuf)
-{
-    return __xstat(_STAT_VER, __path, __statbuf);
-}
-#endif

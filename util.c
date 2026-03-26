@@ -32,40 +32,9 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include "config.h"     /* for CONFIG_WIN32 */
+#include "config.h"
 #include "util.h"
-
-#ifdef CONFIG_WIN32
-
-/* XXX: not sufficient, but OK for basic operations */
-// XXX: should use own own function in all cases
-int fnmatch(const char *pattern, const char *string, int flags) {
-    char c;
-    while ((c = *pattern++) != '\0') {
-        if (c == '*') {
-            if (*pattern == '\0')
-                return 0;
-            while (*string) {
-                if (!fnmatch(pattern, string))
-                    return 0;
-                string++;
-            }
-            return FNM_NOMATCH;
-        } else
-        if (c == '?') {
-            if (*string++ == '\0')
-                return FNM_NOMATCH;
-        } else
-        if (c != *string++) {
-            return FNM_NOMATCH;
-        }
-    }
-    return *string ? FNM_NOMATCH : 0;
-}
-
-#else
 #include <fnmatch.h>
-#endif
 
 #define MAX_FILENAME_SIZE    1024       /* Size for a filename buffer */
 

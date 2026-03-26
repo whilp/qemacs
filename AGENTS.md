@@ -34,70 +34,40 @@ kmap/                Keyboard mapping files for input methods
 cp/                  Character set data files (ISO 8859-x)
 fonts/               Bitmap font files (.fbf format)
 plugins/             Plugin development examples
-Makefile.cosmo       Primary build file for this fork
+Makefile             Single build file (cosmocc-only)
 .github/workflows/   CI configuration (ci.yml, release.yml)
 ```
 
-### Files not built by cosmocc
-
-The repository contains platform-specific files inherited from upstream that are
-**not compiled** in cosmocc builds. Do not modify these unless also fixing upstream
-compatibility:
-
-- `x11.c` — X11 GUI display driver
-- `win32.c` — Windows GUI display driver
-- `haiku.cpp` — Haiku/BeOS display driver
-- `cfb.c/h`, `fbfrender.c/h`, `libfbf.c/h` — Framebuffer graphics (for html2png)
-- `html2png.c` — HTML-to-PNG converter tool
-- `modes/video.c`, `modes/image.c` — FFmpeg-dependent media modes
-
-The cosmocc configure disables these via: `--disable-x11 --disable-png
---disable-ffmpeg --disable-plugins`. The HTML rendering library (`libqhtml/`),
-terminal modes (shell, dired, hex, etc.), and all language modules are built.
+The HTML rendering library (`libqhtml/`) is present but not compiled by default
+(requires `CONFIG_HTML=yes`). Terminal modes, shell, dired, hex, and all
+language modules are built.
 
 ## Building
 
-This fork uses `Makefile.cosmo` as the primary build entry point. The cosmocc
-toolchain is auto-installed to `/opt/cosmocc` if not already present.
+Requires **cosmocc** in PATH. Everything is in a single `Makefile`. No
+configure step needed — `config.h` is generated automatically.
 
 ```bash
-make -f Makefile.cosmo          # Configure and build with cosmocc
-```
+make install-cosmocc    # Install cosmocc to /opt/cosmocc (one-time)
+export PATH="/opt/cosmocc/bin:$PATH"
 
-Key targets in `Makefile.cosmo`:
-- `make -f Makefile.cosmo` — full build (configure + compile)
-- `make -f Makefile.cosmo ci` — install cosmocc + build + verify binaries
-- `make -f Makefile.cosmo release` — build + create GitHub release with checksums
-- `make -f Makefile.cosmo clean` — clean build artifacts
-
-You can point to a custom cosmocc installation:
-```bash
-make -f Makefile.cosmo COSMOCC=/path/to/cosmocc/bin
+make                    # Build qe + tqe (APE binaries)
+make test               # Run unit tests
+make ci                 # Install cosmocc + build + test + verify
+make release            # Build + create GitHub release
+make debug              # Debug build
+make clean              # Clean build artifacts
 ```
 
 Output binaries:
-- `qe` — full-featured terminal editor (APE)
+- `qe` — full-featured terminal editor (APE — runs on Linux/macOS/Windows/BSD)
 - `tqe` — tiny/minimal variant (APE)
-
-Both are single-file executables that run on all supported platforms without
-recompilation.
-
-### Local development with system compiler
-
-For fast iteration you can also use your system compiler:
-```bash
-./configure && make              # Uses gcc/clang
-make debug                       # Debug build with symbols
-make asan                        # Address Sanitizer build
-make ubsan                       # Undefined Behavior Sanitizer build
-```
 
 ## Testing
 
 ### Running Tests
 
 ```bash
-./configure          # Must configure first (generates config.h)
 make test            # Run the full test suite
 ```
 
@@ -113,8 +83,7 @@ This delegates to `tests/Makefile`, which compiles and runs unit test binaries.
 ### CI
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR:
-1. **Unit tests** — `./configure && make test` on Ubuntu
-2. **Cosmopolitan build** — `make -f Makefile.cosmo ci` (installs cosmocc, builds, verifies)
+- `make ci` — installs cosmocc, builds with cosmocc, runs tests, verifies APE binaries
 
 Releases (`.github/workflows/release.yml`):
 - Nightly pre-releases at 6 AM UTC
@@ -150,26 +119,15 @@ int main() { return testlib_run_all(); }
 
 ## Dependencies
 
-**Required:** cosmocc toolchain (auto-installed by `make -f Makefile.cosmo`)
-
-For local development: any C compiler (gcc, clang, tcc) + GNU make.
-
-The cosmocc build has no external library dependencies. Everything needed is
-compiled into a single portable binary.
-
-## Cosmopolitan Features
-
-This fork should take full advantage of cosmopolitan libc capabilities:
-- **APE format** — single binary runs on 6+ operating systems
-- **Built-in platform abstractions** — filesystem, terminal, signals work cross-platform
-- **cosmocc toolchain** — pinned version from `whilp/cosmopolitan` releases
-- **No external runtime dependencies** — fully self-contained executables
+**Required:** cosmocc toolchain + GNU make. Install cosmocc via `make install-cosmocc`
+or from the [cosmopolitan releases](https://github.com/whilp/cosmopolitan/releases).
+No other external dependencies — everything is compiled into the APE binary.
 
 ## Common Workflows
 
 **Build and test the portable binary:**
 ```bash
-make -f Makefile.cosmo ci
+make ci
 ```
 
 **Add a new language syntax module:**
@@ -177,12 +135,12 @@ make -f Makefile.cosmo ci
 2. Use `qe_module_init()` to register the mode
 3. Rebuild — the build system auto-discovers modules in `lang/`
 
-**Run just the unit tests (fast, uses system compiler):**
+**Run the unit tests:**
 ```bash
-./configure && make -C tests test
+make test
 ```
 
 **Create a release locally:**
 ```bash
-make -f Makefile.cosmo release
+make release
 ```

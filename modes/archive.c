@@ -241,9 +241,7 @@ static CompressType compress_type_array[] = {
 //    { "image", NULL, 0, "bmp", "img2txt -f utf8 $1", NULL, SF_COLOR, NULL  },
     { "pdf", NULL, 0, "pdf", "pstotext $1", NULL, 0, NULL },
     { "zdump", "TZif\0\0\0\0", 8, NULL, "zdump -v $1", NULL, 0, NULL },
-#ifdef CONFIG_DARWIN
     { "dylib", NULL, 0, "dylib", "nm -n $1", NULL, 0, NULL },
-#endif
 };
 
 static CompressType *compress_types;
