@@ -20,7 +20,7 @@ COSMOCC ?= $(shell dirname $$(which cosmocc 2>/dev/null) 2>/dev/null)
 
 HOST_CC := cc
 
-.PHONY: all clean configure build ci release cosmocc
+.PHONY: all clean build ci release cosmocc
 
 # Install cosmocc toolchain if not already present
 cosmocc:
@@ -31,9 +31,9 @@ cosmocc:
 		unzip -q /tmp/cosmocc/cosmocc.zip -d $(COSMOCC_DIR); \
 	fi
 
-all: configure build
+all: build
 
-configure:
+build:
 	@cosmocc="$(COSMOCC)"; \
 	if [ -z "$$cosmocc" ] && [ -x "$(COSMOCC_DIR)/bin/cosmocc" ]; then \
 		cosmocc="$(COSMOCC_DIR)/bin"; \
@@ -42,32 +42,22 @@ configure:
 		echo "error: cosmocc not found. Set COSMOCC=/path/to/cosmocc/bin or add cosmocc to PATH" >&2; \
 		exit 1; \
 	fi; \
-	PATH="$$cosmocc:$$PATH" ./configure \
-		--cc=cosmocc \
-		--host-cc=$(HOST_CC) \
-		--extra-cflags="-mcosmo" \
-		--disable-x11 \
-		--disable-html \
-		--disable-plugins \
-		--disable-png \
-		--disable-ffmpeg; \
-	sed -i 's/^STRIP=.*/STRIP=true/' config.mak
-
-build:
-	@cosmocc="$(COSMOCC)"; \
-	if [ -z "$$cosmocc" ] && [ -x "$(COSMOCC_DIR)/bin/cosmocc" ]; then \
-		cosmocc="$(COSMOCC_DIR)/bin"; \
-	fi; \
-	PATH="$$cosmocc:$$PATH" $(MAKE) -f Makefile -j$$(nproc 2>/dev/null || echo 4)
+	PATH="$$cosmocc:$$PATH" $(MAKE) -f Makefile \
+		CC=cosmocc \
+		HOST_CC=$(HOST_CC) \
+		AR=cosmoar \
+		CFLAGS="-O2 -mcosmo" \
+		STRIP=true \
+		-j$$(nproc 2>/dev/null || echo 4)
 
 # CI target: install cosmocc, build, and verify binaries
-ci: cosmocc configure build
+ci: cosmocc build
 	file qe tqe
 	test -f qe && test -f tqe
 
 # Release target: build and create a GitHub release
 # Requires GH_TOKEN, GITHUB_SHA, and optionally RELEASE to be set
-release: cosmocc configure build
+release: cosmocc build
 	mkdir -p release
 	cp qe release/qe
 	cp tqe release/tqe

@@ -1,4 +1,10 @@
-include ../config.mak
+# Build defaults — override on command line (e.g., make CC=cosmocc)
+CC ?= cc
+CONFIG_SESSION_DETACH ?= yes
+SESSION_DETACH_LIBS ?= -lutil
+
+# Optional config.mak for local overrides
+-include ../config.mak
 
 TEST_CFLAGS = -g -O2 -Wall -I.. -DHAVE_QE_CONFIG_H
 

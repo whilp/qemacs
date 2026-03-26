@@ -2,7 +2,7 @@
 # Delegates to Makefile.cosmo for configure + build.
 #
 # To use the upstream Makefile directly:
-#   ./configure && make -f Makefile
+#   make -f Makefile
 
 .DEFAULT_GOAL := all
 

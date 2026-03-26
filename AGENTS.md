@@ -51,8 +51,7 @@ compatibility:
 - `html2png.c` — HTML-to-PNG converter tool
 - `modes/video.c`, `modes/image.c` — FFmpeg-dependent media modes
 
-The cosmocc configure disables these via: `--disable-x11 --disable-png
---disable-ffmpeg --disable-plugins`. The HTML rendering library (`libqhtml/`),
+These are not compiled in the cosmocc build (the Makefile defaults exclude them). The HTML rendering library (`libqhtml/`),
 terminal modes (shell, dired, hex, etc.), and all language modules are built.
 
 ## Building
@@ -65,7 +64,7 @@ make -f Makefile.cosmo          # Configure and build with cosmocc
 ```
 
 Key targets in `Makefile.cosmo`:
-- `make -f Makefile.cosmo` — full build (configure + compile)
+- `make -f Makefile.cosmo` — full build with cosmocc
 - `make -f Makefile.cosmo ci` — install cosmocc + build + verify binaries
 - `make -f Makefile.cosmo release` — build + create GitHub release with checksums
 - `make -f Makefile.cosmo clean` — clean build artifacts
@@ -86,10 +85,16 @@ recompilation.
 
 For fast iteration you can also use your system compiler:
 ```bash
-./configure && make              # Uses gcc/clang
-make debug                       # Debug build with symbols
-make asan                        # Address Sanitizer build
-make ubsan                       # Undefined Behavior Sanitizer build
+make -f Makefile                 # Uses system cc (gcc/clang)
+make -f Makefile debug           # Debug build with symbols
+make -f Makefile asan            # Address Sanitizer build
+make -f Makefile ubsan           # Undefined Behavior Sanitizer build
+```
+
+No separate configure step is needed — `config.h` is generated automatically
+by the Makefile. Override defaults on the command line:
+```bash
+make -f Makefile CC=gcc prefix=/opt/qe
 ```
 
 ## Testing
@@ -97,7 +102,6 @@ make ubsan                       # Undefined Behavior Sanitizer build
 ### Running Tests
 
 ```bash
-./configure          # Must configure first (generates config.h)
 make test            # Run the full test suite
 ```
 
@@ -113,7 +117,7 @@ This delegates to `tests/Makefile`, which compiles and runs unit test binaries.
 ### CI
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR:
-1. **Unit tests** — `./configure && make test` on Ubuntu
+1. **Unit tests** — `make test` on Ubuntu
 2. **Cosmopolitan build** — `make -f Makefile.cosmo ci` (installs cosmocc, builds, verifies)
 
 Releases (`.github/workflows/release.yml`):
@@ -179,7 +183,7 @@ make -f Makefile.cosmo ci
 
 **Run just the unit tests (fast, uses system compiler):**
 ```bash
-./configure && make -C tests test
+make -f Makefile test
 ```
 
 **Create a release locally:**
