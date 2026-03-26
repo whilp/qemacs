@@ -26,6 +26,7 @@ tqe
 tests/test_cutils
 tests/test_session
 tests/test_terminal
+tests/bench_buffer
 tqe1
 xqe
 # temp-directories
