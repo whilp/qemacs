@@ -36,6 +36,7 @@ STRIP ?= strip -s -R .comment -R .note
 INSTALL ?= install
 MAKE ?= make
 CFLAGS ?= -O2
+EXTRA_CFLAGS ?=
 LDFLAGS ?=
 LIBS ?=
 EXE ?=
@@ -82,7 +83,7 @@ endif
 #include local compiler configuration file
 -include $(DEPTH)/cflags.mk
 
-CFLAGS += -Wno-unused-result
+CFLAGS += $(EXTRA_CFLAGS) -Wno-unused-result
 
 CFLAGS+=-I$(DEPTH)
 
@@ -547,7 +548,8 @@ cosmo:
 	fi; \
 	PATH="$$cosmocc:$$PATH" $(MAKE) \
 		CC=cosmocc HOST_CC=cc AR=cosmoar \
-		CFLAGS="-O2 -mcosmo" STRIP=true \
+		EXTRA_CFLAGS="-mcosmo" STRIP=true \
+		SESSION_DETACH_LIBS= \
 		-j$$(nproc 2>/dev/null || echo 4)
 
 # CI target: install cosmocc, build, and verify binaries
