@@ -5,10 +5,10 @@
               QERGB(0xf8, 0xd8, 0xb0), QERGB(0x00, 0x00, 0x00), QE_FONT_FAMILY_FIXED, 12)
 
     /* system styles */
-    STYLE_DEF(QE_STYLE_MODE_LINE, "mode-line", /* grey74 on dark grey */
-              QERGB(0xb0, 0xb0, 0xb0), QERGB(0x1a, 0x1a, 0x1a), 0, 0)
-    STYLE_DEF(QE_STYLE_WINDOW_BORDER, "window-border", /* dim cyan on dark grey */
-              QERGB(0x60, 0x90, 0x90), QERGB(0x1a, 0x1a, 0x1a), 0, 0)
+    STYLE_DEF(QE_STYLE_MODE_LINE, "mode-line", /* grey74 on default bg */
+              QERGB(0xb0, 0xb0, 0xb0), COLOR_TRANSPARENT, 0, 0)
+    STYLE_DEF(QE_STYLE_WINDOW_BORDER, "window-border", /* dim cyan on default bg */
+              QERGB(0x60, 0x90, 0x90), COLOR_TRANSPARENT, 0, 0)
     STYLE_DEF(QE_STYLE_MINIBUF, "minibuf", /* yellow */
               QERGB(0xff, 0xff, 0x00), COLOR_TRANSPARENT, 0, 0)
     STYLE_DEF(QE_STYLE_STATUS, "status", /* yellow */
