@@ -1,6 +1,6 @@
 # QEmacs Codebase Cleanup Plan
 
-Status: **In Progress**
+Status: **In Progress** (4 of 8 items complete)
 
 ## Overview
 
@@ -11,21 +11,23 @@ organized by priority.
 ---
 
 ## 1. Extract Shared Colorize Helpers
-**Priority:** High | **Effort:** Medium | **Status:** Not Started
+**Priority:** High | **Effort:** Medium | **Status:** Done
 
-The 57 language modules in `lang/` duplicate identical parsing logic:
+The 57 language modules in `lang/` duplicated identical parsing logic.
 
-- **String escape handling** — `if (c == '\\') { if (i < n) i++; }` duplicated 57 times
-- **Comment parsing** — C-style `/* */`, line comments `#`, `//` duplicated 45+ times
-- **Number literal parsing** — hex/octal/binary/decimal/exponent duplicated 15+ times
-
-### Plan
-- Create `lang/lang-utils.h` with inline helpers:
+### Completed
+- Added three inline helpers in `util.h`:
   - `colorize_skip_escape(str, i, n)` — advance past backslash escape
-  - `colorize_skip_string(str, i, n, sep)` — skip to end of quoted string
-  - `colorize_match_c_comment_start(str, i, n)` — detect `/*`
-  - `colorize_skip_to_c_comment_end(str, i, n)` — skip to `*/`
-- Migrate a few representative modules first (lua, python, ruby), then sweep remaining
+  - `colorize_skip_block_comment(str, i, n, statep, bit)` — scan for `*/` end
+  - `colorize_parse_number(str, i, n, allow_sep)` — parse number literals
+    with 0x/0o/0b radix prefixes, decimal point, and exponent
+- Applied to 17 language modules: scad, rust, nim, falcon, elm, icon, swift,
+  jai, virgil, coffee, julia, groovy, crystal, magpie, python, ruby, sql
+- Net result: -69 lines
+
+### Remaining opportunity
+- More lang/ files could adopt these helpers (ada, rebol, haskell, etc.)
+- Nested comment variants (magpie, swift, tiger) need custom logic
 
 ---
 
@@ -46,73 +48,70 @@ Only 4 test files exist for ~100K LOC. Core modules have zero coverage:
 ---
 
 ## 3. Fix Unchecked malloc and strcpy Consistency
-**Priority:** Medium | **Effort:** Low | **Status:** Not Started
+**Priority:** Medium | **Effort:** Low | **Status:** Done
 
-### Specific issues
-- `qe.c:6409` — `qe_malloc_array(char, size)` used without null check
-- `qe.c:6840` — `strcpy(c->buf, "Describe key: ")` should use `pstrcpy`
-- `qe.c:8755` — `strcpy(cwd, ".")` should use `pstrcpy`
-- `qe.c:11065` — `strcpy(path, ".")` should use `pstrcpy`
-- `qe.c:2056` — malloc failure silently returns (FIXME comment)
-
-### Plan
-- Add null check after malloc at line 6409
-- Replace 3 strcpy calls with pstrcpy
-- Add `put_status` error message for malloc failure at line 2056
+### Completed
+- Added null check after `qe_malloc_array` in `do_define_kbd_macro`
+- Replaced 3 `strcpy` calls with bounded `pstrcpy` for consistency
+- Added `put_status` error message for malloc failure in `do_quoted_insert`
 
 ---
 
 ## 4. Module Init Macro
-**Priority:** Medium | **Effort:** Low | **Status:** Not Started
+**Priority:** Medium | **Effort:** Low | **Status:** Done
 
-55+ files repeat identical 5-line init boilerplate:
-```c
-static int lang_init(QEmacsState *qs) {
-    qe_register_mode(qs, &lang_mode, MODEF_SYNTAX);
-    return 0;
-}
-qe_module_init(lang_init);
-```
+### Completed
+- Defined `qe_module_init_mode(mode, flags)` macro in `qe.h`
+- Applied to 45 lang/ files and 3 modes/ files (48 total)
+- Updated Makefile module generation to handle the new macro
+- Net result: -265 lines of boilerplate removed
 
-### Plan
-- Define `qe_module_init_mode(mode, flags)` macro in `qe.h`
-- Replace boilerplate in all single-mode lang/ files
-- Keep custom init functions for multi-mode files (clang.c, lisp.c, script.c)
+### Files kept with custom init (multi-mode or extra setup)
+- clang.c (61 modes + commands), lisp.c (8 modes), script.c (6 modes),
+  python.c (3 modes), sharp.c (3 modes), lua.c, makemode.c, ebnf.c,
+  jai.c, ocaml.c, arm.c
 
 ---
 
 ## 5. Split qe.c into Logical Modules
 **Priority:** Medium | **Effort:** High | **Status:** Not Started
 
-`qe.c` is 12,282 LOC with 182 static globals and 178 TODO/FIXME comments.
+`qe.c` is ~12K LOC with 182 static globals and 178 TODO/FIXME comments.
 
 ### Plan
-- Identify natural boundaries (window management, file I/O, command dispatch, key handling)
+- Identify natural boundaries (window management, file I/O, command dispatch)
 - Extract in phases to avoid breakage
-- Deferred to after items 1-4 are complete
 
 ---
 
 ## 6. Split clang.c
 **Priority:** Low | **Effort:** Medium | **Status:** Not Started
 
-`lang/clang.c` is 4,812 LOC defining 53 language modes.
+`lang/clang.c` is 4,812 LOC defining 53+ language modes.
 
 ### Plan
 - Split into `clang-c.c` (C/C++/ObjC core), `clang-js.c` (JS/TS), `clang-misc.c`
-- Deferred to after items 1-4 are complete
 
 ---
 
 ## 7. Remove #if 0 Dead Code Blocks
-**Priority:** Low | **Effort:** Low | **Status:** Not Started
+**Priority:** Low | **Effort:** Low | **Status:** Done
 
-13+ `#if 0` blocks across core files. These are dead code that obscures the
-actual logic.
+### Completed
+Removed 19 dead code blocks (~250 lines) from core files:
+- **qe.c**: Debug printf blocks (4), async callbacks (2), unused functions
+  (`do_space`, `qe_find_file_window`, `detect_binary`), broken buffer data
+  cleanup, unused color completion code
+- **buffer.c**: Async I/O infrastructure (`BufferIOState`, `load_buffer`,
+  callbacks), unused `eb_line_pad`
+- **cutils.c**: Exploratory `utf8_min_code` constant array
+- **display.c**: Bitmap cache stubs (`QECachedBitmap` and functions)
+- **qe.h**: Unused struct fields (`io_state`, `probed`, `font`, `style_cache`)
 
-### Plan
-- Audit each block: remove if obsolete, convert to proper `#ifdef` if conditional
-- Files: qe.c (13 blocks), buffer.c (2), cutils.c (1), charset.c (2), color.c (4), display.c (2)
+### Blocks intentionally kept
+- `#if 0`/`#else` blocks with active alternatives (color.c algorithm choices,
+  charset.c detection fallbacks, display.c interpolation) — these document
+  design decisions
 
 ---
 
@@ -127,10 +126,20 @@ actual logic.
 
 ### Plan
 - Group related globals into structs (e.g., `TtyState`, `SearchState`)
-- Deferred to after items 1-6 are complete
 
 ---
+
+## Summary of Changes
+
+| Item | Lines Removed | Lines Added | Net |
+|------|--------------|-------------|-----|
+| 1. Colorize helpers | 200 | 131 | -69 |
+| 3. Safety fixes | 4 | 8 | +4 |
+| 4. Module init macro | 333 | 68 | -265 |
+| 7. Dead code removal | 318 | 4 | -314 |
+| **Total** | **855** | **211** | **-644** |
 
 ## Changelog
 
 - **2026-03-26**: Initial analysis and plan created
+- **2026-03-26**: Completed items 1, 3, 4, 7. Removed 644 net lines.
