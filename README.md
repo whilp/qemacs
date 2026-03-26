@@ -3,6 +3,12 @@
 Welcome to QEmacs! A small but powerful UNIX editor with many features
 that even big editors lack.
 
+This is a fork of [QEmacs](https://github.com/qemacs/qemacs) that
+builds exclusively with [cosmocc](https://github.com/jart/cosmopolitan)
+(Cosmopolitan C compiler) to produce Actually Portable Executables (APE)
+that run natively on Linux, macOS, Windows, FreeBSD, OpenBSD, and NetBSD
+from a single binary.
+
 ## Quick Description
 
 QEmacs is a small text editor targeted at embedded systems or debugging.
@@ -53,12 +59,21 @@ package for image parsing.
 
 ## Building QEmacs
 
-* Launch the custom configuration script `./configure`. You can list the
-available options by typing `./configure --help`.
+This fork requires **cosmocc** in PATH. No configure step is needed —
+`config.h` is generated automatically by the Makefile.
 
-* Type `make` to compile qemacs and its associated tools.
+```bash
+make install-cosmocc    # Install cosmocc to /opt/cosmocc (one-time)
+export PATH="/opt/cosmocc/bin:$PATH"
 
-* Type `make install` as root to install it in **/usr/local**.
+make                    # Build qe + tqe (APE binaries)
+make test               # Run unit tests
+make install            # Install to /usr/local (as root)
+```
+
+Output binaries:
+- `qe` — full-featured terminal editor (APE)
+- `tqe` — tiny/minimal variant (APE)
 
 ## QEmacs Documentation
 
@@ -71,8 +86,11 @@ QEmacs is released under the MIT license.
 
 ## Contributing to QEmacs
 
-QEmacs official repository is available on [Github](https://github.com/qemacs/qemacs).
-You are welcome to contribute by opening an issue or submitting a Pull Request. Older discussions are archived on the  [qemacs-devel](https://lists.nongnu.org/mailman/listinfo/qemacs-devel) mailing list.
+This fork is maintained at [whilp/qemacs](https://github.com/whilp/qemacs).
+You are welcome to contribute by opening an issue or submitting a Pull Request.
+
+The upstream QEmacs project is at [qemacs/qemacs](https://github.com/qemacs/qemacs).
+Older discussions are archived on the [qemacs-devel](https://lists.nongnu.org/mailman/listinfo/qemacs-devel) mailing list.
 
 ## Authors
 
