@@ -132,7 +132,7 @@ TARGET_OBJ:=$(TARGET)
 endif
 
 OBJS:= qe.o cutils.o util.o color.o charset.o buffer.o search.o input.o display.o \
-       qescript.o modes/hex.o
+       qescript.o modes/hex.o test_display.o
 
 ifdef CONFIG_32BIT
 CFLAGS += -m32
