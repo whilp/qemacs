@@ -507,14 +507,27 @@ static int tty_dpy_init(QEditScreen *s, QEmacsState *qs,
     if (ts->term_code == TERM_TW100)
         s->charset = qe_find_charset(qs, "atarist");
 
-    // XXX: default charset for non tty invocations should be UTF-8
+    /* Default to UTF-8 for non-tty invocations */
     if (!s->charset && !isatty(fileno(s->STDOUT)))
-        s->charset = &charset_8859_1;
+        s->charset = &charset_utf8;
+
+    if (!s->charset) {
+        /* Check locale environment for UTF-8 indication */
+        const char *locale = getenv("LC_ALL");
+        if (!locale) locale = getenv("LC_CTYPE");
+        if (!locale) locale = getenv("LANG");
+        if (locale && (strstr(locale, "UTF-8") || strstr(locale, "utf-8")
+                   ||  strstr(locale, "UTF8") || strstr(locale, "utf8"))) {
+            s->charset = &charset_utf8;
+        }
+    }
 
     if (!s->charset) {
         int y, x, n;
 
-        s->charset = &charset_8859_1;
+        /* Default to UTF-8; probe may confirm or we keep this default.
+         * Nearly all modern terminals support UTF-8. */
+        s->charset = &charset_utf8;
 
         /* Test UTF8 support by looking at the cursor position (idea
          * from Ricardas Cepas <rch@pub.osf.lt>). Since uClibc actually
@@ -535,6 +548,10 @@ static int tty_dpy_init(QEditScreen *s, QEmacsState *qs,
         /* XXX: should have a timeout to avoid locking on unsupported terminals */
         n = fscanf(s->STDIN, "\033[%d;%dR", &y, &x);  /* get cursor position */
         TTY_FPRINTF(s->STDOUT, "\r   \r");        /* go back, erase 3 chars */
+        if (n == 2 && x != 2) {
+            /* Terminal is not UTF-8: é took more than 1 column */
+            s->charset = &charset_8859_1;
+        }
         if (n == 2 && x == 2) {
 #if 0
             /* determine the unicode version supported */
@@ -1842,6 +1859,10 @@ static void tty_dpy_flush(QEditScreen *s)
                 if (bgcolor != (int)TTY_CHAR_GET_BG(cc)) {
                     int lastbg = bgcolor;
                     bgcolor = TTY_CHAR_GET_BG(cc);
+                    if (bgcolor == 0) {
+                        /* Use terminal default background instead of explicit black */
+                        TTY_FPUTS("\033[49m", s->STDOUT);
+                    } else
 #if TTY_STYLE_BITS == 32
                     if (ts->term_bg_colors_count > 256 && bgcolor >= 256) {
                         /* XXX: should special case dynamic palette */

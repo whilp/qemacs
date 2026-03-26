@@ -26,6 +26,9 @@
 #include "qe.h"
 #include "unicode_join.h"
 #include "variables.h"
+#ifdef __COSMOPOLITAN__
+extern void ShowCrashReports(void);
+#endif
 #ifdef CONFIG_SESSION_DETACH
 #include <dirent.h>
 #include "session.h"
@@ -73,7 +76,7 @@ int disable_crc;
 int use_session_file;
 #endif
 int use_html = 1;
-int is_player = 1;    /* Start in dired mode when invoked with no arguments */
+int is_player = 0;    /* Do not start in dired mode when invoked with no arguments */
 #ifndef CONFIG_TINY
 static int free_everything;
 #endif
@@ -3393,7 +3396,7 @@ void basic_mode_line(EditState *s, buf_t *out, int c1)
     /* Strip text mode name if another mode is also active */
     strstart(mode_name, "text ", &mode_name);
 
-    buf_printf(out, "%s%s \342\224\202 %s",
+    buf_printf(out, "%s%s - %s",
                mod_indicator,
                s->b->name, mode_name);
     if (s->b->flags & BF_READONLY)
@@ -3415,8 +3418,7 @@ void text_mode_line(EditState *s, buf_t *out)
     basic_mode_line(s, out, wrap_mode);
 
     eb_get_pos(s->b, &line_num, &col_num, s->offset);
-    /* \342\224\202 is UTF-8 for U+2502 │ (box drawing light vertical) */
-    buf_puts(out, " \342\224\202 ");
+    buf_puts(out, " - ");
     if (s->qs->line_number_mode)
         buf_printf(out, "L%d ", line_num + 1);
     if (s->qs->column_number_mode)
@@ -3431,7 +3433,7 @@ void text_mode_line(EditState *s, buf_t *out)
 
     if (s->input_method)
         buf_printf(out, " %s", s->input_method->name);
-    buf_printf(out, " \342\224\202 %d%%", compute_percent(s->offset, s->b->total_size));
+    buf_printf(out, " - %d%%", compute_percent(s->offset, s->b->total_size));
     if (s->x_disp[0])
         buf_printf(out, " <%d", -s->x_disp[0]);
     if (s->x_disp[1])
@@ -12114,9 +12116,9 @@ static int qe_init(void *opaque)
     }
 #endif
 #ifdef CONFIG_TINY
-    put_status(s, "Tiny QEmacs %s \342\224\202 F1 help \342\224\202 C-x C-f open \342\224\202 C-x C-c quit", QE_VERSION);
+    put_status(s, "Tiny QEmacs %s - F1 help - C-x C-f open - C-x C-c quit", QE_VERSION);
 #else
-    put_status(s, "QEmacs %s \342\224\202 F1 help \342\224\202 C-x C-f open \342\224\202 C-x C-c quit", QE_VERSION);
+    put_status(s, "QEmacs %s - F1 help - C-x C-f open - C-x C-c quit", QE_VERSION);
     b = qe_find_buffer_name(qs, "*errors*");
     if (b != NULL) {
         show_popup(s, b, "Errors");
@@ -12136,6 +12138,10 @@ int main(int argc, char **argv)
     QEmacsState *qs = &qe_state;
     QEArgs args;
     int status;
+
+#ifdef __COSMOPOLITAN__
+    ShowCrashReports();
+#endif
 
 #ifdef CONFIG_SESSION_DETACH
     /* Pre-parse session arguments before editor initialization.
