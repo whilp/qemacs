@@ -2921,7 +2921,20 @@ static void shell_move_eol(EditState *e)
         qe_term_write(s, "\005", 1); /* Control-E */
     } else {
         text_move_eol(e);
-        /* XXX: restore shell interactive mode on end / ^E */
+        if (s) {
+            /* Skip back over trailing whitespace in shell buffer lines,
+             * which are padded with spaces to the terminal width */
+            int offset = e->offset;
+            int offset1;
+            while (offset > 0) {
+                char32_t c = eb_prevc(e->b, offset, &offset1);
+                if (c == '\n') break;  /* don't go past start of this line */
+                if (!qe_isblank(c)) break;
+                offset = offset1;
+            }
+            e->offset = offset;
+        }
+        /* restore shell interactive mode on end / ^E */
         if (s && (s->shell_flags & SF_INTERACTIVE) && !s->grab_keys
         &&  e->offset >= s->cur_offset) {
             e->interactive = 1;
