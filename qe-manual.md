@@ -1,12 +1,16 @@
+# QEmacs User Guide
 
 # Introduction
 
-Welcome to QEmacs! A small but powerful UNIX editor with many features
+Welcome to QEmacs! A small but powerful text editor with many features
 that even big editors lack.
 
 ## Quick Description
 
 QEmacs is a small text editor targeted at embedded systems or debugging.
+This fork builds with cosmocc to produce Actually Portable Executables
+(APE) that run on Linux, macOS, Windows, and BSDs from a single binary.
+
 Although it is very small, it has some very interesting features that
 even big editors lack:
 
@@ -54,11 +58,46 @@ package for image parsing.
 
 # Concepts
 
+QEmacs uses an Emacs-style model built around buffers, windows, and modes.
+Text is stored in buffers, displayed through windows, and behavior is
+controlled by modes. Commands are invoked via key bindings or by name
+through the minibuffer (`M-x`).
+
 # Buffers
+
+A buffer holds the contents of a file or other text being edited. Each
+buffer has a name (usually the filename) and an associated major mode.
+You can have many buffers open simultaneously and switch between them
+with `C-x b`. List all buffers with `C-x C-b`.
+
+Buffers use a page-based internal representation that allows efficient
+editing of very large files (hundreds of megabytes) with minimal memory
+overhead.
 
 # Windows
 
+A window is a view onto a buffer. The QEmacs display can be split into
+multiple windows, each showing a different buffer or a different part of
+the same buffer. Split horizontally with `C-x 2`, vertically with
+`C-x 3`, and close the current window with `C-x 0`. Switch between
+windows with `C-x o`.
+
 # Modes
+
+A mode defines the behavior of a buffer: syntax highlighting, indentation,
+key bindings, and special commands. QEmacs supports major modes (one per
+buffer) and minor modes (which can be layered on top).
+
+Built-in modes include:
+- **Text mode** — default for plain text files
+- **C mode** — syntax highlighting and auto-indent for C/C++/Java/etc.
+- **Shell mode** — full VT100 terminal emulator (`M-x shell`)
+- **Dired mode** — directory browser (`C-x C-d`)
+- **Hex mode** — binary/hexadecimal editing (`M-x hex-mode`)
+- **Markdown/Org modes** — structured document editing
+
+Language syntax modules (56 languages) are in `lang/` and are loaded
+automatically based on file extension and content.
 
 # Commands
 
@@ -186,7 +225,31 @@ the keystrokes.
 
 # Implementation
 
+QEmacs is implemented in C99 and organized as a core editor with a
+modular system for language support and editor modes. The source is
+structured as follows:
+
+- **Core** (`qe.c`, `qe.h`) — main loop, command dispatch, key bindings
+- **Buffer management** (`buffer.c`) — page-based buffer representation
+  for efficient editing of large files
+- **Display** (`display.c`, `tty.c`) — rendering pipeline and terminal driver
+- **Character sets** (`charset.c`) — encoding/decoding for multiple charsets
+- **Utilities** (`cutils.c`) — string handling, memory management, path operations
+- **Search** (`search.c`) — incremental search, query-replace, regex support
+- **Input** (`input.c`) — key binding resolution and input method support
+
+Modules use `qe_module_init()` / `qe_module_exit()` macros to register
+themselves at startup. Language modules go in `lang/`, editor modes in `modes/`.
+
 # Structures
+
+The key data structures are:
+
+- **`EditBuffer`** — represents a text buffer with page-based storage
+- **`EditState`** — per-window editing state (cursor position, display info)
+- **`ModeDef`** — defines a major or minor mode (callbacks, key bindings)
+- **`buf_t`** — fixed-length character array for safe formatted output
+- **`DynBuf`** — dynamically growing byte buffer
 
 # C functions
 
@@ -934,7 +997,7 @@ The objects are initialized to all bits zero.
 
 Note: this function is implemented as a macro.
 
-### `T *qe_mallocz_array(type T, size_t n);`
+### `T *qe_mallocz_hack(type T, size_t n);`
 
 Allocate memory for an object of type `T` with `n` extra bytes.
 The object and the extra space is initialized to all bits zero.
@@ -2709,11 +2772,11 @@ Return the length in bytes of an intial common prefix of `str1` and `str2`.
 
 ## Building QEmacs
 
-* Get the source code from github or an archive.
-* Launch the custom configuration script `./configure`. You can list the
-available options by typing `./configure --help`.
+* Get the source code from [GitHub](https://github.com/whilp/qemacs).
+* Install cosmocc: `make install-cosmocc` (one-time setup).
+* Ensure cosmocc is in your PATH: `export PATH="/opt/cosmocc/bin:$PATH"`
 * Type `make` to compile qemacs and its associated tools.
-* Type `make install` as root to install it in ** /usr/local **.
+* Type `make install` as root to install it in **/usr/local**.
 
 ## Authors
 
@@ -2728,5 +2791,7 @@ QEmacs is released under the MIT license.
 
 ## Contributing to QEmacs
 
-The QEmacs project is hosted on [github](https://github.com/qemacs/qemacs/)
-Please file an issue for any questions or feature requests. Patch requests are welcome.
+This fork is maintained at [whilp/qemacs](https://github.com/whilp/qemacs).
+Please file an issue for any questions or feature requests. Pull requests are welcome.
+
+The upstream QEmacs project is at [qemacs/qemacs](https://github.com/qemacs/qemacs).

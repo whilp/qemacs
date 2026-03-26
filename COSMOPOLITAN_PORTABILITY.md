@@ -5,7 +5,7 @@ Research based on analysis of `whilp/cosmopolitan` and the current qemacs codeba
 ## Current State
 
 QEmacs already uses cosmopolitan in a minimal way:
-- Builds with `cosmocc` via `Makefile.cosmo`
+- Builds with `cosmocc` via `Makefile`
 - Uses `ShowCrashReports()` behind `#ifdef __COSMOPOLITAN__` (qe.c:29-31)
 - Produces APE binaries that run on Linux, macOS, Windows, FreeBSD, OpenBSD, NetBSD
 
@@ -75,7 +75,7 @@ static int load_resource(const char *name, ...) {
 }
 ```
 
-Build integration in `Makefile.cosmo`:
+Build integration in `Makefile`:
 ```makefile
 # After building qe, embed resources
 zip qe kmap/*.kmap cp/*.cp config/default.qerc
@@ -255,7 +255,7 @@ switching**, but individual algorithms (like color quantization) could be studie
 
 **What:** Cosmopolitan's `-mtiny` flag aggressively optimizes for size.
 
-**Where:** `Makefile.cosmo` for the `tqe` (tiny qemacs) build.
+**Where:** `Makefile` for the `tqe` (tiny qemacs) build.
 
 **Why:** Could make `tqe` even smaller. Currently the tiny build uses `-Os`.
 
