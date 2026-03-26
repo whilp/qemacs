@@ -56,19 +56,11 @@ case "$cpu" in
     ;;
 esac
 
-unlockio="no"
 ptsname="yes"
 gprof="no"
 network="yes"
-atari="no"
-win32="no"
-cygwin="no"
-darwin="no"
-haiku="no"
 lshared="no"
-dllibs="-ldl"
 extralibs=""
-simpleidct="yes"
 bigendian="no"
 
 tiny="no"
@@ -90,87 +82,7 @@ exe=""
 
 # OS specific
 targetos=`uname -s`
-case $targetos in
-  BeOS)
-    prefix="/boot/home/config"
-    # helps building libavcodec
-    CFLAGS="-O2 -DPIC"
-    # no need for libm, but the inet stuff
-    # Check for BONE
-    if (echo $BEINCLUDES|grep 'headers/be/bone' >/dev/null); then
-        extralibs="-lbind -lsocket"
-    else
-        echo "Not sure building for net_server will succeed... good luck."
-        extralibs="-lsocket"
-    fi
-    ;;
-  BSD/OS)
-    extralibs="-lpoll -lgnugetopt -lm"
-    make="gmake"
-    doc="no"
-    plugins="no"
-    ptsname="no"
-    ;;
-  NetBSD)
-    extralibs="-lm"
-    unlockio="no"
-    doc="no"
-    plugins="no"
-    dllibs=
-    ;;
-  OpenBSD)
-    extralibs="-lm"
-    make="gmake"
-    doc="no"
-    plugins="no"
-    ptsname="no"
-    dllibs=
-    cc="cc"
-    host_cc="cc"
-    ;;
-  FreeBSD)
-    extralibs="-lm"
-    make="gmake"
-    doc="no"
-    unlockio="no"
-    plugins="no"
-    ptsname="yes"
-    cc="clang"
-    host_cc="clang"
-    ;;
-  MINGW*)
-    mingw="yes"
-    ;;
-  CYGWIN*)
-    cygwin="yes"
-    ;;
-  Darwin)
-    darwin="yes"
-    CFLAGS=""
-    unlockio="yes"
-    plugins="no"
-    extralibs="-lm"
-    strip_args="-x -S"
-    cc="clang"
-    host_cc="clang"
-    ;;
-  Haiku)
-    prefix="`finddir B_COMMON_DIRECTORY`"
-    # no need for libm, but the network stuff
-    extralibs="-lnetwork"
-    # dlopen() is in libroot already
-    dllibs=""
-    # use Haiku GUI; avoid building for X11 even if there are headers around
-    haiku="yes"
-    html="yes"
-    png="yes"
-    x11="no"
-    ;;
-  *)
-    extralibs="-lm"
-    unlockio="yes"
-    ;;
-esac
+extralibs="-lm"
 
 # find source path
 # XXX: we assume an absolute path is given when launching configure,
@@ -182,33 +94,6 @@ if test -z "$source_path" -o "$source_path" = "." ; then
     source_path=`pwd`
     source_path_used="no"
 fi
-
-if test -d "./ffmpeg" ; then
-    ffmpeg="yes"
-    ffmpeg_srcdir="./ffmpeg"
-fi
-
-if test -f "/usr/include/png.h" ; then
-    png="yes"
-fi
-
-for x11path in /usr /opt/X11 /usr/X11R6; do
-    if test -f "$x11path/include/X11/Xlib.h" ; then
-        x11="yes"
-        x11_libdir="$x11path/lib"
-        x11_includedir="$x11path/include"
-        html="yes"
-        if test -f "$x11path/include/X11/extensions/Xv.h" ; then
-          if test -f "$x11path/include/X11/extensions/Xvlib.h" ; then
-            xv="yes"
-          fi
-        fi
-        if test -f "$x11path/include/X11/extensions/Xshm.h" ; then
-            xshm="yes"
-        fi
-        break
-    fi
-done
 
 if test -z `which texi2html 2>/dev/null` ; then
     doc="no"
@@ -225,21 +110,13 @@ EOF
 echo "Standard options:"
 echo "  --help                   print this message"
 echo "  --prefix=PREFIX          install in PREFIX [$prefix]"
-echo "  --enable-atari           enable atari cross compile"
-echo "  --enable-win32           enable win32 cross compile"
-echo "  --enable-cygwin          compile for cygwin systems"
-echo "  --disable-x11            disable Xwindow support"
-echo "  --disable-xv             disable Xvideo extension support"
-echo "  --disable-xshm           disable XShm extension support"
-echo "  --disable-xrender        disable Xrender extension support"
 echo "  --enable-tiny            build a very small version"
+echo "  --disable-x11            disable Xwindow support (for non-cosmo builds)"
 echo "  --disable-html           disable graphical html support"
 echo "  --disable-png            disable png support"
 echo "  --disable-plugins        disable plugins support"
 echo "  --disable-ffmpeg         disable ffmpeg support"
 echo "  --disable-session-detach disable session detach/reattach support"
-echo "  --with-ffmpegdir=DIR     find ffmpeg sources and libraries in DIR"
-echo "                           for audio/video/image support"
 echo ""
 echo "Advanced options (experts only):"
 echo "  --source-path=PATH       path of source code [$source_path]"
@@ -319,15 +196,6 @@ for opt do
       --enable-network | --disable-network)
         network="$value"
         ;;
-      --enable-atari)
-        atari="yes"
-        ;;
-      --enable-win32)
-        win32="yes"
-        ;;
-      --enable-cygwin)
-        cygwin="yes"
-        ;;
       --enable-shared | --disable-shared)
         lshared="$value"
         ;;
@@ -380,79 +248,10 @@ if test -z "$CFLAGS"; then
     CFLAGS="-O2"
 fi
 
-if test "$atari" = "yes" ; then
-    if test "$cross_prefix" = ""; then
-        cross_prefix="m68k-atari-mint-"
-    fi
-    if test "$cross_env" = ""; then
-        cross_env="/opt/netsurf/${cross_prefix%-}/env"
-    fi
-    # LLONG_MIN needs C99, but other parts don't build with std=c99
-    CFLAGS="$CFLAGS -m68020-60 -I${cross_env}/include -std=gnu99"
-    LDFLAGS="$LDFLAGS -Wl,--stack,256k -m68020-60 -L${cross_env}/lib"
-    #extralibs="$extralibs -lgem"
-    ptsname="no"
-    network="no"
-    doc="no"
-    plugins="no"
-    x11="no"
-    mmap="no"
-    cygwin="no"
-    exe=".tos"
-    cpu="m68k"
-    targetos="MiNT"
-fi
-
-if test "$win32" = "yes" ; then
-    if test "$cygwin" = "yes" ; then
-        cross_prefix="i686-pc-mingw32-"
-        gcc_major="3"
-	CFLAGS="$CFLAGS -I/usr/include/mingw -I/usr/include/w32api"
-	LDFLAGS="$LDFLAGS -L/usr/lib/mingw"
-    else
-        cross_prefix="i586-mingw32msvc-"
-	CFLAGS="$CFLAGS -I/usr/i586-mingw32msvc/include"
-	extralibs="$extralibs -lws2_32"
-    fi
-    network="no"
-    doc="no"
-    plugins="no"
-    x11="no"
-    mmap="no"
-    cygwin="no"
-    exe=".exe"
-fi
-
-if test "$cygwin" = "yes" ; then
-    doc="no"
-    x11="no"
-    png="no"
-    ffmpeg="no"
-    html="no"
-    plugins="no"
-    exe=".exe"
-fi
-
-if test "$mingw" = "yes" ; then
-    doc="no"
-    x11="no"
-    png="no"
-    ffmpeg="no"
-    html="no"
-    plugins="no"
-    exe=".exe"
-fi
-
 if test "$x11" = "no" ; then
     xv="no"
     xshm="no"
     xrender="no"
-fi
-
-if test "$x11" = "no" -a "$haiku" = "no" ; then
-    png="no"
-    ffmpeg="no"
-    html="no"
 fi
 
 # endianness: guess with cpu type. Should also use prefix
@@ -546,14 +345,11 @@ fi
 
 # check forkpty support for session detach/reattach
 if test "$session_detach" = "yes" ; then
-    if test "$win32" = "yes" -o "$atari" = "yes" -o "$cygwin" = "yes" ; then
-        session_detach="no"
-    else
-        # Try Linux/Cygwin header first, then macOS/BSD
-        session_detach="no"
-        session_detach_libs=""
-        for pty_header in pty.h util.h libutil.h; do
-            cat > $TMPC <<EOF
+    # Check for forkpty support
+    session_detach="no"
+    session_detach_libs=""
+    for pty_header in pty.h util.h libutil.h; do
+        cat > $TMPC <<EOF
 #include <$pty_header>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -563,18 +359,16 @@ int main(void) {
     return p;
 }
 EOF
-            if $cc -o $TMPO $TMPC -lutil 2> /dev/null ; then
-                session_detach="yes"
-                session_detach_libs="-lutil"
-                break
-            fi
-            # Some systems (macOS) don't need -lutil
-            if $cc -o $TMPO $TMPC 2> /dev/null ; then
-                session_detach="yes"
-                break
-            fi
-        done
-    fi
+        if $cc -o $TMPO $TMPC -lutil 2> /dev/null ; then
+            session_detach="yes"
+            session_detach_libs="-lutil"
+            break
+        fi
+        if $cc -o $TMPO $TMPC 2> /dev/null ; then
+            session_detach="yes"
+            break
+        fi
+    done
 fi
 
 if test "$x11" = "yes" ; then
@@ -596,18 +390,7 @@ echo "  version          " `$cc --version | head -n 1`
 echo "  cpu               $cpu"
 echo "  targetos          $targetos"
 echo "Tiny build          $tiny"
-echo "X11 support         $x11"
-if test "$x11" = "yes" ; then
-  echo "Xvideo support      $xv"
-  echo "XShm support        $xshm"
-  #echo "Xrender support     $xrender"
-fi
-echo "libpng support      $png"
-echo "FFMPEG support      $ffmpeg"
-echo "Graphical HTML      $html"
 echo "Memory mapped files $mmap"
-echo "Unlocked I/O        $unlockio"
-echo "Plugins support     $plugins"
 echo "Bidir support       $bidir"
 echo "All kmaps           $kmaps"
 echo "All modes           $modes"
@@ -661,10 +444,6 @@ if test "$bigendian" = "yes" ; then
   echo "WORDS_BIGENDIAN=yes" >> $TMPMAK
   echo "#define WORDS_BIGENDIAN 1" >> $TMPH
 fi
-if test "$unlockio" = "yes" ; then
-  echo "CONFIG_UNLOCKIO=yes" >> $TMPMAK
-  echo "#define CONFIG_UNLOCKIO 1" >> $TMPH
-fi
 if test "$ptsname" = "yes" ; then
   echo "CONFIG_PTSNAME=yes" >> $TMPMAK
   echo "#define CONFIG_PTSNAME 1" >> $TMPH
@@ -677,7 +456,6 @@ if test "$lshared" = "yes" ; then
   echo "BUILD_SHARED=yes" >> $TMPMAK
   echo "PIC=-fPIC" >> $TMPMAK
 fi
-echo "DLLIBS=$dllibs" >> $TMPMAK
 echo "EXTRALIBS=$extralibs" >> $TMPMAK
 version=`head $source_path/VERSION`
 echo "VERSION=$version" >> $TMPMAK
@@ -686,31 +464,6 @@ echo "#define QE_VERSION \"$version\"" >> $TMPH
 if test "$network" = "yes" ; then
   echo "#define CONFIG_NETWORK 1" >> $TMPH
   echo "CONFIG_NETWORK=yes" >> $TMPMAK
-fi
-
-if test "$atari" = "yes" ; then
-  echo "#define CONFIG_ATARI 1" >> $TMPH
-  echo "CONFIG_ATARI=yes" >> $TMPMAK
-fi
-
-if test "$win32" = "yes" ; then
-  echo "#define CONFIG_WIN32 1" >> $TMPH
-  echo "CONFIG_WIN32=yes" >> $TMPMAK
-fi
-
-if test "$cygwin" = "yes" ; then
-  echo "#define CONFIG_CYGWIN 1" >> $TMPH
-  echo "CONFIG_CYGWIN=yes" >> $TMPMAK
-fi
-
-if test "$darwin" = "yes" ; then
-  echo "#define CONFIG_DARWIN 1" >> $TMPH
-  echo "CONFIG_DARWIN=yes" >> $TMPMAK
-fi
-
-if test "$haiku" = "yes" ; then
-  echo "#define CONFIG_HAIKU 1" >> $TMPH
-  echo "CONFIG_HAIKU=yes" >> $TMPMAK
 fi
 
 if test "$x11" = "yes" ; then
@@ -741,11 +494,6 @@ fi
 if test "$html" = "yes" ; then
   echo "#define CONFIG_HTML 1" >> $TMPH
   echo "CONFIG_HTML=yes" >> $TMPMAK
-fi
-
-if test "$plugins" = "yes" ; then
-  echo "#define CONFIG_DLL 1" >> $TMPH
-  echo "CONFIG_DLL=yes" >> $TMPMAK
 fi
 
 if test "$session_detach" = "yes" ; then

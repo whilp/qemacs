@@ -44,15 +44,7 @@ endif
 #include local compiler configuration file
 -include $(DEPTH)/cflags.mk
 
-ifdef CONFIG_DARWIN
-  CFLAGS += -Wno-string-plus-int
-  CFLAGS += -Wint-conversion
-  CFLAGS += -Wno-packed
-else
-ifneq ($(OSNAME),OpenBSD)
-  CFLAGS += -Wno-unused-result
-endif
-endif
+CFLAGS += -Wno-unused-result
 
 ifdef TARGET_GPROF
   CFLAGS  += -p
@@ -156,33 +148,16 @@ ifdef CONFIG_PNG_OUTPUT
   HTMLTOPPM_LIBS += -lpng
 endif
 
-ifdef CONFIG_DLL
-  LIBS += $(DLLIBS)
-  # export some qemacs symbols
-  LDFLAGS += -Wl,-E
-endif
-
 ifdef CONFIG_DOC
   TARGETS += qe-doc.html
 endif
 
-ifdef CONFIG_HAIKU
-  OBJS += haiku.o
-  LIBS += -lbe -lstdc++
+OBJS+= unix.o tty.o
+ifdef CONFIG_SESSION_DETACH
+  OBJS+= session.o
+  LIBS+= $(SESSION_DETACH_LIBS)
 endif
-
-ifdef CONFIG_WIN32
-  OBJS+= unix.o win32.o
-#  OBJS+= printf.o
-  LIBS+= -lmsvcrt -lgdi32 -lwsock32
-else
-  OBJS+= unix.o tty.o
-  ifdef CONFIG_SESSION_DETACH
-    OBJS+= session.o
-    LIBS+= $(SESSION_DETACH_LIBS)
-  endif
-  LIBS+= $(EXTRALIBS)
-endif
+LIBS+= $(EXTRALIBS)
 
 ifndef TARGET_TINY
 
@@ -224,10 +199,6 @@ OBJS+= modes/shell.o    modes/dired.o    modes/archive.o  modes/latex-mode.o
 endif
 endif
 
-# currently not used in qemacs
-ifdef CONFIG_CFB
-  OBJS+= libfbf.o fbfrender.o cfb.o fbffonts.o
-endif
 
 ifdef CONFIG_HTML
   LIBQHTML:= $(DEPTH)/.objs/$(TARGET_OS)-$(TARGET_ARCH)-$(CC)/libqhtml$(DEBUG_SUFFIX).a
@@ -237,44 +208,11 @@ ifdef CONFIG_HTML
   DEP_LIBS+= $(LIBQHTML)
   LIBS+= $(QHTML_LIBS)
   OBJS+= modes/html.o modes/docbook.o
-  ifndef CONFIG_WIN32
-    TARGETLIBS+= libqhtml
-    TARGETS+= html2png$(EXE)
-  endif
+  TARGETLIBS+= libqhtml
 endif
 
-ifdef CONFIG_FFMPEG
-  OBJS+= modes/video.o modes/image.o
-  DEP_LIBS+= $(FFMPEG_LIBDIR)/libavcodec/libavcodec.a $(FFMPEG_LIBDIR)/libavformat/libavformat.a
-  LIBS+= -L$(FFMPEG_LIBDIR)/libavcodec -L$(FFMPEG_LIBDIR)/libavformat -lavformat -lavcodec -lz -lpthread
-  DEFINES+= -I$(FFMPEG_SRCDIR)/libavcodec -I$(FFMPEG_SRCDIR)/libavformat
-  TARGETS+= ffplay$(EXE)
-else
-  OBJS+= modes/stb.o
-endif
+OBJS+= modes/stb.o
 
-ifdef CONFIG_X11
-  TARGETS += xqe
-endif
-
-ifdef TARGET_X11
-  OBJS+= x11.o
-  ECHO_CFLAGS += -DCONFIG_X11
-  DEFINES += -DCONFIG_X11
-  CFLAGS += $(XCFLAGS)
-  LDFLAGS += $(XLDFLAGS)
-  LIBS += $(XLIBS)
-  ifdef CONFIG_XRENDER
-    LIBS += -lXrender
-  endif
-  ifdef CONFIG_XV
-    LIBS += -lXv
-  endif
-  ifdef CONFIG_XSHM
-    LIBS += -lXext
-  endif
-  LIBS += -lX11 $(DLLIBS)
-endif
 endif	# TARGET_TINY
 
 SRCS:= $(OBJS:.o=.c)
@@ -325,21 +263,19 @@ endif
 ifeq (1,$(TOP))
 
 # targets that require recursion
-xqe:		force;	$(MAKE) TARGET=xqe TARGET_OBJ=qe TARGET_X11=1
-tqe:		force;	$(MAKE) TARGET=tqe TARGET_TINY=1
-tqe1:		force;	$(MAKE) TARGET=tqe TARGET_TINY=1 tqe1$(EXE)
-asan qe_asan:	force;	$(MAKE) TARGET=qe ASAN=1
-msan qe_msan:	force;	$(MAKE) TARGET=qe MSAN=1
-ubsan qe_ubsan:	force;	$(MAKE) TARGET=qe UBSAN=1
-debug qe_debug:	force;	$(MAKE) TARGET=qe DEBUG=1
-xqe_debug:	force;	$(MAKE) TARGET=xqe TARGET_OBJ=qe TARGET_X11=1 DEBUG=1
+tqe:		force;	$(MAKE) -f Makefile TARGET=tqe TARGET_TINY=1
+tqe1:		force;	$(MAKE) -f Makefile TARGET=tqe TARGET_TINY=1 tqe1$(EXE)
+asan qe_asan:	force;	$(MAKE) -f Makefile TARGET=qe ASAN=1
+msan qe_msan:	force;	$(MAKE) -f Makefile TARGET=qe MSAN=1
+ubsan qe_ubsan:	force;	$(MAKE) -f Makefile TARGET=qe UBSAN=1
+debug qe_debug:	force;	$(MAKE) -f Makefile TARGET=qe DEBUG=1
 tqe_debug:	force;	$(MAKE) TARGET=tqe TARGET_TINY=1 DEBUG=1
 
 else
 
 # Amalgation mode produces a larger executable
 TSRCS:=qe.c cutils.c util.c color.c charset.c buffer.c search.c input.c display.c \
-       modes/hex.c parser.c unix.c tty.c win32.c qeend.c
+       modes/hex.c parser.c unix.c tty.c qeend.c
 TSRCS+= $(OBJS_DIR)/tqe_modules.c
 
 tqe1_g$(EXE): tqe.c $(TSRCS) Makefile
@@ -393,10 +329,8 @@ $(OBJS_DIR)/$(TARGET)_modules.c: $(SRCS) Makefile config.mak
 	@echo '#undef qe_module_exit'                       >> $@
 	@echo '}'                                           >> $@
 
-$(OBJS_DIR)/cfb.o: cfb.c cfb.h fbfrender.h
 $(OBJS_DIR)/charset.o: charset.c wcwidth.c
 $(OBJS_DIR)/charsetjis.o: charsetjis.c charsetjis.def
-$(OBJS_DIR)/fbfrender.o: fbfrender.c fbfrender.h libfbf.h
 $(OBJS_DIR)/modes/stb.o: modes/stb.c modes/stb_image.h
 $(OBJS_DIR)/libunicode.o: libunicode.c libunicode.h libunicode-table.h
 $(OBJS_DIR)/libregexp.o: libregexp.c libregexp.h libregexp-opcode.h
@@ -405,11 +339,6 @@ $(OBJS_DIR)/%.o: %.c $(DEPENDS) Makefile
 	$(echo) CC $(ECHO_CFLAGS) -c $<
 	$(cmd)  mkdir -p $(dir $@)
 	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -o $@ -c $<
-
-$(OBJS_DIR)/haiku.o: haiku.cpp $(DEPENDS) Makefile
-	$(echo) CPP $(ECHO_CFLAGS) -c $<
-	$(cmd)  mkdir -p $(dir $@)
-	$(cmd)  g++ $(DEFINES) $(CFLAGS) -Wno-multichar -o $@ -c $<
 
 # debugging targets
 %.s: %.c $(DEPENDS) Makefile
@@ -536,37 +465,6 @@ unicode_width: $(BINDIR)/unitable$(EXE) Makefile
 #libunicode_table: $(BINDIR)/unicode_gen$(EXE) Makefile
 #	$(BINDIR)/unicode_gen libunicode-table.h
 
-#
-# fonts (only needed for html2png)
-#
-FONTS=fixed10.fbf fixed12.fbf fixed13.fbf fixed14.fbf \
-      helv8.fbf helv10.fbf helv12.fbf helv14.fbf helv18.fbf helv24.fbf \
-      times8.fbf times10.fbf times12.fbf times14.fbf times18.fbf times24.fbf \
-      unifont.fbf
-FONTS:=$(addprefix fonts/,$(FONTS))
-
-$(BINDIR)/fbftoqe$(EXE): tools/fbftoqe.c cutils.c
-	$(echo) CC -o $@ $^
-	$(cmd)  mkdir -p $(dir $@)
-	$(cmd)  $(HOST_CC) $(HOST_CFLAGS) -o $@ $^
-
-fbffonts.c: $(BINDIR)/fbftoqe$(EXE) $(FONTS)
-	$(BINDIR)/fbftoqe $(FONTS) > $@
-
-#
-# html2png tool (XML/HTML/CSS2 renderer test tool)
-#
-OBJS1=html2png.o cutils.o util.o color.o display.o \
-      arabic.o indic.o unicode_join.o \
-      charset.o charsetmore.o charsetjis.o \
-      libfbf.o fbfrender.o cfb.o fbffonts.o
-
-OBJS1:=$(addprefix $(OBJS_DIR)/, $(OBJS1))
-
-html2png$(EXE): $(OBJS1) $(LIBQHTML)
-	$(echo) LD $@
-	$(cmd)  $(CC) $(LDFLAGS) -o $@ $(OBJS1) $(QHTML_LIBS) $(HTMLTOPPM_LIBS)
-
 # autotest target
 test:
 	$(MAKE) -C tests test
@@ -596,8 +494,8 @@ clean:
 	rm -f qe-doc.aux qe-doc.info qe-doc.log qe-doc.pdf qe-doc.toc
 	rm -rf *.dSYM *.gch .objs* .tobjs* .xobjs* bin
 	rm -f *~ *.o *.a *.exe *_g *_debug TAGS gmon.out core *.exe.stackdump \
-           qe tqe tqe1 xqe kmaptoqe ligtoqe html2png cptoqe jistoqe \
-           fbftoqe fbffonts.c allmodules.txt basemodules.txt '.#'*[0-9] \
+           qe tqe tqe1 kmaptoqe ligtoqe cptoqe jistoqe \
+           allmodules.txt basemodules.txt '.#'*[0-9] \
            qe_asan qe_msan qe_ubsan
 
 distclean: clean
@@ -608,35 +506,22 @@ install: $(TARGETS) qe.1
 	$(INSTALL) -m 755 -d $(DESTDIR)$(prefix)/bin
 	$(INSTALL) -m 755 -d $(DESTDIR)$(mandir)/man1
 	$(INSTALL) -m 755 -d $(DESTDIR)$(datadir)/qe
-ifdef CONFIG_X11
-	$(INSTALL) -m 755 -s xqe$(EXE) $(DESTDIR)$(prefix)/bin/qemacs$(EXE)
-else
-  ifdef CONFIG_TINY
+ifdef CONFIG_TINY
 	$(INSTALL) -m 755 -s tqe$(EXE) $(DESTDIR)$(prefix)/bin/qemacs$(EXE)
-  else
+else
 	$(INSTALL) -m 755 -s qe$(EXE) $(DESTDIR)$(prefix)/bin/qemacs$(EXE)
-  endif
 endif
 	ln -sf qemacs$(EXE) $(DESTDIR)$(prefix)/bin/qe$(EXE)
-ifdef CONFIG_FFMPEG
-	ln -sf qemacs$(EXE) $(DESTDIR)$(prefix)/bin/ffplay$(EXE)
-endif
 	$(INSTALL) -m 644 kmaps ligatures $(DESTDIR)$(datadir)/qe
 	$(INSTALL) -m 644 qe.1 $(DESTDIR)$(mandir)/man1
-ifdef CONFIG_HTML
-	$(INSTALL) -m 755 -s html2png$(EXE) $(DESTDIR)$(prefix)/bin
-endif
 
 uninstall:
 	rm -f $(DESTDIR)$(prefix)/bin/qemacs$(EXE)   \
 	      $(DESTDIR)$(prefix)/bin/qe$(EXE)       \
 	      $(DESTDIR)$(prefix)/bin/tqe$(EXE)      \
-	      $(DESTDIR)$(prefix)/bin/xqe$(EXE)      \
-	      $(DESTDIR)$(prefix)/bin/ffplay$(EXE)   \
 	      $(DESTDIR)$(mandir)/man1/qe.1          \
 	      $(DESTDIR)$(datadir)/qe/kmaps          \
-	      $(DESTDIR)$(datadir)/qe/ligatures      \
-	      $(DESTDIR)$(prefix)/bin/html2png$(EXE)
+	      $(DESTDIR)$(datadir)/qe/ligatures
 
 rebuild:
 	./configure && $(MAKE) clean all

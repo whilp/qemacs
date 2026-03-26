@@ -59,3 +59,5 @@ STATS
 TAGS
 .qerc
 cflags.mk
+tests/test_cosmo
+tests/test_unix
