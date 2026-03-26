@@ -85,23 +85,12 @@ typedef uint32_t TTYChar;
 #define COMB_CACHE_SIZE       1
 #endif
 
-#if defined(CONFIG_UNLOCKIO)
-#  define TTY_PUTC(c,f)         putc_unlocked(c, f)
-#ifdef CONFIG_DARWIN
-#  define TTY_FWRITE(b,s,n,f)   fwrite(b, s, n, f)
-#else
-#  define TTY_FWRITE(b,s,n,f)   fwrite_unlocked(b, s, n, f)
-#endif
-#  define TTY_FPRINTF           fprintf
+#define TTY_PUTC(c,f)         putc_unlocked(c, f)
+#define TTY_FWRITE(b,s,n,f)   fwrite_unlocked(b, s, n, f)
+#define TTY_FPRINTF           fprintf
 static inline void TTY_FPUTS(const char *s, FILE *fp) {
     TTY_FWRITE(s, 1, strlen(s), fp);
 }
-#else
-#  define TTY_PUTC(c,f)         putc(c, f)
-#  define TTY_FWRITE(b,s,n,f)   fwrite(b, s, n, f)
-#  define TTY_FPRINTF           fprintf
-#  define TTY_FPUTS             fputs
-#endif
 
 enum InputState {
     IS_NORM,
