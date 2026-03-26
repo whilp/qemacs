@@ -23,6 +23,7 @@ bin
 html2png
 qe
 tqe
+tests/test_buffer
 tests/test_cutils
 tests/test_session
 tests/test_terminal
