@@ -2,7 +2,7 @@ include ../config.mak
 
 TEST_CFLAGS = -g -O2 -Wall -I.. -DHAVE_QE_CONFIG_H
 
-TESTS = test_cutils test_buffer
+TESTS = test_cutils test_buffer test_unix
 
 ifdef CONFIG_SESSION_DETACH
 TESTS += test_session
@@ -26,6 +26,9 @@ BUFFER_SRCS = ../buffer.c ../cutils.c ../charset.c ../libunicode.c ../util.c \
 
 test_buffer: test_buffer.c $(BUFFER_SRCS) testlib.h ../qe.h ../cutils.h ../config.h
 	$(CC) $(TEST_CFLAGS) -Wno-format-truncation -o $@ test_buffer.c $(BUFFER_SRCS)
+
+test_unix: test_unix.c testlib.h
+	$(CC) $(TEST_CFLAGS) -o $@ test_unix.c
 
 test_session: test_session.c ../session.c ../session.h testlib.h ../config.h
 	$(CC) $(TEST_CFLAGS) -o $@ test_session.c $(SESSION_DETACH_LIBS)
