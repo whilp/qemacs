@@ -26,6 +26,9 @@
 #include "qe.h"
 #include "unicode_join.h"
 #include "variables.h"
+#ifdef __COSMOPOLITAN__
+extern void ShowCrashReports(void);
+#endif
 #ifdef CONFIG_SESSION_DETACH
 #include <dirent.h>
 #include "session.h"
@@ -12135,6 +12138,10 @@ int main(int argc, char **argv)
     QEmacsState *qs = &qe_state;
     QEArgs args;
     int status;
+
+#ifdef __COSMOPOLITAN__
+    ShowCrashReports();
+#endif
 
 #ifdef CONFIG_SESSION_DETACH
     /* Pre-parse session arguments before editor initialization.
