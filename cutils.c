@@ -168,14 +168,8 @@ size_t get_basename_offset(const char *path) {
 
     if (p) {
         for (i = 0; p[i]; i++) {
-#ifdef CONFIG_WIN32
-            /* Simplistic DOS/Windows filename support */
-            if (p[i] == '/' || p[i] == '\\' || (p[i] == ':' && i == 1))
-                base = i + 1;
-#else
             if (p[i] == '/')
                 base = i + 1;
-#endif
         }
     }
     return base;

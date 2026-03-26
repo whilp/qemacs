@@ -8623,17 +8623,6 @@ static int is_abs_path(const char *path)
     return 0;
 }
 
-#ifdef CONFIG_WIN32
-/* convert '\' to '/' */
-static void path_win_to_unix(char *buf) {
-    char *p;
-
-    for (p = buf; *p; p++) {
-        if (*p == '\\')
-            *p = '/';
-    }
-}
-#endif
 
 /* canonicalize the path for a given window and make it absolute */
 void canonicalize_absolute_path(EditState *s, char *buf, int buf_size, const char *path1)
@@ -8653,9 +8642,6 @@ void canonicalize_absolute_buffer_path(EditBuffer *b, int offset, char *buf, int
                 homedir = getenv("HOME");
                 if (homedir) {
                     pstrcpy(path, sizeof(path), homedir);
-#ifdef CONFIG_WIN32
-                    path_win_to_unix(path);
-#endif
                     remove_slash(path);
                     pstrcat(path, sizeof(path), path1 + 1);
                     path1 = path;
@@ -8671,13 +8657,9 @@ void canonicalize_absolute_buffer_path(EditBuffer *b, int offset, char *buf, int
                 path1 = path;
             }
         } else {
-            /* CG: not sufficient for windows drives */
             if (!b || !get_default_path(b, offset, cwd, sizeof(cwd))) {
                 if (!getcwd(cwd, sizeof(cwd)))
                     pstrcpy(cwd, sizeof(cwd), ".");
-#ifdef CONFIG_WIN32
-                path_win_to_unix(cwd);
-#endif
             }
             makepath(path, sizeof(path), cwd, path1);
             path1 = path;
@@ -10044,14 +10026,6 @@ void do_help_for_help(EditState *s)
     show_popup(s, b, "QEmacs help for help - Press q to quit:");
 }
 
-#ifdef CONFIG_WIN32
-
-void qe_event_init(QEmacsState *qs)
-{
-}
-
-#else
-
 /* we install a signal handler to set poll_flag to one so that we can
    avoid polling too often in some cases */
 
@@ -10089,8 +10063,6 @@ int qe__is_user_input_pending(void)
     QEditScreen *s = &global_screen;
     return s->dpy.dpy_is_user_input_pending(s);
 }
-
-#endif
 
 #ifndef CONFIG_TINY
 
@@ -11993,11 +11965,7 @@ static int qe_init(void *opaque)
     return 0;
 }
 
-#ifdef CONFIG_WIN32
-int main1(int argc, char **argv)
-#else
 int main(int argc, char **argv)
-#endif
 {
     QEmacsState *qs = &qe_state;
     QEArgs args;

@@ -1451,11 +1451,6 @@ void file_complete(CompleteState *cp, CompleteFunc enumerate);
 int file_print_entry(CompleteState *cp, EditState *s, const char *name);
 void buffer_complete(CompleteState *cp, CompleteFunc enumerate);
 
-#ifdef CONFIG_WIN32
-static inline int is_user_input_pending(void) {
-    return 0;
-}
-#else
 extern int qe__fast_test_event_poll_flag;
 int qe__is_user_input_pending(void);
 
@@ -1467,7 +1462,6 @@ static inline int is_user_input_pending(void) {
         return 0;
     }
 }
-#endif
 
 /* file loading */
 #define LF_KILL_BUFFER    0x01

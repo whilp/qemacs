@@ -30,13 +30,6 @@
 
 /* OS specific defines */
 
-// XXX: should include config.h for CONFIG_WIN32 and CONFIG_HAS_TYPEOF
-
-#ifdef CONFIG_WIN32
-#define snprintf   _snprintf
-#define vsnprintf  _vsnprintf
-#endif
-
 #define OWNED     /* ptr attribute for allocated data owned by a structure */
 
 #define QASSERT(e)   do { if (!(e)) fprintf(stderr, "%s:%d: assertion failed: %s\n", __FILE__, __LINE__, #e); } while (0)
