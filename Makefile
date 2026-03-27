@@ -255,34 +255,10 @@ $(OBJS_DIR)/qe_modules.o: $(OBJS_DIR)/qe_modules.c Makefile
 	$(echo) CC $(ECHO_CFLAGS) -c $<
 	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -o $@ -c $<
 
-$(OBJS_DIR)/qe_modules.c: $(SRCS) Makefile
+$(OBJS_DIR)/qe_modules.c: $(SRCS) Makefile tools/gen-modules.sh
 	@echo creating $@
 	$(cmd)  mkdir -p $(dir $@)
-	@echo '/* This file was generated automatically */' > $@
-	@echo '#include "qe.h"'                             >> $@
-	@echo '#undef qe_module_init'                       >> $@
-	@echo '#undef qe_module_init_mode'                  >> $@
-	@echo '#define qe_module_init(fn)  extern int qe_module_##fn(QEmacsState *qs)' >> $@
-	@echo '#define qe_module_init_mode(mode, flags)  extern int qe_module_##mode##__init(QEmacsState *qs)' >> $@
-	-@grep -h ^qe_module_init $(SRCS)                   >> $@
-	@echo '#undef qe_module_init'                       >> $@
-	@echo '#undef qe_module_init_mode'                  >> $@
-	@echo 'void qe_init_all_modules(QEmacsState *qs) {' >> $@
-	@echo '#define qe_module_init(fn)  qe_module_##fn(qs)' >> $@
-	@echo '#define qe_module_init_mode(mode, flags)  qe_module_##mode##__init(qs)' >> $@
-	-@grep -h ^qe_module_init $(SRCS)                   >> $@
-	@echo '#undef qe_module_init'                       >> $@
-	@echo '#undef qe_module_init_mode'                  >> $@
-	@echo '}'                                           >> $@
-	@echo '#undef qe_module_exit'                       >> $@
-	@echo '#define qe_module_exit(fn)  extern void qe_module_##fn(QEmacsState *qs)' >> $@
-	-@grep -h ^qe_module_exit $(SRCS)                   >> $@
-	@echo '#undef qe_module_exit'                       >> $@
-	@echo 'void qe_exit_all_modules(QEmacsState *qs) {' >> $@
-	@echo '#define qe_module_exit(fn)  qe_module_##fn(qs)' >> $@
-	-@grep -h ^qe_module_exit $(SRCS)                   >> $@
-	@echo '#undef qe_module_exit'                       >> $@
-	@echo '}'                                           >> $@
+	$(cmd)  sh tools/gen-modules.sh $@ $(SRCS)
 
 $(OBJS_DIR)/charset.o: charset.c wcwidth.c
 $(OBJS_DIR)/charsetjis.o: charsetjis.c charsetjis.def
@@ -296,20 +272,16 @@ $(OBJS_DIR)/%.o: %.c $(DEPENDS) Makefile | $(COSMOCC_DIR)/bin/cosmocc
 	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -o $@ -c $<
 
 #
-# Host utilities
+# Host utilities (pattern rule covers tools/*.c -> o/bin/*)
 #
 $(BINDIR)/%$(EXE): tools/%.c
 	$(echo) CC -o $@ $^
 	$(cmd)  mkdir -p $(dir $@)
 	$(cmd)  $(HOST_CC) $(HOST_CFLAGS) -o $@ $^
 
-#
-# build ligature table
-#
+# Tools that also need cutils.c
 $(BINDIR)/ligtoqe$(EXE): tools/ligtoqe.c cutils.c
-	$(echo) CC -o $@ $^
-	$(cmd)  mkdir -p $(dir $@)
-	$(cmd)  $(HOST_CC) $(HOST_CFLAGS) -o $@ $^
+$(BINDIR)/kmaptoqe$(EXE): tools/kmaptoqe.c cutils.c
 
 ifdef BUILD_ALL
 ligatures: $(BINDIR)/ligtoqe$(EXE) unifont.lig
@@ -332,11 +304,6 @@ KMAPS := Arabic.kmap langstrlist.kmap langstrcom.kmap langstrswap.kmap \
 KMAPS := $(addprefix $(KMAPS_DIR)/, $(KMAPS))
 
 ifdef BUILD_ALL
-$(BINDIR)/kmaptoqe$(EXE): tools/kmaptoqe.c cutils.c
-	$(echo) CC -o $@ $^
-	$(cmd)  mkdir -p $(dir $@)
-	$(cmd)  $(HOST_CC) $(HOST_CFLAGS) -o $@ $^
-
 kmaps: $(BINDIR)/kmaptoqe$(EXE) $(KMAPS)
 	$(BINDIR)/kmaptoqe $@ $(KMAPS)
 else
