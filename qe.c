@@ -3402,11 +3402,15 @@ void display_mode_line(EditState *s)
         if (!strequal(buf, s->modeline_shadow)) {
             if (s->screen->media & CSS_MEDIA_TTY) {
                 /* Modern TTY mode line: thin horizontal line with text */
-                QEColor fg = qe_styles[QE_STYLE_MODE_LINE].fg_color;
-                QEColor bg = qe_styles[QE_STYLE_MODE_LINE].bg_color;
+                QEStyleDef styledef;
+                QEColor fg, bg;
                 char32_t ubuf[MAX_SCREEN_WIDTH];
                 int len, i, text_start;
                 CSSRect rect;
+
+                get_style(s, &styledef, QE_STYLE_MODE_LINE);
+                fg = styledef.fg_color;
+                bg = styledef.bg_color;
 
                 len = utf8_to_char32(ubuf, countof(ubuf), buf);
 

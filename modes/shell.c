@@ -2916,7 +2916,20 @@ static void shell_move_eol(EditState *e)
         qe_term_write(s, "\005", 1); /* Control-E */
     } else {
         text_move_eol(e);
-        /* XXX: restore shell interactive mode on end / ^E */
+        if (s) {
+            /* Skip back over trailing whitespace in shell buffer lines,
+             * which are padded with spaces to the terminal width */
+            int offset = e->offset;
+            int offset1;
+            while (offset > 0) {
+                char32_t c = eb_prevc(e->b, offset, &offset1);
+                if (c == '\n') break;  /* don't go past start of this line */
+                if (!qe_isblank(c)) break;
+                offset = offset1;
+            }
+            e->offset = offset;
+        }
+        /* restore shell interactive mode on end / ^E */
         if (s && (s->shell_flags & SF_INTERACTIVE) && !s->grab_keys
         &&  e->offset >= s->cur_offset) {
             e->interactive = 1;
@@ -3069,6 +3082,25 @@ static void do_shell_backspace(EditState *e)
         shell_write_char(e, KEY_DEL);
     } else {
         do_backspace(e, NO_ARG);
+    }
+}
+
+static void do_shell_undo(EditState *e)
+{
+    if (e->interactive) {
+        /* no-op: undo doesn't make sense for terminal output */
+        put_status(e, "Undo not available in shell interactive mode");
+    } else {
+        do_undo(e);
+    }
+}
+static void do_shell_backward_kill_region(EditState *e)
+{
+    if (e->interactive) {
+        /* Send C-w (WERASE) to the shell for backward kill word */
+        shell_write_char(e, 'w' & 31);
+    } else {
+        do_kill_region(e);
     }
 }
 
@@ -3276,15 +3308,12 @@ static void do_shell_toggle_input(EditState *e)
             e->interactive = 0;
             return;
         }
-        if ((s->shell_flags & SF_INTERACTIVE) && e->offset >= e->b->total_size) {
+        if (s->shell_flags & SF_INTERACTIVE) {
+            /* Move to end of buffer and re-enter interactive mode */
+            e->offset = e->b->total_size;
             e->interactive = 1;
             if (s->grab_keys)
                 qe_grab_keys(s->base.qs, shell_key, s);
-#if 0
-            if (e->interactive) {
-                qe_term_update_cursor(s);
-            }
-#endif
             return;
         }
     }
@@ -3796,6 +3825,12 @@ static const CmdDef shell_commands[] = {
     CMD3( "shell-backward-kill-word", "M-DEL, M-C-h, C-w",
           "Shell buffer delete word backward",
           do_shell_kill_word, ESi, "v", -1)
+    CMD0( "shell-backward-kill-region", "C-w",
+          "Shell buffer backward kill word (send WERASE to shell)",
+          do_shell_backward_kill_region)
+    CMD0( "shell-undo", "C-x u, C-_, C-/",
+          "Undo (disabled in shell interactive mode)",
+          do_shell_undo)
     CMD1( "shell-previous", "M-p",
           "Shell buffer previous command",
           shell_previous_next, -1)
