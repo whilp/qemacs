@@ -24,13 +24,18 @@
 DEPTH=.
 OSNAME:=$(shell uname -s)
 
-# Requires cosmocc — install via: make install-cosmocc
-# Then add /opt/cosmocc/bin to PATH, or set COSMOCC_DIR
+# Cosmopolitan toolchain — auto-fetched on first build
+COSMOCC_VERSION := cosmocc-2026.03.15-bbe7b3cf4
+COSMOCC_SHA256 := 344ffe8ec31dc5eeba72a8c3747f29181322e2a8041e505360860d92a9729dc7
+COSMOCC_URL := https://github.com/whilp/cosmopolitan/releases/download/$(COSMOCC_VERSION)/cosmocc.zip
+COSMOCC_DIR ?= o/cosmocc
+
+export PATH := $(CURDIR)/$(COSMOCC_DIR)/bin:$(PATH)
+
 CC = cosmocc
 HOST_CC ?= cc
 AR = cosmoar
 STRIP ?= true
-INSTALL ?= install
 INSTALL_DIR ?= /persist/whilp/.local/bin
 
 prefix ?= /usr/local
@@ -55,11 +60,6 @@ CONFIG_ALL_KMAPS ?= yes
 CONFIG_MMAP ?= yes
 CONFIG_ALL_MODES ?= yes
 CONFIG_UNICODE_JOIN ?= yes
-
-# Cosmopolitan toolchain auto-install
-COSMOCC_VERSION := cosmocc-2026.03.15-bbe7b3cf4
-COSMOCC_URL := https://github.com/whilp/cosmopolitan/releases/download/$(COSMOCC_VERSION)/cosmocc.zip
-COSMOCC_DIR ?= /opt/cosmocc
 
 -include $(DEPTH)/config.mak
 
@@ -342,7 +342,7 @@ $(OBJS_DIR)/modes/stb.o: modes/stb.c modes/stb_image.h
 $(OBJS_DIR)/libunicode.o: libunicode.c libunicode.h libunicode-table.h
 $(OBJS_DIR)/libregexp.o: libregexp.c libregexp.h libregexp-opcode.h
 
-$(OBJS_DIR)/%.o: %.c $(DEPENDS) Makefile
+$(OBJS_DIR)/%.o: %.c $(DEPENDS) Makefile | $(COSMOCC_DIR)/bin/cosmocc
 	$(echo) CC $(ECHO_CFLAGS) -c $<
 	$(cmd)  mkdir -p $(dir $@)
 	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -o $@ -c $<
@@ -482,26 +482,27 @@ qe-doc.pdf: qe-doc.texi Makefile
 	LANGUAGE=en_US LC_ALL=en_US.UTF-8 texi2pdf -o $@ $<
 
 #
-# Install cosmocc toolchain if not already present
+# Fetch and verify cosmocc toolchain
 #
-install-cosmocc:
-	@if [ ! -x "$(COSMOCC_DIR)/bin/cosmocc" ]; then \
-		echo "Installing cosmocc..."; \
-		mkdir -p /tmp/cosmocc; \
-		curl -sSL -o /tmp/cosmocc/cosmocc.zip $(COSMOCC_URL); \
-		unzip -q /tmp/cosmocc/cosmocc.zip -d $(COSMOCC_DIR); \
-	fi
+$(COSMOCC_DIR)/bin/cosmocc:
+	@echo "==> fetching cosmocc $(COSMOCC_VERSION)"
+	@mkdir -p $(COSMOCC_DIR)
+	@curl -fsSL -o $(COSMOCC_DIR)/cosmocc.zip $(COSMOCC_URL)
+	@echo "$(COSMOCC_SHA256)  $(COSMOCC_DIR)/cosmocc.zip" | sha256sum -c - >/dev/null
+	@unzip -q $(COSMOCC_DIR)/cosmocc.zip -d $(COSMOCC_DIR)
+	@rm -f $(COSMOCC_DIR)/cosmocc.zip
+	@echo "==> cosmocc installed to $(COSMOCC_DIR)"
 
-# CI target: install cosmocc, build, test, and verify
-ci: install-cosmocc
-	PATH="$(COSMOCC_DIR)/bin:$$PATH" $(MAKE) all test
+# CI target: build, test, and verify
+ci:
+	$(MAKE) all test
 	file qe tqe
 	test -f qe && test -f tqe
 
 # Release target: build and create a GitHub release
 # Requires GH_TOKEN, GITHUB_SHA, and optionally RELEASE to be set
-release: install-cosmocc
-	PATH="$(COSMOCC_DIR)/bin:$$PATH" $(MAKE) all
+release:
+	$(MAKE) all
 	mkdir -p release
 	cp qe release/qe
 	cp tqe release/tqe
@@ -550,7 +551,7 @@ TAGS: force
 help:
 	@echo "Usage: make [targets] [VERBOSE=1]"
 	@echo ""
-	@echo "Requires cosmocc in PATH. Install via: make install-cosmocc"
+	@echo "Requires cosmocc (auto-fetched on first build)."
 	@echo ""
 	@echo "Build targets:"
 	@echo "  all           build qe + tqe [default]"
@@ -572,4 +573,4 @@ archive:
 	git archive --prefix=$(FILE)/ HEAD | gzip > ../$(FILE).tar.gz
 
 .PHONY: all test clean distclean install uninstall rebuild help force \
-        ci release install-cosmocc archive
+        ci release archive
