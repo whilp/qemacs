@@ -20,7 +20,9 @@ COSMOCC ?= $(shell dirname $$(which cosmocc 2>/dev/null) 2>/dev/null)
 
 HOST_CC := cc
 
-.PHONY: all clean configure build ci release cosmocc
+INSTALL_DIR ?= /persist/whilp/.local/bin
+
+.PHONY: all clean configure build ci release cosmocc install
 
 # Install cosmocc toolchain if not already present
 cosmocc:
@@ -51,6 +53,7 @@ configure:
 		--disable-png \
 		--disable-ffmpeg; \
 	sed -i 's/^STRIP=.*/STRIP=true/' config.mak
+	sed -i 's/^CFLAGS=.*/CFLAGS=-g -O0 -mdbg/' config.mak
 
 build:
 	@cosmocc="$(COSMOCC)"; \
@@ -80,3 +83,8 @@ release: cosmocc configure build
 
 clean:
 	$(MAKE) -f Makefile clean
+
+install: all
+	@mkdir -p $(INSTALL_DIR)
+	cp qe $(INSTALL_DIR)/qe.new
+	mv -f $(INSTALL_DIR)/qe.new $(INSTALL_DIR)/qe
