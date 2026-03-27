@@ -2777,7 +2777,7 @@ Return the length in bytes of an intial common prefix of `str1` and `str2`.
 * Install cosmocc: `make install-cosmocc` (one-time setup).
 * Ensure cosmocc is in your PATH: `export PATH="/opt/cosmocc/bin:$PATH"`
 * Type `make` to compile qemacs and its associated tools.
-* Type `make install` as root to install it in **/usr/local**.
+* Type `make install` as root to install it in `/usr/local`.
 
 ## Authors
 
