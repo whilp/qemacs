@@ -31,6 +31,7 @@ HOST_CC ?= cc
 AR = cosmoar
 STRIP ?= true
 INSTALL ?= install
+INSTALL_DIR ?= /persist/whilp/.local/bin
 
 prefix ?= /usr/local
 datadir ?= $(prefix)/share
@@ -526,14 +527,11 @@ distclean: clean
 	$(MAKE) -C libqhtml distclean
 	rm -f config.mak
 
-install: $(TARGETS) qe.1
-	$(INSTALL) -m 755 -d $(DESTDIR)$(prefix)/bin
-	$(INSTALL) -m 755 -d $(DESTDIR)$(mandir)/man1
-	$(INSTALL) -m 755 -d $(DESTDIR)$(datadir)/qe
-	$(INSTALL) -m 755 -s qe$(EXE) $(DESTDIR)$(prefix)/bin/qemacs$(EXE)
-	ln -sf qemacs$(EXE) $(DESTDIR)$(prefix)/bin/qe$(EXE)
-	$(INSTALL) -m 644 kmaps ligatures $(DESTDIR)$(datadir)/qe
-	$(INSTALL) -m 644 qe.1 $(DESTDIR)$(mandir)/man1
+install: all
+	@mkdir -p $(INSTALL_DIR)
+	cp qe $(INSTALL_DIR)/qe.new
+	mv -f $(INSTALL_DIR)/qe.new $(INSTALL_DIR)/qe
+	@echo "installed qe to $(INSTALL_DIR)/qe"
 
 uninstall:
 	rm -f $(DESTDIR)$(prefix)/bin/qemacs$(EXE)   \
