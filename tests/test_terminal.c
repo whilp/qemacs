@@ -28,6 +28,8 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <sys/stat.h>
+#include <sys/utsname.h>
 
 #include "testlib.h"
 
@@ -1014,6 +1016,36 @@ static int session_wait_for(TestSession *sess, const char *substr, int timeout_m
     return 0;
 }
 
+/* Diagnose PTY availability for debugging CI failures */
+static void diagnose_pty(void)
+{
+    struct stat st;
+    fprintf(stderr, "PTY diagnostics:\n");
+    fprintf(stderr, "  /dev/ptmx exists: %s\n",
+            stat("/dev/ptmx", &st) == 0 ? "yes" : "no");
+    fprintf(stderr, "  /dev/pts exists: %s\n",
+            stat("/dev/pts", &st) == 0 ? "yes" : "no");
+
+    int fd = posix_openpt(O_RDWR | O_NOCTTY);
+    fprintf(stderr, "  posix_openpt: fd=%d errno=%d (%s)\n",
+            fd, fd < 0 ? errno : 0, fd < 0 ? strerror(errno) : "ok");
+    if (fd >= 0) {
+        const char *name = ptsname(fd);
+        fprintf(stderr, "  ptsname: %s\n", name ? name : "(null)");
+        int gpt = grantpt(fd);
+        fprintf(stderr, "  grantpt: %d errno=%d\n", gpt, gpt < 0 ? errno : 0);
+        int upt = unlockpt(fd);
+        fprintf(stderr, "  unlockpt: %d errno=%d\n", upt, upt < 0 ? errno : 0);
+        close(fd);
+    }
+
+    /* Check kernel version */
+    struct utsname uts;
+    if (uname(&uts) == 0) {
+        fprintf(stderr, "  kernel: %s %s\n", uts.sysname, uts.release);
+    }
+}
+
 /* Test that M-x shell opens a shell buffer and shows a prompt.
  * Reproduces: "M-x shell stopped working" */
 TEST(shell, mx_shell_opens)
@@ -1040,6 +1072,7 @@ TEST(shell, mx_shell_opens)
         got_prompt = session_wait_for(&sess, ">", 2000);
 
     if (!got_prompt) {
+        diagnose_pty();
         ScreenSnap *snap = session_take_screenshot(&sess);
         if (snap) {
             fprintf(stderr, "DEBUG: M-x shell did not open. Screen:\n");
