@@ -1014,6 +1014,59 @@ static int session_wait_for(TestSession *sess, const char *substr, int timeout_m
     return 0;
 }
 
+/* Test that M-x shell opens a shell buffer and shows a prompt.
+ * Reproduces: "M-x shell stopped working" */
+TEST(shell, mx_shell_opens)
+{
+    TestSession sess;
+    if (session_start(&sess, NULL) != 0) {
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    /* Send M-x shell RET to open a shell */
+    char esc = 0x1b;
+    session_send_keys(&sess, &esc, 1);
+    usleep(50000);
+    session_type(&sess, "x");
+    usleep(100000);
+    session_type(&sess, "shell\r");
+
+    /* Wait for shell prompt to appear (look for common prompt chars) */
+    int got_prompt = session_wait_for(&sess, "$", 5000);
+    if (!got_prompt)
+        got_prompt = session_wait_for(&sess, "#", 2000);
+    if (!got_prompt)
+        got_prompt = session_wait_for(&sess, ">", 2000);
+
+    if (!got_prompt) {
+        ScreenSnap *snap = session_take_screenshot(&sess);
+        if (snap) {
+            fprintf(stderr, "DEBUG: M-x shell did not open. Screen:\n");
+            for (int i = 0; i < snap->num_lines && i < 10; i++)
+                fprintf(stderr, "  [%d]: '%s'\n", i, snap->lines[i]);
+            free_snapshot(snap);
+        }
+    }
+
+    /* The original file content should no longer be visible —
+     * we should be in a *shell* buffer now */
+    ScreenSnap *snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+    int still_has_hello = snap_any_line_contains(snap, "Hello, World!");
+    free_snapshot(snap);
+    ASSERT_FALSE(still_has_hello);
+
+    /* A shell prompt must have appeared */
+    ASSERT_TRUE(got_prompt);
+
+    /* Clean up */
+    session_ctrl(&sess, 'c');
+    usleep(100000);
+    session_stop(&sess);
+    session_cleanup(&sess);
+}
+
 TEST(shell, ctrl_w_kills_word)
 {
     TestSession sess;
