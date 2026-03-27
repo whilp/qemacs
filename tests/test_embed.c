@@ -108,8 +108,8 @@ TEST(embed, manual_is_markdown) {
     char buf[64] = {0};
     int n = read_head("/zip/share/qe/qe-manual.md", buf, sizeof(buf) - 1);
     ASSERT_TRUE(n > 0);
-    /* Manual should start with a markdown heading */
-    ASSERT_TRUE(buf[0] == '#' || buf[0] == '\n');
+    /* Manual should start with a markdown heading or HTML comment */
+    ASSERT_TRUE(buf[0] == '#' || buf[0] == '\n' || buf[0] == '<');
 }
 
 /*
