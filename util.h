@@ -494,7 +494,7 @@ T *qe_malloc_hack(type T, size_t n);
    @note this function is implemented as a macro.
  */
 
-T *qe_mallocz_array(type T, size_t n);
+T *qe_mallocz_hack(type T, size_t n);
 /*@API memory
    Allocate memory for an object of type `T` with `n` extra bytes.
    The object and the extra space is initialized to all bits zero.
