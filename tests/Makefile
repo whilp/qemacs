@@ -11,10 +11,12 @@ TESTS := $(TEST_SRCS:.c=)
 
 all: test
 
+QE_BINARY ?= ../o/qe
+
 test: $(TESTS)
 	@for t in $(TESTS); do \
 		echo "--- Running $$t ---"; \
-		./$$t || exit 1; \
+		QE_BINARY=$(QE_BINARY) ./$$t || exit 1; \
 	done
 	@echo ""
 	@echo "All test suites passed."
