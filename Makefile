@@ -130,6 +130,10 @@ OBJS += modes/html.o modes/docbook.o \
 
 OBJS += modes/stb.o
 
+OBJS_DIR := $(o)/obj$(DEBUG_SUFFIX)
+BINDIR := $(o)/bin
+GENDIR := $(o)/gen
+
 SRCS := $(OBJS:.o=.c)
 SRCS := $(subst libqhtml/html_style.c,$(GENDIR)/libqhtml/html_style.c,$(SRCS))
 SRCS := $(subst libqhtml/docbook_style.c,$(GENDIR)/libqhtml/docbook_style.c,$(SRCS))
@@ -138,13 +142,9 @@ DEPENDS := qe.h charset.h color.h cutils.h display.h \
 	qestyles.h unicode_join.h util.h variables.h session.h \
 	wcwidth.h lang/clang.h
 
-OBJS_DIR := $(o)/obj$(DEBUG_SUFFIX)
 CFLAGS += -I$(OBJS_DIR)
 OBJS := $(addprefix $(OBJS_DIR)/, $(OBJS))
 OBJS += $(OBJS_DIR)/qe_modules.o
-
-BINDIR := $(o)/bin
-GENDIR := $(o)/gen
 
 .DEFAULT_GOAL := all
 
