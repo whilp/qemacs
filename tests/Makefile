@@ -13,7 +13,11 @@ all: test
 
 QE_BINARY ?= ../o/qe
 
-test: $(TESTS)
+# Build all test binaries (parallelizable with make -j)
+build: $(TESTS)
+
+# Run tests sequentially (must be serial for correct output)
+test: build
 	@for t in $(TESTS); do \
 		echo "--- Running $$t ---"; \
 		QE_BINARY=$(QE_BINARY) ./$$t || exit 1; \
@@ -73,4 +77,4 @@ bench: bench_buffer
 clean:
 	rm -rf $(TESTS) bench_buffer .embed
 
-.PHONY: all test bench clean
+.PHONY: all build test bench clean

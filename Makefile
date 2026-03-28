@@ -153,19 +153,23 @@ OBJS += $(OBJS_DIR)/qe_modules.o
 #
 # Build targets
 #
-all: $(o)/qe$(DEBUG_SUFFIX)$(EXE) $(o)/kmaps $(o)/ligatures $(o)/qe-manual.md
+all: $(o)/qe$(DEBUG_SUFFIX)$(EXE)
+
+# Documentation is built as a dependency of the final binary (embedded via zip)
+# but doesn't need to block object compilation
+docs: $(o)/qe-manual.md
 
 ifneq (,$(DEBUG_SUFFIX))
-$(o)/qe$(DEBUG_SUFFIX)$(EXE): $(OBJS) $(DEP_LIBS)
+$(o)/qe$(DEBUG_SUFFIX)$(EXE): $(OBJS) $(DEP_LIBS) | $(EMBED_FILES)
 	$(echo) LD $@
-	$(cmd)  $(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+	$(cmd)  $(CC) $(LDFLAGS) -o $@ $(OBJS) $(DEP_LIBS) $(LIBS)
 	$(call embed-resources,$@)
 else
 $(o)/qe_g$(EXE): $(OBJS) $(DEP_LIBS)
 	$(echo) LD $@
 	$(cmd)  $(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-$(o)/qe$(EXE): $(o)/qe_g$(EXE) Makefile
+$(o)/qe$(EXE): $(o)/qe_g$(EXE) Makefile | $(EMBED_FILES)
 	@rm -f $@
 	cp $< $@
 	-$(STRIP) $@
@@ -192,7 +196,7 @@ endef
 debug qe_debug: force
 	$(MAKE) DEBUG=1
 
-$(OBJS_DIR)/qe_modules.o: $(OBJS_DIR)/qe_modules.c Makefile
+$(OBJS_DIR)/qe_modules.o: $(OBJS_DIR)/qe_modules.c Makefile | $(COSMOCC_DIR)/bin/cosmocc
 	$(echo) CC $(ECHO_CFLAGS) -c $<
 	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -o $@ -c $<
 
@@ -313,8 +317,8 @@ $(COSMOCC_FETCH_DIR)/bin/cosmocc:
 	@echo "==> cosmocc installed to $(COSMOCC_FETCH_DIR)"
 
 # CI target: build, test, and verify
-ci:
-	$(MAKE) all test
+ci: all
+	$(MAKE) -C tests test
 	file $(o)/qe
 	test -f $(o)/qe
 
@@ -354,9 +358,10 @@ TAGS: force
 	etags *.[ch]
 
 help:
-	@echo "Usage: make [targets] [VERBOSE=1]"
+	@echo "Usage: make -j\$$(nproc) [targets] [VERBOSE=1]"
 	@echo ""
 	@echo "Requires cosmocc (auto-fetched on first build)."
+	@echo "Use -j\$$(nproc) for parallel builds (recommended)."
 	@echo ""
 	@echo "Build targets:"
 	@echo "  all           build qe [default]"
@@ -365,6 +370,7 @@ help:
 	@echo "  release       build + create GitHub release"
 	@echo "  debug         debug build (qe_debug)"
 	@echo "  install       build + install to INSTALL_DIR"
+	@echo "  docs          build documentation only"
 	@echo ""
 	@echo "Flags:"
 	@echo "  VERBOSE=1     show full compiler commands"
@@ -377,5 +383,5 @@ FILE = qemacs-$(VERSION)
 archive:
 	git archive --prefix=$(FILE)/ HEAD | gzip > ../$(FILE).tar.gz
 
-.PHONY: all test clean distclean install rebuild help force \
+.PHONY: all docs test clean distclean install rebuild help force \
         ci release archive debug
