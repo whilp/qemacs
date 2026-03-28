@@ -26,7 +26,6 @@
 #include <stdarg.h>
 #include <string.h>
 
-#include "config.h"
 #include "cutils.h"
 
 char *pstrcpy(char *buf, int size, const char *str) {

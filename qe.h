@@ -42,8 +42,6 @@
 #include <time.h>
 #include <pwd.h>
 
-#include "config.h"
-
 #ifdef CONFIG_TINY
 #undef CONFIG_ALL_KMAPS
 #undef CONFIG_UNICODE_JOIN

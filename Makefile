@@ -50,13 +50,6 @@ TARGET_ARCH ?= $(shell uname -m)
 SRC_PATH ?= $(CURDIR)
 VERSION ?= $(shell cat VERSION)
 
-# Feature flags (control which object files are compiled)
-CONFIG_SESSION_DETACH ?= yes
-CONFIG_ALL_KMAPS ?= yes
-CONFIG_ALL_MODES ?= yes
-CONFIG_UNICODE_JOIN ?= yes
-CONFIG_HTML ?= yes
-
 -include config.mak
 
 ifeq (,$(V)$(VERBOSE))
@@ -76,7 +69,10 @@ ifeq ($(CC),$(HOST_CC))
   HOST_CFLAGS := $(CFLAGS)
 endif
 
-DEFINES = -DHAVE_QE_CONFIG_H -DQE_VERSION='"$(VERSION)"'
+DEFINES = -DQE_VERSION='"$(VERSION)"' \
+          -DCONFIG_HAS_TYPEOF -DCONFIG_PTSNAME -DCONFIG_NETWORK -DCONFIG_MMAP \
+          -DCONFIG_SESSION_DETACH -DCONFIG_ALL_KMAPS -DCONFIG_UNICODE_JOIN \
+          -DCONFIG_ALL_MODES -DCONFIG_HTML
 
 ########################################################
 
@@ -99,25 +95,15 @@ EMBED_FILES := kmaps ligatures config.eg qe-manual.md qe.1
 OBJS := qe.o cutils.o util.o color.o charset.o buffer.o search.o input.o display.o \
         qescript.o modes/hex.o test_display.o extras.o variables.o
 
-OBJS += unix.o tty.o
-ifdef CONFIG_SESSION_DETACH
-  OBJS += session.o
-endif
+OBJS += unix.o tty.o session.o
 LIBS += $(EXTRALIBS)
 
-ifdef CONFIG_ALL_KMAPS
-  OBJS += kmap.o
-endif
+OBJS += kmap.o
 
-ifdef CONFIG_UNICODE_JOIN
-  OBJS += unicode_join.o arabic.o indic.o
-  OBJS += libunicode.o libregexp.o
-endif
+OBJS += unicode_join.o arabic.o indic.o libunicode.o libregexp.o
 
-# more charsets if needed
 OBJS += charsetjis.o charsetmore.o
 
-ifdef CONFIG_ALL_MODES
 OBJS += modes/unihex.o   modes/bufed.o    modes/orgmode.o  modes/markdown.o \
         lang/clang.o     lang/xml.o       lang/htmlsrc.o   lang/forth.o     \
         lang/arm.o       lang/lisp.o      lang/makemode.o  lang/perl.o      \
@@ -135,22 +121,18 @@ OBJS += modes/unihex.o   modes/bufed.o    modes/orgmode.o  modes/markdown.o \
         lang/rye.o       lang/nanorc.o    lang/tcl.o       modes/fractal.o  \
         lang/algol68.o   $(EXTRA_MODES)
 OBJS += modes/shell.o    modes/dired.o    modes/archive.o  modes/latex-mode.o
-endif
 
-ifdef CONFIG_HTML
-  CFLAGS += -I./libqhtml
-  HOST_CFLAGS += -I./libqhtml
-  OBJS += modes/html.o modes/docbook.o
-  LIBQHTML_OBJS := libqhtml/css.o libqhtml/xmlparse.o libqhtml/cssparse.o \
-                    libqhtml/html_style.o libqhtml/docbook_style.o
-  OBJS += $(LIBQHTML_OBJS)
-endif
+CFLAGS += -I./libqhtml
+HOST_CFLAGS += -I./libqhtml
+OBJS += modes/html.o modes/docbook.o \
+        libqhtml/css.o libqhtml/xmlparse.o libqhtml/cssparse.o \
+        libqhtml/html_style.o libqhtml/docbook_style.o
 
 OBJS += modes/stb.o
 
 SRCS := $(OBJS:.o=.c)
 
-DEPENDS := qe.h config.h charset.h color.h cutils.h display.h \
+DEPENDS := qe.h charset.h color.h cutils.h display.h \
 	qestyles.h unicode_join.h util.h variables.h session.h \
 	wcwidth.h lang/clang.h
 
@@ -287,8 +269,8 @@ endif
 #
 # documentation
 #
-qe-manual.md: $(BINDIR)/scandoc qe-manual.c $(SRCS) $(DEPENDS) config.h
-	$(BINDIR)/scandoc qe-manual.c $(SRCS) $(DEPENDS) config.h > $@
+qe-manual.md: $(BINDIR)/scandoc qe-manual.c $(SRCS) $(DEPENDS)
+	$(BINDIR)/scandoc qe-manual.c $(SRCS) $(DEPENDS) > $@
 
 #
 # Test target

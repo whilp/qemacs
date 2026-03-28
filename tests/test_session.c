@@ -4,7 +4,6 @@
 
 #define _GNU_SOURCE
 #include "testlib.h"
-#include "config.h"
 
 #ifdef CONFIG_SESSION_DETACH
 

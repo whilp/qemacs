@@ -8,7 +8,6 @@
  */
 
 #include "testlib.h"
-#include "config.h"
 #include "cutils.h"
 #include "qe.h"
 
