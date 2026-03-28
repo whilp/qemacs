@@ -2,8 +2,8 @@
  * Markdown render mode — pure parsing functions.
  * No QEmacs dependencies. Testable standalone.
  *
- * Copyright (c) 2024 Charlie Gordon.
- * MIT License (see markdown.c header).
+ * Copyright (c) 2026 QEmacs contributors.
+ * MIT License.
  */
 
 #include "mkd_render.h"
@@ -12,19 +12,19 @@
  * Pure parsing functions (no editor dependency — testable standalone)
  *----------------------------------------------------------------------*/
 
-static int is_space(char32_t c) {
+static int is_space(uint32_t c) {
     return c == ' ' || c == '\t';
 }
 
-static int is_digit(char32_t c) {
+static int is_digit(uint32_t c) {
     return c >= '0' && c <= '9';
 }
 
-int mkd_render_classify_line(const char32_t *buf)
+int mkd_render_classify_line(const uint32_t *buf)
 {
     int i = 0;
     int indent = 0;
-    char32_t c;
+    uint32_t c;
 
     /* skip leading spaces, count indent */
     while (is_space(buf[i])) {
@@ -54,19 +54,34 @@ int mkd_render_classify_line(const char32_t *buf)
         (c == '~' && buf[i+1] == '~' && buf[i+2] == '~'))
         return MKD_LINE_CODE_FENCE;
 
+    /* indented code block: 4+ spaces of indent, not a list marker */
+    if (indent >= 4) {
+        /* check if this looks like a nested list item */
+        if (!((c == '-' || c == '*' || c == '+') && is_space(buf[i+1])) &&
+            !(is_digit(c))) {
+            return MKD_LINE_INDENTED_CODE;
+        }
+    }
+
     /* blockquote: > */
     if (c == '>')
         return MKD_LINE_BLOCKQUOTE;
 
-    /* table: starts with | */
-    if (c == '|')
-        return MKD_LINE_TABLE;
+    /* table: starts with | and has at least one more | */
+    if (c == '|') {
+        int j = i + 1;
+        while (buf[j]) {
+            if (buf[j] == '|')
+                return MKD_LINE_TABLE;
+            j++;
+        }
+    }
 
     /* horizontal rule: 3+ of same char (- * _) with optional spaces */
     if (c == '-' || c == '*' || c == '_') {
         int count = 0;
         int j = i;
-        char32_t rc = c;
+        uint32_t rc = c;
         while (buf[j]) {
             if (buf[j] == rc)
                 count++;
@@ -93,7 +108,7 @@ int mkd_render_classify_line(const char32_t *buf)
     return MKD_LINE_PARAGRAPH;
 }
 
-int mkd_render_heading_level(const char32_t *buf, int *content_offset)
+int mkd_render_heading_level(const uint32_t *buf, int *content_offset)
 {
     int i = 0, level;
 
@@ -121,14 +136,14 @@ int mkd_render_heading_level(const char32_t *buf, int *content_offset)
     return level;
 }
 
-static const char32_t bullet_chars[] = {
+static const uint32_t bullet_chars[] = {
     0x2022,  /* ● BULLET (depth 0) */
     0x25E6,  /* ◦ WHITE BULLET (depth 1) */
     0x2043,  /* ⁃ HYPHEN BULLET (depth 2) */
 };
 #define NUM_BULLET_CHARS 3
 
-char32_t mkd_render_bullet_char(int depth, int ordered)
+uint32_t mkd_render_bullet_char(int depth, int ordered)
 {
     if (ordered)
         return 0;
@@ -136,12 +151,24 @@ char32_t mkd_render_bullet_char(int depth, int ordered)
 }
 
 /*
+ * Check if character is alphanumeric or underscore (word character).
+ */
+static int is_word_char(uint32_t c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+           (c >= '0' && c <= '9') || c == '_';
+}
+
+/*
  * Scan for a paired delimiter in `buf` starting at position `i`.
+ * `flanking` controls CommonMark-style delimiter matching:
+ *   0 = no flanking rules (for backtick code spans)
+ *   1 = require left-flanking open, right-flanking close (for emphasis)
  * Returns position after the closing delimiter, or 0 if not found.
  */
-static int scan_delimited(const char32_t *buf, int i,
+static int scan_delimited(const uint32_t *buf, int i,
                           const char *open, int open_len,
-                          const char *close, int close_len)
+                          const char *close, int close_len,
+                          int flanking)
 {
     int j, k;
 
@@ -156,6 +183,18 @@ static int scan_delimited(const char32_t *buf, int i,
     if (is_space(buf[k]) || buf[k] == 0)
         return 0;
 
+    /* for emphasis: opening delimiter must be left-flanking
+     * (not preceded by a word character) */
+    if (flanking && i > 0 && is_word_char(buf[i - 1]))
+        return 0;
+
+    /* ensure the open delimiter is not part of a longer run
+     * of the same character (e.g., don't match single * at
+     * position 0 when followed by another * forming **) */
+    if (flanking && open_len == 1 &&
+        buf[i + open_len] == (unsigned char)open[0])
+        return 0;
+
     /* scan for closing delimiter */
     while (buf[k]) {
         int match = 1;
@@ -165,14 +204,24 @@ static int scan_delimited(const char32_t *buf, int i,
                 break;
             }
         }
-        if (match && !is_space(buf[k - 1]))
+        if (match && !is_space(buf[k - 1])) {
+            /* for emphasis: closing delimiter must be right-flanking
+             * (not followed by a word character) */
+            if (flanking && is_word_char(buf[k + close_len]))
+                { k++; continue; }
+            /* ensure the close delimiter is not part of a longer run
+             * of the same character (e.g., don't match * inside **) */
+            if (flanking && close_len == 1 &&
+                buf[k + close_len] == (unsigned char)close[0])
+                { k++; continue; }
             return k + close_len;
+        }
         k++;
     }
     return 0;
 }
 
-int mkd_render_find_spans(const char32_t *buf, MkdRenderSpan *spans, int max_spans)
+int mkd_render_find_spans(const uint32_t *buf, MkdRenderSpan *spans, int max_spans)
 {
     int i = 0, n = 0;
 
@@ -183,7 +232,7 @@ int mkd_render_find_spans(const char32_t *buf, MkdRenderSpan *spans, int max_spa
         switch (buf[i]) {
         case '*':
             if (buf[i+1] == '*') {
-                end = scan_delimited(buf, i, "**", 2, "**", 2);
+                end = scan_delimited(buf, i, "**", 2, "**", 2, 1);
                 if (end) {
                     sp->type = MKD_SPAN_BOLD;
                     sp->start = i;
@@ -195,7 +244,7 @@ int mkd_render_find_spans(const char32_t *buf, MkdRenderSpan *spans, int max_spa
                     continue;
                 }
             }
-            end = scan_delimited(buf, i, "*", 1, "*", 1);
+            end = scan_delimited(buf, i, "*", 1, "*", 1, 1);
             if (end) {
                 sp->type = MKD_SPAN_ITALIC;
                 sp->start = i;
@@ -210,7 +259,7 @@ int mkd_render_find_spans(const char32_t *buf, MkdRenderSpan *spans, int max_spa
 
         case '_':
             if (buf[i+1] == '_') {
-                end = scan_delimited(buf, i, "__", 2, "__", 2);
+                end = scan_delimited(buf, i, "__", 2, "__", 2, 1);
                 if (end) {
                     sp->type = MKD_SPAN_BOLD;
                     sp->start = i;
@@ -222,7 +271,7 @@ int mkd_render_find_spans(const char32_t *buf, MkdRenderSpan *spans, int max_spa
                     continue;
                 }
             }
-            end = scan_delimited(buf, i, "_", 1, "_", 1);
+            end = scan_delimited(buf, i, "_", 1, "_", 1, 1);
             if (end) {
                 sp->type = MKD_SPAN_ITALIC;
                 sp->start = i;
@@ -237,7 +286,7 @@ int mkd_render_find_spans(const char32_t *buf, MkdRenderSpan *spans, int max_spa
 
         case '~':
             if (buf[i+1] == '~') {
-                end = scan_delimited(buf, i, "~~", 2, "~~", 2);
+                end = scan_delimited(buf, i, "~~", 2, "~~", 2, 1);
                 if (end) {
                     sp->type = MKD_SPAN_STRIKETHROUGH;
                     sp->start = i;
@@ -252,7 +301,7 @@ int mkd_render_find_spans(const char32_t *buf, MkdRenderSpan *spans, int max_spa
             break;
 
         case '`':
-            end = scan_delimited(buf, i, "`", 1, "`", 1);
+            end = scan_delimited(buf, i, "`", 1, "`", 1, 0);
             if (end) {
                 sp->type = MKD_SPAN_CODE;
                 sp->start = i;
@@ -267,7 +316,7 @@ int mkd_render_find_spans(const char32_t *buf, MkdRenderSpan *spans, int max_spa
 
         case '[':
             /* link: [text](url) */
-            end = scan_delimited(buf, i, "[", 1, "]", 1);
+            end = scan_delimited(buf, i, "[", 1, "]", 1, 0);
             if (end && buf[end] == '(') {
                 int url_end = end + 1;
                 while (buf[url_end] && buf[url_end] != ')')
@@ -290,7 +339,7 @@ int mkd_render_find_spans(const char32_t *buf, MkdRenderSpan *spans, int max_spa
     return n;
 }
 
-int mkd_render_blockquote_depth(const char32_t *buf, int *content_offset)
+int mkd_render_blockquote_depth(const uint32_t *buf, int *content_offset)
 {
     int i = 0, depth = 0;
 
@@ -305,7 +354,7 @@ int mkd_render_blockquote_depth(const char32_t *buf, int *content_offset)
     return depth;
 }
 
-int mkd_render_parse_list_item(const char32_t *buf, int *depth, int *ordered, int *content_offset)
+int mkd_render_parse_list_item(const uint32_t *buf, int *depth, int *ordered, int *content_offset)
 {
     int i = 0, indent = 0;
 

@@ -9,14 +9,16 @@
  *
  * Toggle with: M-x mkd-render-mode  or  C-c C-r
  *
- * Copyright (c) 2024 Charlie Gordon.
- * MIT License (see markdown.c header).
+ * Copyright (c) 2026 QEmacs contributors.
+ * MIT License.
  */
 
 #include "qe.h"
 #include "mkd_render.h"
 
-/* Include the standalone parsing functions */
+/* Include the standalone parsing functions directly so they compile
+ * into this translation unit. mkd_render_parse.c has no qemacs
+ * dependencies and can also be compiled standalone by the tests. */
 #include "mkd_render_parse.c"
 
 /*----------------------------------------------------------------------
@@ -280,6 +282,32 @@ static int mkd_render_display_line(EditState *s, DisplayState *ds, int offset)
             else if (c == '-')
                 c = 0x2500;  /* ─ */
             display_char(ds, offset + i, offset + i + 1, c);
+        }
+        display_eol(ds, offset + len, next_offset);
+        break;
+    }
+
+    case MKD_LINE_INDENTED_CODE: {
+        /* Indented code block (4+ spaces): strip the indent prefix,
+         * display content with code style and a 2-space visual indent */
+        int i, content_start = 0;
+        int ind = 0;
+        /* skip the leading 4 spaces / 1 tab of code indent */
+        while (ind < 4 && buf[content_start]) {
+            if (buf[content_start] == '\t') {
+                ind += 4;
+            } else if (buf[content_start] == ' ') {
+                ind++;
+            } else {
+                break;
+            }
+            content_start++;
+        }
+        ds->style = MKD_RENDER_CODE;
+        display_char(ds, -1, -1, ' ');
+        display_char(ds, -1, -1, ' ');
+        for (i = content_start; i < len; i++) {
+            display_char(ds, offset + i, offset + i + 1, buf[i]);
         }
         display_eol(ds, offset + len, next_offset);
         break;
