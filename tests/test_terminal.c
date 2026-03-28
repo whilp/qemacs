@@ -160,6 +160,10 @@ static int session_start(TestSession *sess, const char *initial_file)
         setenv("QE_TEST_RESIZE_FILE", sess->resize_path, 1);
         /* Suppress config file loading */
         setenv("HOME", "/nonexistent", 1);
+        /* Use a deterministic shell and prompt so tests don't depend
+         * on the user's login shell or prompt configuration. */
+        setenv("SHELL", "/bin/sh", 1);
+        setenv("PS1", "$ ", 1);
 
         execlp(qe_binary, "qe", "-q", "-nw", initial_file, NULL);
         perror("execlp");
