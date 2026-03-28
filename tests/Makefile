@@ -42,6 +42,9 @@ test_buffer: test_buffer.c $(BUFFER_SRCS) testlib.h ../qe.h ../cutils.h
 test_session: test_session.c ../session.c ../session.h testlib.h
 	$(CC) $(TEST_CFLAGS) -o $@ test_session.c
 
+test_mkd_render: test_mkd_render.c ../modes/mkd_render_parse.c ../modes/mkd_render.h testlib.h
+	$(CC) $(TEST_CFLAGS) -o $@ test_mkd_render.c ../modes/mkd_render_parse.c
+
 # Embed test: validates resource files are accessible via /zip/ paths
 EMBED_FILES = ../o/kmaps ../o/ligatures ../config.eg ../o/qe-manual.md ../qe.1
 
