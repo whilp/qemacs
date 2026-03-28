@@ -278,7 +278,8 @@ static int set_socket_path(char *path, size_t size, const char *name) {
     }
     if (qe_session_get_dir(dir, sizeof(dir)) < 0)
         return -1;
-    snprintf(path, size, "%s/%s", dir, name);
+    if ((size_t)snprintf(path, size, "%s/%s", dir, name) >= size)
+        return -1;
     return 0;
 }
 
@@ -794,7 +795,8 @@ static int create_session(const char *name, int argc, char **argv) {
             sa.sa_handler = server_sigchld_handler;
             sigaction(SIGCHLD, &sa, NULL);
 
-            switch (server.pid = forkpty(&server.pty, NULL,
+            char pty_name[256];
+            switch (server.pid = forkpty(&server.pty, pty_name,
                                          has_term ? &server.term : NULL,
                                          &server.winsize)) {
             case 0:  /* grandchild: exec qemacs */

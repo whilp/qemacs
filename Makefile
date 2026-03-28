@@ -62,7 +62,7 @@ endif
 
 -include cflags.mk
 
-CFLAGS += -mcosmo -Wno-unused-result
+CFLAGS += -mcosmo -Wall -Wno-unused-result
 CFLAGS += -I.
 
 ifeq ($(CC),$(HOST_CC))

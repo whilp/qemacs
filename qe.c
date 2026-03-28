@@ -27,6 +27,7 @@
 #include "unicode_join.h"
 #include "variables.h"
 #ifdef __COSMOPOLITAN__
+#include <libc/calls/pledge.h>
 extern void ShowCrashReports(void);
 extern void CheckForMemoryLeaks(void);
 extern void CheckForFileLeaks(void);
@@ -2001,7 +2002,7 @@ static void quote_key(void *opaque, int key)
     QEmacsState *qs = s->qs;
     int repeat = qa->argval;
 
-    put_status(s, "");  /* erase "Quote: " message */
+    put_status(s, "%s", "");  /* erase "Quote: " message */
     /* Achtung! this should free the grab data */
     qe_ungrab_keys(qs);
 
