@@ -1460,6 +1460,314 @@ TEST(shell, mouse_scroll_reaches_top)
     session_cleanup(&sess);
 }
 
+/*--- Shell text wrapping in split windows ---*/
+
+/* Helper: find the byte position of the vertical separator (│, U+2502)
+ * in a screen line. Returns the byte offset, or -1 if not found. */
+static int find_separator_byte_pos(const char *line)
+{
+    const char *p = strstr(line, "\xe2\x94\x82");
+    return p ? (int)(p - line) : -1;
+}
+
+/* Helper: count the number of character cells (columns) before a byte
+ * position in a UTF-8 string. Assumes all characters are single-width
+ * (ASCII or rendered as 1 cell). For the box-drawing separator, this
+ * gives us the column index. */
+static int byte_pos_to_col(const char *line, int byte_pos)
+{
+    int col = 0;
+    int i = 0;
+    while (i < byte_pos && line[i]) {
+        unsigned char c = (unsigned char)line[i];
+        if (c < 0x80) {
+            i++;
+        } else if (c < 0xE0) {
+            i += 2;
+        } else if (c < 0xF0) {
+            i += 3;
+        } else {
+            i += 4;
+        }
+        col++;
+    }
+    return col;
+}
+
+/* Test that text typed in a shell buffer wraps within the left pane
+ * of a side-by-side split, rather than bleeding into the right pane.
+ *
+ * Steps:
+ * 1. Open a shell buffer
+ * 2. Split side-by-side (C-x 3)
+ * 3. Switch to right window (C-x o) and open another shell
+ * 4. Switch back to left window (C-x o)
+ * 5. Type a long string that exceeds the left pane width
+ * 6. Verify: the typed text should NOT appear to the right of the separator
+ *
+ * The bug: text does not wrap and instead writes under the right-hand window.
+ */
+TEST(shell, text_wraps_in_split_window)
+{
+    TestSession sess;
+    if (session_start(&sess, NULL) != 0) {
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    /* Step 1: Open a shell in the initial full-width window */
+    if (!shell_open_and_wait(&sess)) {
+        session_stop(&sess);
+        session_cleanup(&sess);
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    /* Step 2: Split side-by-side with C-x 3 */
+    session_ctrl(&sess, 'x');
+    usleep(50000);
+    session_type(&sess, "3");
+    usleep(500000);
+
+    /* Step 3: Switch to right window (C-x o) and open a different buffer.
+     * M-x shell would reuse the existing *shell* buffer, so instead open
+     * a scratch file to ensure the right pane has a separate buffer. */
+    session_ctrl(&sess, 'x');
+    usleep(50000);
+    session_type(&sess, "o");
+    usleep(200000);
+
+    /* Open the initial test file in the right pane via C-x C-f */
+    session_ctrl(&sess, 'x');
+    usleep(50000);
+    session_ctrl(&sess, 'f');
+    usleep(200000);
+    session_type(&sess, sess.test_file);
+    session_type(&sess, "\r");
+    usleep(500000);
+
+    /* Step 4: Switch back to left window (C-x o) */
+    session_ctrl(&sess, 'x');
+    usleep(50000);
+    session_type(&sess, "o");
+    usleep(200000);
+
+    /* Verify we have a vertical separator */
+    ScreenSnap *snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+
+    int sep_col = -1;
+    for (int row = 0; row < snap->num_lines - 2; row++) {
+        int bp = find_separator_byte_pos(snap->lines[row]);
+        if (bp >= 0) {
+            sep_col = byte_pos_to_col(snap->lines[row], bp);
+            break;
+        }
+    }
+    free_snapshot(snap);
+    ASSERT_TRUE(sep_col > 0);  /* separator must exist */
+
+    /* Step 5: Type a long string that exceeds the left pane width.
+     * The left pane is roughly sep_col chars wide (including mode line area).
+     * Type a distinctive marker string that's definitely wider than the pane.
+     * Use 'echo' so the shell processes it, but we're looking at the input
+     * line echoed by the terminal. */
+    char long_str[256];
+    int fill_len = sep_col + 20;  /* definitely wider than left pane */
+    if (fill_len > (int)sizeof(long_str) - 10)
+        fill_len = sizeof(long_str) - 10;
+
+    /* Build: "echo QQQQ...QQQQ" where Q's exceed the pane width.
+     * Use 'Q' because it doesn't appear in "Hello, World!" (the right pane content),
+     * avoiding false positives when checking for bleed-through. */
+    memset(long_str, 0, sizeof(long_str));
+    strcpy(long_str, "echo ");
+    for (int i = 5; i < fill_len; i++)
+        long_str[i] = 'Q';
+    long_str[fill_len] = '\0';
+
+    session_type(&sess, long_str);
+    usleep(1000000);  /* wait for terminal to echo the characters */
+
+    /* Step 6: Take screenshot and check that Q's don't appear past the separator
+     * in ANY row. If wrapping works, all Q's stay within columns 0..sep_col-1.
+     * If wrapping is broken, Q's will appear in columns >= sep_col. */
+    snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+
+    int wrap_broken = 0;
+    int q_found_at_all = 0;
+    for (int row = 0; row < snap->num_lines - 1; row++) {
+        /* Find the separator in this row */
+        int bp = find_separator_byte_pos(snap->lines[row]);
+        if (bp < 0)
+            continue;  /* no separator on this row (e.g., mode line) */
+
+        /* Check if 'Q' appears after the separator position */
+        const char *after_sep = snap->lines[row] + bp + 3;  /* skip 3-byte UTF-8 │ */
+        if (strchr(after_sep, 'Q') != NULL) {
+            wrap_broken = 1;
+            fprintf(stderr, "BUG: row %d has 'Q' past separator (col %d): '%s'\n",
+                    row, sep_col, snap->lines[row]);
+        }
+
+        /* Check if 'Q' appears before the separator (expected) */
+        char *before = strndup(snap->lines[row], bp);
+        if (before) {
+            if (strchr(before, 'Q') != NULL)
+                q_found_at_all = 1;
+            free(before);
+        }
+    }
+
+    /* Also check rows that might not have a separator (wrapped continuation lines
+     * in the left pane). Look for Q's on rows without a separator — these would
+     * be continuation lines if wrapping works. */
+    for (int row = 0; row < snap->num_lines - 1; row++) {
+        if (snap_line_contains(snap, row, "Q"))
+            q_found_at_all = 1;
+    }
+
+    if (!q_found_at_all) {
+        fprintf(stderr, "DEBUG: No Q characters found on screen at all.\n");
+        for (int i = 0; i < snap->num_lines; i++)
+            fprintf(stderr, "  [%d]: '%s'\n", i, snap->lines[i]);
+    }
+
+    /* The Q's should be present somewhere on screen */
+    ASSERT_TRUE(q_found_at_all);
+
+    if (wrap_broken) {
+        fprintf(stderr, "DETECTED BUG: Shell text does not wrap in split window.\n");
+        fprintf(stderr, "Text from left pane bleeds past the vertical separator.\n");
+    }
+    ASSERT_FALSE(wrap_broken);
+
+    free_snapshot(snap);
+    session_ctrl(&sess, 'c');
+    usleep(100000);
+    session_stop(&sess);
+    session_cleanup(&sess);
+}
+
+/* Variation: Type a long 'echo' command and execute it, checking that the
+ * OUTPUT also wraps correctly within the left pane. */
+TEST(shell, output_wraps_in_split_window)
+{
+    TestSession sess;
+    if (session_start(&sess, NULL) != 0) {
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    /* Open shell */
+    if (!shell_open_and_wait(&sess)) {
+        session_stop(&sess);
+        session_cleanup(&sess);
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    /* Split side-by-side */
+    session_ctrl(&sess, 'x');
+    usleep(50000);
+    session_type(&sess, "3");
+    usleep(500000);
+
+    /* Switch to right window and open a different buffer there.
+     * M-x shell would reuse the existing *shell* buffer, so open
+     * the initial test file instead. */
+    session_ctrl(&sess, 'x');
+    usleep(50000);
+    session_type(&sess, "o");
+    usleep(200000);
+
+    session_ctrl(&sess, 'x');
+    usleep(50000);
+    session_ctrl(&sess, 'f');
+    usleep(200000);
+    session_type(&sess, sess.test_file);
+    session_type(&sess, "\r");
+    usleep(500000);
+
+    /* Switch back to left window */
+    session_ctrl(&sess, 'x');
+    usleep(50000);
+    session_type(&sess, "o");
+    usleep(200000);
+
+    /* Find separator column */
+    ScreenSnap *snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+    int sep_col = -1;
+    for (int row = 0; row < snap->num_lines - 2; row++) {
+        int bp = find_separator_byte_pos(snap->lines[row]);
+        if (bp >= 0) {
+            sep_col = byte_pos_to_col(snap->lines[row], bp);
+            break;
+        }
+    }
+    free_snapshot(snap);
+    ASSERT_TRUE(sep_col > 0);
+
+    /* Use printf to output a long string of Z's (wider than the pane).
+     * The output from the command should wrap within the left pane. */
+    char cmd[256];
+    int z_count = sep_col + 15;
+    snprintf(cmd, sizeof(cmd), "printf '%%*s\\n' %d '' | tr ' ' 'Z'\r", z_count);
+    session_type(&sess, cmd);
+    usleep(2000000);  /* wait for output */
+
+    snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+
+    int output_bleeds = 0;
+    int z_found = 0;
+    for (int row = 0; row < snap->num_lines - 1; row++) {
+        int bp = find_separator_byte_pos(snap->lines[row]);
+        if (bp < 0) continue;
+
+        /* Check for Z's past the separator */
+        const char *after_sep = snap->lines[row] + bp + 3;
+        if (strchr(after_sep, 'Z') != NULL) {
+            output_bleeds = 1;
+            fprintf(stderr, "BUG: row %d has 'Z' past separator: '%s'\n",
+                    row, snap->lines[row]);
+        }
+        char *before = strndup(snap->lines[row], bp);
+        if (before) {
+            if (strchr(before, 'Z') != NULL)
+                z_found = 1;
+            free(before);
+        }
+    }
+
+    /* Also check all rows for Z presence */
+    for (int row = 0; row < snap->num_lines - 1; row++) {
+        if (snap_line_contains(snap, row, "Z"))
+            z_found = 1;
+    }
+
+    if (!z_found) {
+        fprintf(stderr, "DEBUG: No Z characters found. Screen:\n");
+        for (int i = 0; i < snap->num_lines; i++)
+            fprintf(stderr, "  [%d]: '%s'\n", i, snap->lines[i]);
+    }
+
+    ASSERT_TRUE(z_found);
+
+    if (output_bleeds) {
+        fprintf(stderr, "DETECTED BUG: Shell output bleeds past separator in split window.\n");
+    }
+    ASSERT_FALSE(output_bleeds);
+
+    free_snapshot(snap);
+    session_ctrl(&sess, 'c');
+    usleep(100000);
+    session_stop(&sess);
+    session_cleanup(&sess);
+}
+
 /*--- Main ---*/
 
 int main(void)
