@@ -27,6 +27,7 @@ OSNAME := $(shell uname -s)
 COSMOCC_VERSION := cosmocc-2026.03.15-bbe7b3cf4
 COSMOCC_SHA256 := 344ffe8ec31dc5eeba72a8c3747f29181322e2a8041e505360860d92a9729dc7
 COSMOCC_URL := https://github.com/whilp/cosmopolitan/releases/download/$(COSMOCC_VERSION)/cosmocc.zip
+COSMOCC_FETCH_DIR := o/fetch/cosmocc/$(COSMOCC_SHA256)
 COSMOCC_DIR ?= o/cosmocc
 
 export PATH := $(CURDIR)/$(COSMOCC_DIR)/bin:$(PATH)
@@ -297,14 +298,18 @@ test:
 #
 # Fetch and verify cosmocc toolchain
 #
-$(COSMOCC_DIR)/bin/cosmocc:
+$(COSMOCC_DIR)/bin/cosmocc: $(COSMOCC_FETCH_DIR)/bin/cosmocc
+	@ln -sfn $(CURDIR)/$(COSMOCC_FETCH_DIR) $(COSMOCC_DIR)
+	@echo "==> symlinked $(COSMOCC_DIR) -> $(COSMOCC_FETCH_DIR)"
+
+$(COSMOCC_FETCH_DIR)/bin/cosmocc:
 	@echo "==> fetching cosmocc $(COSMOCC_VERSION)"
-	@mkdir -p $(COSMOCC_DIR)
-	@curl -fsSL -o $(COSMOCC_DIR)/cosmocc.zip $(COSMOCC_URL)
-	@echo "$(COSMOCC_SHA256)  $(COSMOCC_DIR)/cosmocc.zip" | sha256sum -c - >/dev/null
-	@unzip -q $(COSMOCC_DIR)/cosmocc.zip -d $(COSMOCC_DIR)
-	@rm -f $(COSMOCC_DIR)/cosmocc.zip
-	@echo "==> cosmocc installed to $(COSMOCC_DIR)"
+	@mkdir -p $(COSMOCC_FETCH_DIR)
+	@curl -fsSL -o $(COSMOCC_FETCH_DIR)/cosmocc.zip $(COSMOCC_URL)
+	@echo "$(COSMOCC_SHA256)  $(COSMOCC_FETCH_DIR)/cosmocc.zip" | sha256sum -c - >/dev/null
+	@unzip -q $(COSMOCC_FETCH_DIR)/cosmocc.zip -d $(COSMOCC_FETCH_DIR)
+	@rm -f $(COSMOCC_FETCH_DIR)/cosmocc.zip
+	@echo "==> cosmocc installed to $(COSMOCC_FETCH_DIR)"
 
 # CI target: build, test, and verify
 ci:
