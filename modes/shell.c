@@ -1299,10 +1299,36 @@ static void shell_display_hook(EditState *e)
     ShellState *s;
 
     if (e->interactive) {
-        if ((s = shell_get_state(e, 0)) != NULL)
+        if ((s = shell_get_state(e, 0)) != NULL) {
             e->offset = s->cur_offset;
-        if (s->use_alternate_screen)
-            e->offset_top = s->alternate_screen_top;
+            if (s->use_alternate_screen)
+                e->offset_top = s->alternate_screen_top;
+            /* Update PTY size when the active window dimensions change.
+             * Only the active window drives the PTY size so that when
+             * multiple windows show the same shell buffer (e.g. right
+             * after a split), the typing window's width is authoritative. */
+            if (e == e->qs->active_window
+                && (s->cols != e->cols || s->rows != e->rows)) {
+                QEmacsState *qs = e->qs;
+                EditState *e1;
+
+                s->cols = e->wrap_cols = e->cols;
+                s->rows = e->rows;
+                for (e1 = qs->first_window; e1 != NULL; e1 = e1->next_window) {
+                    if (e1->b == e->b) {
+                        e1->wrap_cols = s->cols;
+                    }
+                }
+                if (s->pty_fd > 0) {
+                    struct winsize ws;
+                    ws.ws_col = s->cols;
+                    ws.ws_row = s->rows;
+                    ws.ws_xpixel = ws.ws_col;
+                    ws.ws_ypixel = ws.ws_row;
+                    ioctl(s->pty_fd, TIOCSWINSZ, &ws);
+                }
+            }
+        }
     }
 }
 

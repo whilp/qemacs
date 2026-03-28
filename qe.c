@@ -3949,6 +3949,9 @@ void display_init(DisplayState *ds, EditState *e, enum DisplayType do_disp,
     if (ds->wrap == WRAP_TERM) {
         ds->width = ds->line_numbers +
             e->wrap_cols * glyph_width(e->screen, font, '0');
+        /* Clamp to window width so text never overflows into adjacent panes */
+        if (ds->width > e->width)
+            ds->width = e->width;
     } else {
         ds->eol_width = max3_int(glyph_width(e->screen, font, '/'),
                                  glyph_width(e->screen, font, '\\'),
