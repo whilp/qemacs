@@ -4,8 +4,6 @@
 
 #include "testlib.h"
 
-/* We need config.h for the module under test */
-#include "config.h"
 #include "cutils.h"
 
 /* ---- pstrcpy ---- */

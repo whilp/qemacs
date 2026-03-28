@@ -10932,9 +10932,7 @@ static void qe_set_user_option(QEmacsState *qs, const char *user)
 
     pstrcat(qs->res_path, sizeof(qs->res_path),
             "/zip/share/qe" ":"
-            CONFIG_QE_DATADIR ":"
-            CONFIG_QE_PREFIX "/share/qe" ":"
-            CONFIG_QE_PREFIX "/lib/qe" ":"
+            "/usr/local/share/qe" ":"
             "/usr/share/qe" ":"
             "/usr/lib/qe");
 }

@@ -19,7 +19,6 @@
 #include <string.h>
 #include <sys/time.h>
 
-#include "config.h"
 #include "cutils.h"
 #include "qe.h"
 

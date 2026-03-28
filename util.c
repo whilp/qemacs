@@ -32,7 +32,6 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include "config.h"
 #include "util.h"
 #include <fnmatch.h>
 
