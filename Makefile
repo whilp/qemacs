@@ -131,6 +131,8 @@ OBJS += modes/html.o modes/docbook.o \
 OBJS += modes/stb.o
 
 SRCS := $(OBJS:.o=.c)
+SRCS := $(subst libqhtml/html_style.c,$(GENDIR)/libqhtml/html_style.c,$(SRCS))
+SRCS := $(subst libqhtml/docbook_style.c,$(GENDIR)/libqhtml/docbook_style.c,$(SRCS))
 
 DEPENDS := qe.h charset.h color.h cutils.h display.h \
 	qestyles.h unicode_join.h util.h variables.h session.h \
