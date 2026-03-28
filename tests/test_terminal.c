@@ -36,7 +36,7 @@
 /*--- Configuration ---*/
 
 #ifndef QE_BINARY
-#define QE_BINARY  "../qe"
+#define QE_BINARY  "../o/qe"
 #endif
 
 #define SCREEN_WIDTH   80
