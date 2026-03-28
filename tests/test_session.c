@@ -955,6 +955,393 @@ TEST(socket, stale_socket_cleanup_on_connect) {
     memcpy(server.socket_path, saved_path, sizeof(saved_path));
 }
 
+/*------------------------------------------------------------------------
+ * Integration tests: session detach and reattach lifecycle
+ *
+ * These tests fork a real server process with a PTY running 'cat',
+ * then connect clients to verify detach/reattach behavior.
+ *------------------------------------------------------------------------*/
+
+/* Receive a packet with timeout (milliseconds). Returns 0 on success, -1 on timeout/error. */
+static int recv_with_timeout(int fd, Packet *pkt, int timeout_ms) {
+    fd_set fds;
+    struct timeval tv;
+
+    FD_ZERO(&fds);
+    FD_SET(fd, &fds);
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+    if (select(fd + 1, &fds, NULL, NULL, &tv) <= 0)
+        return -1;
+    return recv_packet(fd, pkt);
+}
+
+/* Start a server process with 'cat' running in a PTY.
+ * Returns server PID on success, -1 on failure. */
+static pid_t start_test_server(const char *sock_path) {
+    SessionServer saved = server;
+    memset(&server, 0, sizeof(server));
+    server.running = 1;
+    server.exit_status = -1;
+
+    server.socket = server_create_socket(sock_path);
+    if (server.socket < 0) {
+        server = saved;
+        return -1;
+    }
+
+    int ready_pipe[2];
+    if (pipe(ready_pipe) < 0) {
+        close(server.socket);
+        server = saved;
+        return -1;
+    }
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        close(server.socket);
+        close(ready_pipe[0]);
+        close(ready_pipe[1]);
+        server = saved;
+        return -1;
+    }
+
+    if (pid == 0) {
+        /* Child: become the server */
+        close(ready_pipe[0]);
+
+        struct sigaction sa;
+        sa.sa_flags = 0;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_handler = server_sigchld_handler;
+        sigaction(SIGCHLD, &sa, NULL);
+
+        struct winsize ws;
+        memset(&ws, 0, sizeof(ws));
+        ws.ws_row = 25;
+        ws.ws_col = 80;
+        server.winsize = ws;
+
+        {
+        char pty_name[256];
+        server.pid = forkpty(&server.pty, pty_name, NULL, &ws);
+        }
+        if (server.pid == 0) {
+            /* Grandchild: run cat */
+            close(ready_pipe[1]);
+            close(server.socket);
+            execlp("cat", "cat", (char *)NULL);
+            _exit(1);
+        }
+        if (server.pid < 0) {
+            close(ready_pipe[1]);
+            _exit(1);
+        }
+
+        sa.sa_handler = server_sigterm_handler;
+        sigaction(SIGTERM, &sa, NULL);
+        sa.sa_handler = SIG_IGN;
+        sigaction(SIGPIPE, &sa, NULL);
+        sigaction(SIGINT, &sa, NULL);
+
+        /* Signal parent we're ready */
+        char r = 'R';
+        (void)write(ready_pipe[1], &r, 1);
+        close(ready_pipe[1]);
+
+        server_mainloop();
+        kill(server.pid, SIGKILL);
+        waitpid(server.pid, NULL, 0);
+        _exit(0);
+    }
+
+    /* Parent: close our copy of the listening socket */
+    close(server.socket);
+    close(ready_pipe[1]);
+
+    /* Wait for server child to signal readiness */
+    char r;
+    (void)read(ready_pipe[0], &r, 1);
+    close(ready_pipe[0]);
+
+    /* Give PTY time to initialize */
+    usleep(100000);
+
+    server = saved;
+    return pid;
+}
+
+static void stop_test_server(pid_t pid, const char *sock_path) {
+    kill(pid, SIGKILL);
+    waitpid(pid, NULL, 0);
+    unlink(sock_path);
+}
+
+/* Drain any pending packets (e.g. MSG_PID on connect, PTY initial output) */
+static void drain_packets(int fd, int timeout_ms) {
+    Packet pkt;
+    while (recv_with_timeout(fd, &pkt, timeout_ms) == 0)
+        ;
+}
+
+/* Send MSG_ATTACH to server */
+static int send_attach(int fd, int flags) {
+    Packet pkt;
+    memset(&pkt, 0, sizeof(pkt));
+    pkt.type = MSG_ATTACH;
+    pkt.u.i = flags;
+    pkt.len = sizeof(pkt.u.i);
+    return send_packet(fd, &pkt);
+}
+
+/* Send MSG_DETACH to server */
+static int send_detach(int fd) {
+    Packet pkt;
+    memset(&pkt, 0, sizeof(pkt));
+    pkt.type = MSG_DETACH;
+    pkt.len = 0;
+    return send_packet(fd, &pkt);
+}
+
+/* Send MSG_CONTENT to server */
+static int send_content(int fd, const char *data, size_t len) {
+    Packet pkt;
+    memset(&pkt, 0, sizeof(pkt));
+    pkt.type = MSG_CONTENT;
+    pkt.len = len;
+    memcpy(pkt.u.msg, data, len);
+    return send_packet(fd, &pkt);
+}
+
+/* Wait for MSG_CONTENT from server. Returns 1 if received, 0 if timeout. */
+static int wait_for_content(int fd, int timeout_ms) {
+    Packet pkt;
+    int elapsed = 0;
+    int step = 100;
+    while (elapsed < timeout_ms) {
+        if (recv_with_timeout(fd, &pkt, step) == 0 &&
+            pkt.type == MSG_CONTENT && pkt.len > 0)
+            return 1;
+        elapsed += step;
+    }
+    return 0;
+}
+
+/* ---- Detach and reattach: the core lifecycle test ---- */
+
+TEST(session_lifecycle, detach_and_reattach) {
+    const char *sock = "/tmp/qe-test-lifecycle-dar";
+    unlink(sock);
+
+    pid_t srv = start_test_server(sock);
+    ASSERT_TRUE(srv > 0);
+
+    /* --- First client: attach, exchange data, detach --- */
+    int cfd1 = session_connect(sock);
+    ASSERT_TRUE(cfd1 >= 0);
+
+    /* Drain the MSG_PID packet and any initial PTY output */
+    drain_packets(cfd1, 200);
+
+    /* Attach */
+    ASSERT_EQ(send_attach(cfd1, 0), 0);
+
+    /* Send data to cat via PTY */
+    ASSERT_EQ(send_content(cfd1, "ping1\n", 6), 0);
+
+    /* Verify we get content back (PTY echo and/or cat output) */
+    ASSERT_TRUE(wait_for_content(cfd1, 2000));
+
+    /* Detach */
+    ASSERT_EQ(send_detach(cfd1), 0);
+    close(cfd1);
+
+    /* Give server time to process the detach */
+    usleep(100000);
+
+    /* --- Second client: reattach to the same session --- */
+    int cfd2 = session_connect(sock);
+    ASSERT_TRUE(cfd2 >= 0);  /* Server survived the detach */
+
+    drain_packets(cfd2, 200);
+
+    /* Attach again */
+    ASSERT_EQ(send_attach(cfd2, 0), 0);
+
+    /* Send different data */
+    ASSERT_EQ(send_content(cfd2, "ping2\n", 6), 0);
+
+    /* Verify data flows through the same cat process */
+    ASSERT_TRUE(wait_for_content(cfd2, 2000));
+
+    close(cfd2);
+    stop_test_server(srv, sock);
+}
+
+/* ---- Server survives abrupt client disconnect (no MSG_DETACH) ---- */
+
+TEST(session_lifecycle, server_survives_disconnect) {
+    const char *sock = "/tmp/qe-test-lifecycle-disc";
+    unlink(sock);
+
+    pid_t srv = start_test_server(sock);
+    ASSERT_TRUE(srv > 0);
+
+    /* Client connects, attaches, then abruptly closes socket */
+    int cfd1 = session_connect(sock);
+    ASSERT_TRUE(cfd1 >= 0);
+    drain_packets(cfd1, 200);
+    ASSERT_EQ(send_attach(cfd1, 0), 0);
+    ASSERT_EQ(send_content(cfd1, "test\n", 5), 0);
+    ASSERT_TRUE(wait_for_content(cfd1, 2000));
+
+    /* Abrupt disconnect: close without sending MSG_DETACH */
+    close(cfd1);
+
+    usleep(200000);
+
+    /* New client can still connect */
+    int cfd2 = session_connect(sock);
+    ASSERT_TRUE(cfd2 >= 0);
+    drain_packets(cfd2, 200);
+    ASSERT_EQ(send_attach(cfd2, 0), 0);
+    ASSERT_EQ(send_content(cfd2, "alive\n", 6), 0);
+    ASSERT_TRUE(wait_for_content(cfd2, 2000));
+
+    close(cfd2);
+    stop_test_server(srv, sock);
+}
+
+/* ---- Multiple detach/reattach cycles ---- */
+
+TEST(session_lifecycle, multiple_reattach_cycles) {
+    const char *sock = "/tmp/qe-test-lifecycle-multi";
+    unlink(sock);
+
+    pid_t srv = start_test_server(sock);
+    ASSERT_TRUE(srv > 0);
+
+    /* Perform 3 attach/detach cycles on the same session */
+    int i;
+    for (i = 0; i < 3; i++) {
+        int cfd = session_connect(sock);
+        ASSERT_TRUE(cfd >= 0);
+        drain_packets(cfd, 200);
+
+        ASSERT_EQ(send_attach(cfd, 0), 0);
+
+        char msg[32];
+        int len = snprintf(msg, sizeof(msg), "cycle%d\n", i);
+        ASSERT_EQ(send_content(cfd, msg, len), 0);
+        ASSERT_TRUE(wait_for_content(cfd, 2000));
+
+        ASSERT_EQ(send_detach(cfd), 0);
+        close(cfd);
+
+        usleep(100000);
+    }
+
+    /* Final attach to verify session is still alive */
+    int cfd = session_connect(sock);
+    ASSERT_TRUE(cfd >= 0);
+    drain_packets(cfd, 200);
+    ASSERT_EQ(send_attach(cfd, 0), 0);
+    ASSERT_EQ(send_content(cfd, "final\n", 6), 0);
+    ASSERT_TRUE(wait_for_content(cfd, 2000));
+
+    close(cfd);
+    stop_test_server(srv, sock);
+}
+
+/* ---- Process PID is preserved across reattach ---- */
+
+TEST(session_lifecycle, same_pid_after_reattach) {
+    const char *sock = "/tmp/qe-test-lifecycle-pid";
+    unlink(sock);
+
+    pid_t srv = start_test_server(sock);
+    ASSERT_TRUE(srv > 0);
+
+    /* First client: capture server PID from MSG_PID packet */
+    int cfd1 = session_connect(sock);
+    ASSERT_TRUE(cfd1 >= 0);
+
+    Packet pkt;
+    ASSERT_EQ(recv_with_timeout(cfd1, &pkt, 1000), 0);
+    ASSERT_EQ(pkt.type, MSG_PID);
+    uint64_t pid1 = pkt.u.l;
+    ASSERT_TRUE(pid1 > 0);
+
+    ASSERT_EQ(send_attach(cfd1, 0), 0);
+    ASSERT_EQ(send_detach(cfd1), 0);
+    close(cfd1);
+
+    usleep(100000);
+
+    /* Second client: verify same PID */
+    int cfd2 = session_connect(sock);
+    ASSERT_TRUE(cfd2 >= 0);
+
+    ASSERT_EQ(recv_with_timeout(cfd2, &pkt, 1000), 0);
+    ASSERT_EQ(pkt.type, MSG_PID);
+    uint64_t pid2 = pkt.u.l;
+
+    /* Same server process answers both clients */
+    ASSERT_EQ(pid1, pid2);
+
+    close(cfd2);
+    stop_test_server(srv, sock);
+}
+
+/* ---- Two clients attached simultaneously, one detaches ---- */
+
+TEST(session_lifecycle, concurrent_clients_one_detaches) {
+    const char *sock = "/tmp/qe-test-lifecycle-conc";
+    unlink(sock);
+
+    pid_t srv = start_test_server(sock);
+    ASSERT_TRUE(srv > 0);
+
+    /* Client 1 connects and attaches */
+    int cfd1 = session_connect(sock);
+    ASSERT_TRUE(cfd1 >= 0);
+    drain_packets(cfd1, 200);
+    ASSERT_EQ(send_attach(cfd1, 0), 0);
+
+    /* Client 2 connects and attaches */
+    int cfd2 = session_connect(sock);
+    ASSERT_TRUE(cfd2 >= 0);
+    drain_packets(cfd2, 200);
+    ASSERT_EQ(send_attach(cfd2, CLIENT_READONLY), 0);
+
+    /* Client 1 sends data */
+    ASSERT_EQ(send_content(cfd1, "shared\n", 7), 0);
+
+    /* Both clients should receive content */
+    ASSERT_TRUE(wait_for_content(cfd1, 2000));
+    ASSERT_TRUE(wait_for_content(cfd2, 2000));
+
+    /* Client 1 detaches */
+    ASSERT_EQ(send_detach(cfd1), 0);
+    close(cfd1);
+
+    usleep(100000);
+
+    /* Client 2 is still connected; a new client can also attach */
+    int cfd3 = session_connect(sock);
+    ASSERT_TRUE(cfd3 >= 0);
+    drain_packets(cfd3, 200);
+    ASSERT_EQ(send_attach(cfd3, 0), 0);
+
+    ASSERT_EQ(send_content(cfd3, "after\n", 6), 0);
+    ASSERT_TRUE(wait_for_content(cfd3, 2000));
+
+    close(cfd2);
+    close(cfd3);
+    stop_test_server(srv, sock);
+}
+
 #else /* !CONFIG_SESSION_DETACH */
 
 /* When session detach is disabled, just have a passing placeholder test */
