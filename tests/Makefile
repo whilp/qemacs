@@ -5,10 +5,16 @@ CONFIG_SESSION_DETACH ?= yes
 
 TEST_CFLAGS = -g -O2 -mcosmo -Wall -I.. -DHAVE_QE_CONFIG_H
 
-TESTS = test_cutils test_buffer test_unix test_cosmo test_embed
+# Auto-discover all test_*.c files and derive binary names
+TEST_SRCS := $(wildcard test_*.c)
+TESTS := $(TEST_SRCS:.c=)
 
-ifdef CONFIG_SESSION_DETACH
-TESTS += test_session
+# Conditional tests: exclude if feature is not enabled
+ifndef CONFIG_SESSION_DETACH
+TESTS := $(filter-out test_session,$(TESTS))
+endif
+ifndef CONFIG_HTML
+TESTS := $(filter-out test_html,$(TESTS))
 endif
 
 all: test
@@ -21,6 +27,15 @@ test: $(TESTS)
 	@echo ""
 	@echo "All test suites passed."
 
+#
+# Default rule: most tests are single-file, standalone
+#
+test_%: test_%.c testlib.h
+	$(CC) $(TEST_CFLAGS) -o $@ $<
+
+#
+# Tests with extra source dependencies override the default rule
+#
 test_cutils: test_cutils.c ../cutils.c testlib.h ../config.h ../cutils.h
 	$(CC) $(TEST_CFLAGS) -o $@ test_cutils.c ../cutils.c
 
@@ -30,17 +45,10 @@ BUFFER_SRCS = ../buffer.c ../cutils.c ../charset.c ../libunicode.c ../util.c \
 test_buffer: test_buffer.c $(BUFFER_SRCS) testlib.h ../qe.h ../cutils.h ../config.h
 	$(CC) $(TEST_CFLAGS) -Wno-format-truncation -o $@ test_buffer.c $(BUFFER_SRCS)
 
-test_unix: test_unix.c testlib.h
-	$(CC) $(TEST_CFLAGS) -o $@ test_unix.c
-
-test_cosmo: test_cosmo.c testlib.h
-	$(CC) $(TEST_CFLAGS) -o $@ test_cosmo.c
-
 test_session: test_session.c ../session.c ../session.h testlib.h ../config.h
 	$(CC) $(TEST_CFLAGS) -o $@ test_session.c
 
 # Embed test: validates resource files are accessible via /zip/ paths
-# The test binary itself must have resources embedded (same as qe)
 EMBED_FILES = ../kmaps ../ligatures ../config.eg ../qe-manual.md ../qe.1
 
 test_embed: test_embed.c testlib.h $(EMBED_FILES)
@@ -52,24 +60,9 @@ test_embed: test_embed.c testlib.h $(EMBED_FILES)
 	mv $@.com $@
 	rm -rf .embed
 
-# Terminal integration tests (requires qe binary with test_display driver)
-test_terminal: test_terminal.c testlib.h
-	$(CC) $(TEST_CFLAGS) -o $@ test_terminal.c
-
-# Run terminal tests separately (they need qe built first)
-test-terminal: test_terminal
-	@echo "--- Running test_terminal ---"
-	./test_terminal
-
-# HTML rendering tests (requires qe binary with test_display driver)
-test_html: test_html.c testlib.h
-	$(CC) $(TEST_CFLAGS) -o $@ test_html.c
-
-# Run HTML rendering tests separately (they need qe built first)
-test-html: test_html
-	@echo "--- Running test_html ---"
-	./test_html
-
+#
+# Benchmarks (not part of test suite)
+#
 BENCH_SRCS = ../buffer.c ../cutils.c ../charset.c ../libunicode.c ../util.c \
              ../unix.c ../charsetmore.c ../unicode_join.c ../indic.c ../arabic.c
 
@@ -81,6 +74,6 @@ bench: bench_buffer
 	./bench_buffer
 
 clean:
-	rm -rf $(TESTS) test_terminal test_html bench_buffer .embed
+	rm -rf $(TESTS) bench_buffer .embed
 
 .PHONY: all test bench clean

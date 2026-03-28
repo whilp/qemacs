@@ -339,6 +339,8 @@ static void qe_term_init(ShellState *s)
     s->lastc = ' ';
 
     term = getenv("TERM");
+    if (!term)
+        term = "";
     /* vt100 terminfo definitions */
     s->kbs = "\010";
     s->ka1 = "\033Oq";

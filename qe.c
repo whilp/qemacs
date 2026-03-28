@@ -11910,13 +11910,14 @@ static int qe_init(void *opaque)
     /* Restrict syscalls after initialization is complete.
      * stdio: basic I/O
      * rpath/wpath/cpath: filesystem access for editing files
-     * tty: terminal control
+     * tty: terminal control (terminal ioctls)
+     * pty: pseudo-terminal allocation (TIOCGPTN for ptsname)
      * proc/exec: fork/exec for shell mode
      * unix: unix domain sockets for session detach
      * fattr: file attribute operations (chmod)
      * id: getpwnam for ~ expansion
      */
-    pledge("stdio rpath wpath cpath tty proc exec unix fattr id", NULL);
+    pledge("stdio rpath wpath cpath tty pty proc exec unix fattr id", NULL);
 #endif
 
     return 0;
