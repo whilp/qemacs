@@ -3307,13 +3307,15 @@ static char *qe_get_mode_name(EditState *s, char *buf, int size, int full)
 
     if (s->b->data_type_name)
         buf_printf(out, "%s+", s->b->data_type_name);
-    buf_puts(out, s->mode ? s->mode->name : "raw");
+
+    if (full && s->interactive)
+        buf_puts(out, "term");
+    else
+        buf_puts(out, s->mode ? s->mode->name : "raw");
 
     if (full) {
         if (s->overwrite)
             buf_puts(out, " Ovwrt");
-        if (s->interactive)
-            buf_puts(out, " Interactive");
         if (s->b->flags & BF_PREVIEW)
             buf_puts(out, " Preview");
     }
@@ -3322,7 +3324,7 @@ static char *qe_get_mode_name(EditState *s, char *buf, int size, int full)
 
 /* compute string for the first part of the mode line (flags,
    filename, modename) */
-void basic_mode_line(EditState *s, buf_t *out, int c1)
+void basic_mode_line(EditState *s, buf_t *out)
 {
     char buf[128];
     const char *mode_name;
@@ -3352,17 +3354,10 @@ void basic_mode_line(EditState *s, buf_t *out, int c1)
 
 void text_mode_line(EditState *s, buf_t *out)
 {
-    int line_num, col_num, wrap_mode;
+    int line_num, col_num;
     const QEProperty *tag;
 
-    wrap_mode = '-';
-    if (!s->hex_mode) {
-        if (s->wrap == WRAP_TRUNCATE)
-            wrap_mode = 'T';
-        else if (s->wrap == WRAP_WORD)
-            wrap_mode = 'W';
-    }
-    basic_mode_line(s, out, wrap_mode);
+    basic_mode_line(s, out);
 
     eb_get_pos(s->b, &line_num, &col_num, s->offset);
     buf_puts(out, " - ");
@@ -3370,17 +3365,19 @@ void text_mode_line(EditState *s, buf_t *out)
         buf_printf(out, "L%d ", line_num + 1);
     if (s->qs->column_number_mode)
         buf_printf(out, "C%d ", col_num + 1);
-    buf_printf(out, "%s", s->b->charset->name);
+    /* only show charset if non-default */
+    if (strcmp(s->b->charset->name, "utf-8") != 0)
+        buf_printf(out, "%s ", s->b->charset->name);
     if (s->b->eol_type == EOL_DOS)
-        buf_puts(out, "-dos");
+        buf_puts(out, "dos ");
     if (s->b->eol_type == EOL_MAC)
-        buf_puts(out, "-mac");
+        buf_puts(out, "mac ");
     if (s->bidir)
-        buf_printf(out, " %s", s->cur_rtl ? "RTL" : "LTR");
+        buf_printf(out, "%s ", s->cur_rtl ? "RTL" : "LTR");
 
     if (s->input_method)
-        buf_printf(out, " %s", s->input_method->name);
-    buf_printf(out, " - %d%%", compute_percent(s->offset, s->b->total_size));
+        buf_printf(out, "%s ", s->input_method->name);
+    buf_printf(out, "%d%%", compute_percent(s->offset, s->b->total_size));
     if (s->x_disp[0])
         buf_printf(out, " <%d", -s->x_disp[0]);
     if (s->x_disp[1])

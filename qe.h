@@ -1596,7 +1596,7 @@ void do_goto_line(EditState *s, int line, int column);
 void do_up_down(EditState *s, int n);
 void do_left_right(EditState *s, int n);
 void text_mouse_goto(EditState *s, int x, int y, QEEvent *ev);
-void basic_mode_line(EditState *s, buf_t *out, int c1);
+void basic_mode_line(EditState *s, buf_t *out);
 void text_mode_line(EditState *s, buf_t *out);
 void do_toggle_full_screen(EditState *s);
 void qe_toggle_control_h(QEmacsState *qs, int set);

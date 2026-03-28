@@ -222,7 +222,7 @@ static void unihex_move_up_down(EditState *s, int dir)
 
 static void unihex_mode_line(EditState *s, buf_t *out)
 {
-    basic_mode_line(s, out, '-');
+    basic_mode_line(s, out);
     buf_printf(out, "--0x%x--0x%x--%s",
                (unsigned)eb_get_char_offset(s->b, s->offset),
                (unsigned)s->offset, s->b->charset->name);
