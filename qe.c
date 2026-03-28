@@ -11907,16 +11907,17 @@ static int qe_init(void *opaque)
     qs->ec.function = NULL;
 
 #ifdef __COSMOPOLITAN__
-    /* TODO: Re-enable pledge() once cosmopolitan's seccomp-based
-     * implementation portably supports the TIOCGPTN ioctl needed by
-     * ptsname() for PTY allocation in shell mode. On some kernels
-     * (e.g. 6.17), the seccomp violation causes SIGSEGV instead of
-     * returning EPERM, making shell mode completely unusable.
-     * Track upstream: https://github.com/jart/cosmopolitan/issues
-     *
-     * The desired pledge string is:
-     *   "stdio rpath wpath cpath tty pty proc exec unix fattr id"
+    /* Restrict syscalls after initialization is complete.
+     * stdio: basic I/O
+     * rpath/wpath/cpath: filesystem access for editing files
+     * tty: terminal control (terminal ioctls)
+     * pty: pseudo-terminal allocation (TIOCGPTN for ptsname)
+     * proc/exec: fork/exec for shell mode
+     * unix: unix domain sockets for session detach
+     * fattr: file attribute operations (chmod)
+     * id: getpwnam for ~ expansion
      */
+    pledge("stdio rpath wpath cpath tty pty proc exec unix fattr id", NULL);
 #endif
 
     return 0;
