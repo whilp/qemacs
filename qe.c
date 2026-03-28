@@ -10804,7 +10804,10 @@ static void show_usage(void)
            "  -S --session-create NAME  create a new session and attach\n"
            "  -A --session-attach NAME  attach to an existing session\n"
            "  -R --session-resume NAME  attach or create if not found\n"
-           "  --session-list            list active sessions and exit\n");
+           "  --session-list            list active sessions and exit\n"
+           "  --no-session              run without session management\n"
+           "\n"
+           "By default, qe resumes or creates a session named 'main'.\n");
 #endif
     printf("\n"
            "Report bugs to bug@qemacs.org.  First, please see the Bugs\n"
@@ -11949,6 +11952,7 @@ int main(int argc, char **argv)
         int i;
         int sess_action = SESSION_ACTION_NONE;
         const char *sess_name = NULL;
+        int no_session = 0;
 
         for (i = 1; i < argc; i++) {
             if ((strcmp(argv[i], "-S") == 0 || strcmp(argv[i], "--session-create") == 0) && i + 1 < argc) {
@@ -11962,7 +11966,18 @@ int main(int argc, char **argv)
                 sess_name = argv[++i];
             } else if (strcmp(argv[i], "--session-list") == 0) {
                 return qe_session_list();
+            } else if (strcmp(argv[i], "--no-session") == 0) {
+                no_session = 1;
             }
+        }
+
+        /* Default: resume or create a session named "main", unless
+         * --no-session was given or we're already inside a session
+         * (QE_SESSION is set by the session server in the child). */
+        if (sess_action == SESSION_ACTION_NONE && !no_session
+        &&  !getenv("QE_SESSION") && !getenv("QE_TEST_DISPLAY")) {
+            sess_action = SESSION_ACTION_CREATE_ATTACH;
+            sess_name = "main";
         }
 
         if (sess_action != SESSION_ACTION_NONE) {
@@ -11981,7 +11996,8 @@ int main(int argc, char **argv)
                     i++;  /* skip the name argument too */
                     continue;
                 }
-                if (strcmp(argv[i], "--session-list") == 0)
+                if (strcmp(argv[i], "--session-list") == 0
+                ||  strcmp(argv[i], "--no-session") == 0)
                     continue;
                 child_argv[ci++] = argv[i];
             }
