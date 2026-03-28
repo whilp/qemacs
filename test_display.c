@@ -84,6 +84,77 @@ static int test_dpy_probe(void)
 
 /*--- Input handling ---*/
 
+/* Try to parse an SGR mouse sequence starting at buf[start].
+ * SGR format: ESC [ < button ; x ; y M  (press)
+ *             ESC [ < button ; x ; y m  (release)
+ * Returns number of bytes consumed, or 0 if not a complete SGR sequence. */
+static int test_parse_sgr_mouse(const unsigned char *buf, int len, int start,
+                                QEEvent *ev)
+{
+    int pos = start;
+    int button, x, y;
+    char terminator;
+
+    /* Need at least ESC [ < N ; N ; N M = 10 bytes minimum */
+    if (pos + 9 > len) return 0;
+    if (buf[pos] != 0x1b) return 0;
+    if (buf[pos + 1] != '[') return 0;
+    if (buf[pos + 2] != '<') return 0;
+    pos += 3;
+
+    /* Parse button number */
+    button = 0;
+    while (pos < len && buf[pos] >= '0' && buf[pos] <= '9') {
+        button = button * 10 + (buf[pos] - '0');
+        pos++;
+    }
+    if (pos >= len || buf[pos] != ';') return 0;
+    pos++;
+
+    /* Parse x coordinate */
+    x = 0;
+    while (pos < len && buf[pos] >= '0' && buf[pos] <= '9') {
+        x = x * 10 + (buf[pos] - '0');
+        pos++;
+    }
+    if (pos >= len || buf[pos] != ';') return 0;
+    pos++;
+
+    /* Parse y coordinate */
+    y = 0;
+    while (pos < len && buf[pos] >= '0' && buf[pos] <= '9') {
+        y = y * 10 + (buf[pos] - '0');
+        pos++;
+    }
+    if (pos >= len) return 0;
+    terminator = buf[pos];
+    if (terminator != 'M' && terminator != 'm') return 0;
+    pos++;
+
+    /* Build mouse event */
+    memset(ev, 0, sizeof(*ev));
+    if (button & 32)
+        ev->button_event.type = QE_MOTION_EVENT;
+    else if (terminator == 'M')
+        ev->button_event.type = QE_BUTTON_PRESS_EVENT;
+    else
+        ev->button_event.type = QE_BUTTON_RELEASE_EVENT;
+
+    ev->button_event.x = x - 1;
+    ev->button_event.y = y - 1;
+
+    switch (button & ~(4|8|16|32)) {
+    case 0:  ev->button_event.button = QE_BUTTON_LEFT; break;
+    case 1:  ev->button_event.button = QE_BUTTON_MIDDLE; break;
+    case 2:  ev->button_event.button = QE_BUTTON_RIGHT; break;
+    case 64: ev->button_event.button = QE_WHEEL_UP; break;
+    case 65: ev->button_event.button = QE_WHEEL_DOWN; break;
+    default: ev->button_event.button = 0; break;
+    }
+
+    return pos - start;
+}
+
 static void test_read_handler(void *opaque)
 {
     QEditScreen *s = opaque;
@@ -101,6 +172,15 @@ static void test_read_handler(void *opaque)
     }
 
     for (i = 0; i < n; i++) {
+        /* Try to parse SGR mouse escape sequence */
+        if (buf[i] == 0x1b && i + 2 < n && buf[i + 1] == '[' && buf[i + 2] == '<') {
+            int consumed = test_parse_sgr_mouse(buf, n, i, ev);
+            if (consumed > 0) {
+                qe_handle_event(qs, ev);
+                i += consumed - 1;  /* -1 because loop increments */
+                continue;
+            }
+        }
         memset(ev, 0, sizeof(*ev));
         ev->key_event.type = QE_KEY_EVENT;
         ev->key_event.key = buf[i];
