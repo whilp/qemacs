@@ -10211,6 +10211,15 @@ void wheel_scroll_up_down(EditState *s, int dir)
     if (!s->mode->display_line)
         return;
 
+    /* Use the mode's scroll callback if available so that modes like
+     * shell can manage their state (e.g. interactive flag).  Without
+     * this, generic_text_display snaps the view back to the cursor
+     * position after each wheel event, making scroll barely move. */
+    if (s->mode->scroll_up_down) {
+        s->mode->scroll_up_down(s, dir);
+        return;
+    }
+
     line_height = get_line_height(s->screen, s, QE_STYLE_DEFAULT);
     perform_scroll_up_down(s, dir * WHEEL_SCROLL_STEP * line_height);
 }

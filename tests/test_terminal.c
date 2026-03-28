@@ -1177,6 +1177,289 @@ TEST(shell, ctrl_w_kills_word)
     session_cleanup(&sess);
 }
 
+/*--- Mouse wheel helper ---*/
+
+/* Send an SGR mouse wheel event.
+ * button: 64 = wheel up, 65 = wheel down
+ * x, y: 1-based coordinates */
+static void session_send_mouse_wheel(TestSession *sess, int button, int x, int y)
+{
+    char buf[32];
+    int len = snprintf(buf, sizeof(buf), "\033[<%d;%d;%dM", button, x, y);
+    session_send_keys(sess, buf, len);
+}
+
+/* Send N wheel-up events at position (x, y) with small delays between them */
+static void session_scroll_wheel_up(TestSession *sess, int count, int x, int y)
+{
+    for (int i = 0; i < count; i++) {
+        session_send_mouse_wheel(sess, 64, x, y);
+        usleep(50000);  /* 50ms between events */
+    }
+}
+
+/* Send N wheel-down events at position (x, y) with small delays between them */
+static void session_scroll_wheel_down(TestSession *sess, int count, int x, int y)
+{
+    for (int i = 0; i < count; i++) {
+        session_send_mouse_wheel(sess, 65, x, y);
+        usleep(50000);
+    }
+}
+
+/*--- Shell mouse scroll tests ---*/
+
+/* Helper: open a shell and wait for prompt. Returns 1 on success. */
+static int shell_open_and_wait(TestSession *sess)
+{
+    char esc = 0x1b;
+    session_send_keys(sess, &esc, 1);
+    usleep(50000);
+    session_type(sess, "x");
+    usleep(100000);
+    session_type(sess, "shell\r");
+
+    int got_prompt = session_wait_for(sess, "$", 5000);
+    if (!got_prompt)
+        got_prompt = session_wait_for(sess, "#", 2000);
+    if (!got_prompt)
+        got_prompt = session_wait_for(sess, ">", 2000);
+
+    if (!got_prompt) {
+        diagnose_pty();
+        ScreenSnap *snap = session_take_screenshot(sess);
+        if (snap) {
+            fprintf(stderr, "DEBUG: shell prompt not found. Screen:\n");
+            for (int i = 0; i < snap->num_lines && i < 10; i++)
+                fprintf(stderr, "  [%d]: '%s'\n", i, snap->lines[i]);
+            free_snapshot(snap);
+        }
+    }
+    return got_prompt;
+}
+
+/* Helper: find which screen row contains a given substring.
+ * Returns row index or -1 if not found. */
+static int snap_find_line(ScreenSnap *snap, const char *substr)
+{
+    if (!snap) return -1;
+    for (int i = 0; i < snap->num_lines; i++) {
+        if (strstr(snap->lines[i], substr) != NULL)
+            return i;
+    }
+    return -1;
+}
+
+/* Test: generate output in a shell, then scroll up with mouse wheel.
+ * After scrolling up, we should see earlier output lines that were
+ * scrolled off screen. */
+TEST(shell, mouse_scroll_up)
+{
+    TestSession sess;
+    if (session_start(&sess, NULL) != 0) {
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    if (!shell_open_and_wait(&sess)) {
+        session_stop(&sess);
+        session_cleanup(&sess);
+        ASSERT_TRUE(0);  /* shell prompt not found */
+        return;
+    }
+
+    /* Generate enough output to fill and overflow the screen.
+     * Print numbered lines with a distinctive marker so we can
+     * identify them later. Use seq to print 60 lines (more than
+     * the 24-line screen). */
+    session_type(&sess, "for i in $(seq 1 60); do echo \"SCROLLTEST line $i\"; done\r");
+    usleep(3000000);  /* 3s for the command to complete */
+
+    /* Take a screenshot: the last lines should be visible, the first should not */
+    ScreenSnap *snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+
+    /* "SCROLLTEST line 1" should NOT be visible (it scrolled off) */
+    int line1_before = snap_find_line(snap, "SCROLLTEST line 1 ");
+    /* Use trailing space to avoid matching "line 10", "line 11", etc.
+     * Actually, "line 1" without space could match "line 10".
+     * Be more precise: */
+    free_snapshot(snap);
+
+    snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+
+    /* Check that early lines are NOT visible and late lines ARE visible */
+    int has_early = snap_any_line_contains(snap, "SCROLLTEST line 2 ");
+    int has_late = snap_any_line_contains(snap, "SCROLLTEST line 58");
+    free_snapshot(snap);
+
+    /* Late lines should be visible, early lines should have scrolled off */
+    ASSERT_TRUE(has_late);
+    /* If the screen is only 24 lines, 60 lines of output means early
+     * lines are gone. (If early lines are somehow visible, the test
+     * premise is wrong, but we continue.) */
+
+    /* Now scroll up with the mouse wheel — send many wheel-up events
+     * to scroll back to the top. The mouse is positioned in the middle
+     * of the content area (col 40, row 10). */
+    session_scroll_wheel_up(&sess, 50, 40, 10);
+    usleep(500000);  /* 500ms for redraws to settle */
+
+    /* Take screenshot after scrolling up */
+    snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+
+    /* After scrolling up enough, "SCROLLTEST line 1" or other early
+     * lines should now be visible on screen */
+    int has_early_after = 0;
+    /* Check for any of the first few lines */
+    for (int i = 1; i <= 5; i++) {
+        char marker[64];
+        snprintf(marker, sizeof(marker), "SCROLLTEST line %d", i);
+        if (snap_any_line_contains(snap, marker)) {
+            has_early_after = 1;
+            break;
+        }
+    }
+
+    if (!has_early_after) {
+        fprintf(stderr, "DEBUG: After scrolling up, screen contents:\n");
+        for (int i = 0; i < snap->num_lines; i++)
+            fprintf(stderr, "  [%d]: '%s'\n", i, snap->lines[i]);
+    }
+
+    ASSERT_TRUE(has_early_after);
+
+    free_snapshot(snap);
+    session_ctrl(&sess, 'c');
+    usleep(100000);
+    session_stop(&sess);
+    session_cleanup(&sess);
+}
+
+/* Test: scroll down after scrolling up should return to the bottom */
+TEST(shell, mouse_scroll_down_returns)
+{
+    TestSession sess;
+    if (session_start(&sess, NULL) != 0) {
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    if (!shell_open_and_wait(&sess)) {
+        session_stop(&sess);
+        session_cleanup(&sess);
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    /* Generate output */
+    session_type(&sess, "for i in $(seq 1 60); do echo \"SCROLLRET line $i\"; done\r");
+    usleep(3000000);
+
+    /* Scroll up */
+    session_scroll_wheel_up(&sess, 50, 40, 10);
+    usleep(500000);
+
+    /* Verify we scrolled up (early lines visible) */
+    ScreenSnap *snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+    int has_early = 0;
+    for (int i = 1; i <= 5; i++) {
+        char marker[64];
+        snprintf(marker, sizeof(marker), "SCROLLRET line %d", i);
+        if (snap_any_line_contains(snap, marker)) {
+            has_early = 1;
+            break;
+        }
+    }
+    free_snapshot(snap);
+
+    /* Now scroll back down */
+    session_scroll_wheel_down(&sess, 50, 40, 10);
+    usleep(500000);
+
+    /* Late lines should be visible again */
+    snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+    int has_late = snap_any_line_contains(snap, "SCROLLRET line 58") ||
+                   snap_any_line_contains(snap, "SCROLLRET line 59") ||
+                   snap_any_line_contains(snap, "SCROLLRET line 60");
+
+    if (!has_late) {
+        fprintf(stderr, "DEBUG: After scrolling down, screen contents:\n");
+        for (int i = 0; i < snap->num_lines; i++)
+            fprintf(stderr, "  [%d]: '%s'\n", i, snap->lines[i]);
+    }
+
+    ASSERT_TRUE(has_late);
+
+    free_snapshot(snap);
+    session_ctrl(&sess, 'c');
+    usleep(100000);
+    session_stop(&sess);
+    session_cleanup(&sess);
+}
+
+/* Test: scrolling up many times should reach the very beginning of the
+ * buffer, not get stuck partway through (the reported bug). */
+TEST(shell, mouse_scroll_reaches_top)
+{
+    TestSession sess;
+    if (session_start(&sess, NULL) != 0) {
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    if (!shell_open_and_wait(&sess)) {
+        session_stop(&sess);
+        session_cleanup(&sess);
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    /* Print a distinctive first line, then fill the screen with output */
+    session_type(&sess, "echo \"TOP_MARKER_FIRST_LINE\"\r");
+    usleep(500000);
+    session_type(&sess, "for i in $(seq 1 80); do echo \"FILLER line $i of 80\"; done\r");
+    usleep(4000000);
+
+    /* The TOP_MARKER should have scrolled off screen */
+    ScreenSnap *snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+    int marker_visible_before = snap_any_line_contains(snap, "TOP_MARKER_FIRST_LINE");
+    free_snapshot(snap);
+
+    /* Scroll up aggressively — send 100 wheel-up events.
+     * This should be more than enough to reach the top of the buffer.
+     * If scrolling "only goes a little bit" (the bug), we won't reach
+     * the TOP_MARKER line. */
+    session_scroll_wheel_up(&sess, 100, 40, 10);
+    usleep(1000000);
+
+    snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+
+    int marker_visible_after = snap_any_line_contains(snap, "TOP_MARKER_FIRST_LINE");
+
+    if (!marker_visible_after) {
+        fprintf(stderr, "DEBUG: After 100 scroll-up events, TOP_MARKER not visible.\n");
+        fprintf(stderr, "Screen contents:\n");
+        for (int i = 0; i < snap->num_lines; i++)
+            fprintf(stderr, "  [%d]: '%s'\n", i, snap->lines[i]);
+    }
+
+    /* The marker should be visible after scrolling to the top */
+    ASSERT_TRUE(marker_visible_after);
+
+    free_snapshot(snap);
+    session_ctrl(&sess, 'c');
+    usleep(100000);
+    session_stop(&sess);
+    session_cleanup(&sess);
+}
+
 /*--- Main ---*/
 
 int main(void)
