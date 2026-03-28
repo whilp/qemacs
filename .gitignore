@@ -1,6 +1,5 @@
 # generated-files
 config.mak
-config.h
 fbffonts.c
 # object-directories
 .objs*
