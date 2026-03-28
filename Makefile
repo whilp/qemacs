@@ -105,6 +105,7 @@ OBJS += unicode_join.o arabic.o indic.o libunicode.o libregexp.o
 
 OBJS += charsetjis.o charsetmore.o
 
+OBJS += modes/mkd_render.o modes/mkd_render_parse.o
 OBJS += modes/unihex.o   modes/bufed.o    modes/orgmode.o  modes/markdown.o \
         lang/clang.o     lang/xml.o       lang/htmlsrc.o   lang/forth.o     \
         lang/arm.o       lang/lisp.o      lang/makemode.o  lang/perl.o      \
