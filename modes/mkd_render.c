@@ -16,10 +16,8 @@
 #include "qe.h"
 #include "mkd_render.h"
 
-/* Include the standalone parsing functions directly so they compile
- * into this translation unit. mkd_render_parse.c has no qemacs
- * dependencies and can also be compiled standalone by the tests. */
-#include "mkd_render_parse.c"
+/* mkd_render_parse.c is compiled as a separate translation unit and
+ * linked in. Its public API is declared in mkd_render.h. */
 
 /*----------------------------------------------------------------------
  * Render styles — mapped to existing QE style constants.
