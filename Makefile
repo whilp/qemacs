@@ -59,6 +59,7 @@ CONFIG_ALL_KMAPS ?= yes
 CONFIG_MMAP ?= yes
 CONFIG_ALL_MODES ?= yes
 CONFIG_UNICODE_JOIN ?= yes
+CONFIG_HTML ?= yes
 
 -include config.mak
 
@@ -94,8 +95,6 @@ ECHO_CFLAGS += -DCONFIG_DEBUG
 CFLAGS += -g -O0
 LDFLAGS += -g -O0
 endif
-
-TARGETLIBS :=
 
 # Files to embed in the APE executable via zip (accessible at /zip/share/qe/)
 EMBED_FILES := kmaps ligatures config.eg qe-manual.md qe.1
@@ -143,14 +142,12 @@ OBJS += modes/shell.o    modes/dired.o    modes/archive.o  modes/latex-mode.o
 endif
 
 ifdef CONFIG_HTML
-  LIBQHTML := $(o)/libqhtml$(DEBUG_SUFFIX).a
-  QHTML_LIBS := -L$(o)/ -lqhtml$(DEBUG_SUFFIX)
   CFLAGS += -I./libqhtml
   HOST_CFLAGS += -I./libqhtml
-  DEP_LIBS += $(LIBQHTML)
-  LIBS += $(QHTML_LIBS)
   OBJS += modes/html.o modes/docbook.o
-  TARGETLIBS += libqhtml
+  LIBQHTML_OBJS := libqhtml/css.o libqhtml/xmlparse.o libqhtml/cssparse.o \
+                    libqhtml/html_style.o libqhtml/docbook_style.o
+  OBJS += $(LIBQHTML_OBJS)
 endif
 
 OBJS += modes/stb.o
@@ -209,10 +206,7 @@ endif
 #
 # Build targets
 #
-all: $(TARGETLIBS) qe$(DEBUG_SUFFIX)$(EXE) kmaps ligatures qe-manual.md
-
-libqhtml: force
-	$(MAKE) -C libqhtml all
+all: qe$(DEBUG_SUFFIX)$(EXE) kmaps ligatures qe-manual.md
 
 ifneq (,$(DEBUG_SUFFIX))
 qe$(DEBUG_SUFFIX)$(EXE): $(OBJS) $(DEP_LIBS)
@@ -265,6 +259,11 @@ $(OBJS_DIR)/charsetjis.o: charsetjis.c charsetjis.def
 $(OBJS_DIR)/modes/stb.o: modes/stb.c modes/stb_image.h
 $(OBJS_DIR)/libunicode.o: libunicode.c libunicode.h libunicode-table.h
 $(OBJS_DIR)/libregexp.o: libregexp.c libregexp.h libregexp-opcode.h
+$(OBJS_DIR)/libqhtml/html_style.o: libqhtml/html_style.c
+$(OBJS_DIR)/libqhtml/docbook_style.o: libqhtml/docbook_style.c
+$(OBJS_DIR)/libqhtml/css.o: libqhtml/css.c libqhtml/css.h libqhtml/cssid.h
+$(OBJS_DIR)/libqhtml/cssparse.o: libqhtml/cssparse.c libqhtml/css.h libqhtml/cssid.h
+$(OBJS_DIR)/libqhtml/xmlparse.o: libqhtml/xmlparse.c libqhtml/css.h libqhtml/htmlent.h
 
 $(OBJS_DIR)/%.o: %.c $(DEPENDS) Makefile | $(COSMOCC_DIR)/bin/cosmocc
 	$(echo) CC $(ECHO_CFLAGS) -c $<
@@ -282,6 +281,20 @@ $(BINDIR)/%$(EXE): tools/%.c
 # Tools that also need cutils.c
 $(BINDIR)/ligtoqe$(EXE): tools/ligtoqe.c cutils.c
 $(BINDIR)/kmaptoqe$(EXE): tools/kmaptoqe.c cutils.c
+
+# libqhtml: csstoqe tool and generated style sheets
+$(BINDIR)/csstoqe$(EXE): libqhtml/csstoqe.c
+	$(echo) CC -o $@ $<
+	$(cmd)  mkdir -p $(dir $@)
+	$(cmd)  $(HOST_CC) $(HOST_CFLAGS) -o $@ $<
+
+libqhtml/html_style.c: libqhtml/html.css $(BINDIR)/csstoqe$(EXE)
+	$(echo) GEN $@
+	$(cmd)  $(BINDIR)/csstoqe html_style < $< > $@
+
+libqhtml/docbook_style.c: libqhtml/docbook.css $(BINDIR)/csstoqe$(EXE)
+	$(echo) GEN $@
+	$(cmd)  $(BINDIR)/csstoqe docbook_style < $< > $@
 
 ifdef BUILD_ALL
 ligatures: $(BINDIR)/ligtoqe$(EXE) unifont.lig
