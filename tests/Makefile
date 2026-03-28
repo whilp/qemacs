@@ -11,10 +11,12 @@ TESTS := $(TEST_SRCS:.c=)
 
 all: test
 
+QE_BINARY ?= ../o/qe
+
 test: $(TESTS)
 	@for t in $(TESTS); do \
 		echo "--- Running $$t ---"; \
-		./$$t || exit 1; \
+		QE_BINARY=$(QE_BINARY) ./$$t || exit 1; \
 	done
 	@echo ""
 	@echo "All test suites passed."
@@ -41,7 +43,7 @@ test_session: test_session.c ../session.c ../session.h testlib.h
 	$(CC) $(TEST_CFLAGS) -o $@ test_session.c
 
 # Embed test: validates resource files are accessible via /zip/ paths
-EMBED_FILES = ../kmaps ../ligatures ../config.eg ../qe-manual.md ../qe.1
+EMBED_FILES = ../o/kmaps ../o/ligatures ../config.eg ../o/qe-manual.md ../qe.1
 
 test_embed: test_embed.c testlib.h $(EMBED_FILES)
 	$(CC) $(TEST_CFLAGS) -o $@ test_embed.c

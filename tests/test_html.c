@@ -26,9 +26,9 @@
 
 /*--- Configuration ---*/
 
-#ifndef QE_BINARY
-#define QE_BINARY  "../qe"
-#endif
+#define QE_BINARY_DEFAULT  "../o/qe"
+
+static const char *qe_binary;
 
 #define SCREEN_WIDTH   80
 #define SCREEN_HEIGHT  24
@@ -122,7 +122,7 @@ static int session_start(TestSession *sess, const char *initial_file)
         setenv("QE_TEST_DUMP_MODE", "last", 1);
         setenv("QE_TEST_RESIZE_FILE", sess->resize_path, 1);
         setenv("HOME", "/nonexistent", 1);
-        execlp(QE_BINARY, "qe", "-q", "-nw", initial_file, NULL);
+        execlp(qe_binary, "qe", "-q", "-nw", initial_file, NULL);
         perror("execlp");
         _exit(127);
     }
@@ -755,10 +755,13 @@ TEST(html, numeric_entity)
 
 int main(void)
 {
+    const char *env = getenv("QE_BINARY");
+    qe_binary = (env && *env) ? env : QE_BINARY_DEFAULT;
+
     signal(SIGPIPE, SIG_IGN);
 
-    if (access(QE_BINARY, X_OK) != 0) {
-        fprintf(stderr, "ERROR: qe binary not found at '%s'\n", QE_BINARY);
+    if (access(qe_binary, X_OK) != 0) {
+        fprintf(stderr, "ERROR: qe binary not found at '%s'\n", qe_binary);
         fprintf(stderr, "Build qe first: make -f Makefile qe\n");
         return 1;
     }

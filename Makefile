@@ -89,7 +89,7 @@ LDFLAGS += -g -O0
 endif
 
 # Files to embed in the APE executable via zip (accessible at /zip/share/qe/)
-EMBED_FILES := kmaps ligatures config.eg qe-manual.md qe.1
+EMBED_FILES := $(o)/kmaps $(o)/ligatures config.eg $(o)/qe-manual.md qe.1
 
 # Object files
 OBJS := qe.o cutils.o util.o color.o charset.o buffer.o search.o input.o display.o \
@@ -130,37 +130,40 @@ OBJS += modes/html.o modes/docbook.o \
 
 OBJS += modes/stb.o
 
+OBJS_DIR := $(o)/obj$(DEBUG_SUFFIX)
+BINDIR := $(o)/bin
+GENDIR := $(o)/gen
+
 SRCS := $(OBJS:.o=.c)
+SRCS := $(subst libqhtml/html_style.c,$(GENDIR)/libqhtml/html_style.c,$(SRCS))
+SRCS := $(subst libqhtml/docbook_style.c,$(GENDIR)/libqhtml/docbook_style.c,$(SRCS))
 
 DEPENDS := qe.h charset.h color.h cutils.h display.h \
 	qestyles.h unicode_join.h util.h variables.h session.h \
 	wcwidth.h lang/clang.h
 
-OBJS_DIR := $(o)/obj$(DEBUG_SUFFIX)
 CFLAGS += -I$(OBJS_DIR)
 OBJS := $(addprefix $(OBJS_DIR)/, $(OBJS))
 OBJS += $(OBJS_DIR)/qe_modules.o
-
-BINDIR := $(o)/bin
 
 .DEFAULT_GOAL := all
 
 #
 # Build targets
 #
-all: qe$(DEBUG_SUFFIX)$(EXE) kmaps ligatures qe-manual.md
+all: $(o)/qe$(DEBUG_SUFFIX)$(EXE) $(o)/kmaps $(o)/ligatures $(o)/qe-manual.md
 
 ifneq (,$(DEBUG_SUFFIX))
-qe$(DEBUG_SUFFIX)$(EXE): $(OBJS) $(DEP_LIBS)
+$(o)/qe$(DEBUG_SUFFIX)$(EXE): $(OBJS) $(DEP_LIBS)
 	$(echo) LD $@
 	$(cmd)  $(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 	$(call embed-resources,$@)
 else
-qe_g$(EXE): $(OBJS) $(DEP_LIBS)
+$(o)/qe_g$(EXE): $(OBJS) $(DEP_LIBS)
 	$(echo) LD $@
 	$(cmd)  $(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-qe$(EXE): qe_g$(EXE) Makefile
+$(o)/qe$(EXE): $(o)/qe_g$(EXE) Makefile
 	@rm -f $@
 	cp $< $@
 	-$(STRIP) $@
@@ -201,8 +204,16 @@ $(OBJS_DIR)/charsetjis.o: charsetjis.c charsetjis.def
 $(OBJS_DIR)/modes/stb.o: modes/stb.c modes/stb_image.h
 $(OBJS_DIR)/libunicode.o: libunicode.c libunicode.h libunicode-table.h
 $(OBJS_DIR)/libregexp.o: libregexp.c libregexp.h libregexp-opcode.h
-$(OBJS_DIR)/libqhtml/html_style.o: libqhtml/html_style.c
-$(OBJS_DIR)/libqhtml/docbook_style.o: libqhtml/docbook_style.c
+$(OBJS_DIR)/libqhtml/html_style.o: $(GENDIR)/libqhtml/html_style.c $(DEPENDS) Makefile | $(COSMOCC_DIR)/bin/cosmocc
+	$(echo) CC $(ECHO_CFLAGS) -c $<
+	$(cmd)  mkdir -p $(dir $@)
+	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -o $@ -c $<
+
+$(OBJS_DIR)/libqhtml/docbook_style.o: $(GENDIR)/libqhtml/docbook_style.c $(DEPENDS) Makefile | $(COSMOCC_DIR)/bin/cosmocc
+	$(echo) CC $(ECHO_CFLAGS) -c $<
+	$(cmd)  mkdir -p $(dir $@)
+	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -o $@ -c $<
+
 $(OBJS_DIR)/libqhtml/css.o: libqhtml/css.c libqhtml/css.h libqhtml/cssid.h
 $(OBJS_DIR)/libqhtml/cssparse.o: libqhtml/cssparse.c libqhtml/css.h libqhtml/cssid.h
 $(OBJS_DIR)/libqhtml/xmlparse.o: libqhtml/xmlparse.c libqhtml/css.h libqhtml/htmlent.h
@@ -230,20 +241,23 @@ $(BINDIR)/csstoqe$(EXE): libqhtml/csstoqe.c
 	$(cmd)  mkdir -p $(dir $@)
 	$(cmd)  $(HOST_CC) $(HOST_CFLAGS) -o $@ $<
 
-libqhtml/html_style.c: libqhtml/html.css $(BINDIR)/csstoqe$(EXE)
+$(GENDIR)/libqhtml/html_style.c: libqhtml/html.css $(BINDIR)/csstoqe$(EXE)
 	$(echo) GEN $@
+	$(cmd)  mkdir -p $(dir $@)
 	$(cmd)  $(BINDIR)/csstoqe html_style < $< > $@
 
-libqhtml/docbook_style.c: libqhtml/docbook.css $(BINDIR)/csstoqe$(EXE)
+$(GENDIR)/libqhtml/docbook_style.c: libqhtml/docbook.css $(BINDIR)/csstoqe$(EXE)
 	$(echo) GEN $@
+	$(cmd)  mkdir -p $(dir $@)
 	$(cmd)  $(BINDIR)/csstoqe docbook_style < $< > $@
 
 ifdef BUILD_ALL
-ligatures: $(BINDIR)/ligtoqe$(EXE) unifont.lig
+$(o)/ligatures: $(BINDIR)/ligtoqe$(EXE) unifont.lig
 	$(BINDIR)/ligtoqe unifont.lig $@
 else
-ligatures: unifont.lig
-	@test -f $@ || cp $< $@
+$(o)/ligatures: ligatures
+	@mkdir -p $(dir $@)
+	@cp $< $@
 endif
 
 #
@@ -259,17 +273,19 @@ KMAPS := Arabic.kmap langstrlist.kmap langstrcom.kmap langstrswap.kmap \
 KMAPS := $(addprefix $(KMAPS_DIR)/, $(KMAPS))
 
 ifdef BUILD_ALL
-kmaps: $(BINDIR)/kmaptoqe$(EXE) $(KMAPS)
+$(o)/kmaps: $(BINDIR)/kmaptoqe$(EXE) $(KMAPS)
 	$(BINDIR)/kmaptoqe $@ $(KMAPS)
 else
-kmaps:
-	@test -f $@
+$(o)/kmaps: kmaps
+	@mkdir -p $(dir $@)
+	@cp $< $@
 endif
 
 #
 # documentation
 #
-qe-manual.md: $(BINDIR)/scandoc qe-manual.c $(SRCS) $(DEPENDS)
+$(o)/qe-manual.md: $(BINDIR)/scandoc qe-manual.c $(SRCS) $(DEPENDS)
+	@mkdir -p $(dir $@)
 	$(BINDIR)/scandoc qe-manual.c $(SRCS) $(DEPENDS) > $@
 
 #
@@ -293,15 +309,15 @@ $(COSMOCC_DIR)/bin/cosmocc:
 # CI target: build, test, and verify
 ci:
 	$(MAKE) all test
-	file qe
-	test -f qe
+	file $(o)/qe
+	test -f $(o)/qe
 
 # Release target: build and create a GitHub release
 # Requires GH_TOKEN, GITHUB_SHA, and optionally RELEASE to be set
 release:
 	$(MAKE) all
 	mkdir -p release
-	cp qe release/qe
+	cp $(o)/qe release/qe
 	chmod +x release/qe
 	tag="$$(date -u +%Y-%m-%d)-$$(printf '%.7s' "$$GITHUB_SHA")" && \
 	(cd release && sha256sum qe > SHA256SUMS && cat SHA256SUMS) && \
@@ -314,17 +330,14 @@ release:
 # Maintenance targets
 #
 clean:
-	rm -rf $(o)/obj $(o)/obj_debug $(o)/bin $(o)/.embed
-	rm -f *~ *.o *.a *.exe *_g *_debug TAGS gmon.out core *.exe.stackdump \
-	      qe \
-	      qe-doc.aux qe-doc.info qe-doc.log qe-doc.pdf qe-doc.toc
+	rm -rf $(filter-out $(COSMOCC_DIR),$(wildcard $(o)/*))
 
 distclean: clean
 	rm -f config.mak
 
 install: all
 	@mkdir -p $(INSTALL_DIR)
-	cp qe $(INSTALL_DIR)/qe.new
+	cp $(o)/qe $(INSTALL_DIR)/qe.new
 	mv -f $(INSTALL_DIR)/qe.new $(INSTALL_DIR)/qe
 	@echo "installed qe to $(INSTALL_DIR)/qe"
 
