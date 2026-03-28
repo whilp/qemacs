@@ -9,7 +9,7 @@ on:
       - '.github/workflows/ci.yml'
   push:
     branches:
-      - '*'
+      - master
 
 jobs:
   ci:
