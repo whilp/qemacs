@@ -96,41 +96,8 @@ enum InputState {
     IS_NORM,
     IS_ESC,
     IS_CSI,
-    IS_CSI2,
     IS_SS3,
     IS_OSC,
-};
-
-enum TermCode {
-    TERM_UNKNOWN = 0,
-    TERM_ANSI,
-    TERM_VT100,
-    TERM_XTERM,
-    TERM_LINUX,
-    TERM_CYGWIN,
-    TERM_TW100,
-    TERM_SCREEN,
-    TERM_QEMACS,
-    TERM_ITERM,
-    TERM_ITERM2,
-    TERM_WEZTERM,
-    TERM_APPLE_TERMINAL,
-};
-
-static const char * const term_code_name[] = {
-    "UNKNOWN",
-    "ANSI",
-    "VT100",
-    "XTERM",
-    "LINUX",
-    "CYGWIN",
-    "TW100",
-    "SCREEN",
-    "QEMACS",
-    "ITERM",
-    "ITERM2",
-    "WEZTERM",
-    "APPLE_TERMINAL",
 };
 
 typedef struct TTYState {
@@ -151,16 +118,8 @@ typedef struct TTYState {
     int interm;
     int utf8_index;
     unsigned char buf[8];
-    const char *term_name;
-    const char *term_program;
-    enum TermCode term_code;
     unsigned int term_flags;
-#define KBS_CONTROL_H           0x01
-#define USE_ERASE_END_OF_LINE   0x02
-#define USE_BOLD_AS_BRIGHT_FG   0x04
-#define USE_BLINK_AS_BRIGHT_BG  0x08
-#define USE_256_COLORS          0x10
-#define USE_TRUE_COLORS         0x20
+#define USE_ERASE_END_OF_LINE   0x01
     /* number of colors supported by the actual terminal */
     const QEColor *term_colors;
     int term_fg_colors_count;
@@ -204,7 +163,7 @@ static void tty_term_set_raw(QEditScreen *s) {
 #else
     TTY_FPRINTF(s->STDOUT,
                 "\033[?1049h"       /* enter_ca_mode */
-                "\033[m\033(B"      /* exit_attribute_mode */
+                "\033[m"            /* exit_attribute_mode */
                 "\033[4l"           /* exit_insert_mode */
                 "\033[?7h"          /* enter_am_mode (autowrap on) */
                 "\033[39;49m"       /* orig_pair */
@@ -275,18 +234,12 @@ static int tty_dpy_probe(void)
     return 1;
 }
 
-static const char *getenv1(const char *name) {
-    const char *p = getenv(name);
-    return p ? p : "";
-}
-
 static int tty_dpy_init(QEditScreen *s, QEmacsState *qs,
                         qe__unused__ int w, qe__unused__ int h)
 {
     TTYState *ts;
     struct termios tty;
     struct sigaction sig;
-    const char *p;
 
     ts = qe_mallocz(TTYState);
     if (ts == NULL) {
@@ -300,158 +253,24 @@ static int tty_dpy_init(QEditScreen *s, QEmacsState *qs,
     s->priv_data = ts;
     s->media = CSS_MEDIA_TTY;
 
-    /* Derive some settings from the TERM environment variable */
-    ts->term_code = TERM_UNKNOWN;
+    /* Ghostty: always true color, always UTF-8 */
     ts->term_flags = USE_ERASE_END_OF_LINE;
     ts->term_colors = xterm_colors;
-    ts->term_fg_colors_count = 16;
-    ts->term_bg_colors_count = 16;
-
-    ts->term_program = getenv("TERM_PROGRAM");
-    ts->term_name = getenv("TERM");
-    if (ts->term_name) {
-        /* linux and xterm -> kbs=\177
-         * ansi cygwin vt100 -> kbs=^H
-         */
-        if (strstart(ts->term_name, "ansi", NULL)) {
-            ts->term_code = TERM_ANSI;
-            ts->term_flags |= KBS_CONTROL_H;
-        } else
-        if (strstart(ts->term_name, "vt100", NULL)) {
-            ts->term_code = TERM_VT100;
-            ts->term_flags |= KBS_CONTROL_H;
-        } else
-        if (strstart(ts->term_name, "xterm", NULL) || getenv("XTERM_VERSION")) {
-            ts->term_code = TERM_XTERM;
-        } else
-        if (strstart(ts->term_name, "linux", NULL)) {
-            ts->term_code = TERM_LINUX;
-        } else
-        if (strstart(ts->term_name, "cygwin", NULL)) {
-            ts->term_code = TERM_CYGWIN;
-            ts->term_flags |= KBS_CONTROL_H |
-                              USE_BOLD_AS_BRIGHT_FG | USE_BLINK_AS_BRIGHT_BG;
-        } else
-        if (strstart(ts->term_name, "tw100", NULL)) {
-            ts->term_code = TERM_TW100;
-            ts->term_flags |= KBS_CONTROL_H |
-                              USE_BOLD_AS_BRIGHT_FG | USE_BLINK_AS_BRIGHT_BG;
-        } else
-        if (strstart(ts->term_name, "screen", NULL)) {
-            ts->term_code = TERM_SCREEN;
-        }
-    }
-
-    /* Use alternate environment variables */
-    // OSTYPE=darwin23
-    // TERM_PROGRAM=Apple_Terminal / TERM_PROGRAM_VERSION=453
-    // TERM_PROGRAM=iTerm.app / TERM_PROGRAM_VERSION=3.5.5
-    //    LC_TERMINAL=iTerm2 / LC_TERMINAL_VERSION=3.5.5
-    // XTERM_LOCALE=C / XTERM_VERSION='XTerm(378)'
-    // TERM_PROGRAM=WezTerm / TERM_PROGRAM_VERSION=20240203-110809-5046fc22
-    // TERM_PROGRAM=qemacs / TERM_PROGRAM_VERSION=6.3.2
-
-    if (ts->term_program) {
-        /* This mostly works for local use, remote connections typically
-         * do not set the TERM_PROGRAM variable.
-         */
-        // TODO: should query terminal capabilities
-        if (strequal(ts->term_program, "iTerm.app")) {
-            ts->term_code = TERM_ITERM;
-            if (strequal(getenv1("LC_TERMINAL"), "iTerm2"))
-                ts->term_code = TERM_ITERM2;
-        } else
-        if (strequal(ts->term_program, "WezTerm")) {
-            ts->term_code = TERM_WEZTERM;
-        } else
-        if (strequal(ts->term_program, "qemacs")) {
-            ts->term_code = TERM_QEMACS;
-        } else
-        if (strequal(ts->term_program, "Apple_Terminal")) {
-            ts->term_code = TERM_APPLE_TERMINAL;
-        }
-    }
-    switch (ts->term_code) {
-    case TERM_XTERM:
-    case TERM_ITERM:
-    case TERM_ITERM2:
-    case TERM_WEZTERM:
-        if (tty_mk < 0)
-            tty_mk = 2;
-        if (tty_mouse < 0)
-            tty_mouse = 1;
-        if (tty_clipboard < 0)
-            tty_clipboard = 1;
-        break;
-    case TERM_APPLE_TERMINAL:
-        if (tty_mouse < 0)
-            tty_mouse = 1;
-        break;
-    case TERM_QEMACS:
-    case TERM_SCREEN:
-        if (tty_mk < 0)
-            tty_mk = 0;
-        if (tty_mouse < 0)
-            tty_mouse = 0;
-        if (tty_clipboard < 0)
-            tty_clipboard = 0;
-        break;
-    default:
-        break;
-    }
-
-    if (ts->term_name) {
-        if (strstr(ts->term_name, "true") || strstr(ts->term_name, "24")) {
-            ts->term_flags |= USE_TRUE_COLORS | USE_256_COLORS;
-        }
-        if (strstr(ts->term_name, "256")) {
-            ts->term_flags |= USE_256_COLORS;
-        }
-    }
-    if (ts->term_code == TERM_ITERM || ts->term_code == TERM_ITERM2) {
-        /* iTerm and iTerm2 support true colors */
-        ts->term_flags |= USE_TRUE_COLORS | USE_256_COLORS;
-    }
-    /* actual color mode can be forced via environment variables */
-    /* XXX: should have qemacs variables too */
-    if ((p = getenv("COLORTERM")) != NULL) {
-        /* Check COLORTERM environment variable as documented in
-         * https://gist.github.com/XVilka/8346728
-         */
 #if TTY_STYLE_BITS == 32
-        if (strstr(p, "truecolor")
-        ||  strstr(p, "24bit")
-        ||  strstr(p, "hicolor")) {
-            ts->term_flags &= ~(USE_BOLD_AS_BRIGHT_FG | USE_BLINK_AS_BRIGHT_BG |
-                                USE_256_COLORS | USE_TRUE_COLORS);
-            ts->term_flags |= USE_TRUE_COLORS;
-        } else
-#endif
-        if (strstr(p, "256")) {
-            ts->term_flags &= ~(USE_BOLD_AS_BRIGHT_FG | USE_BLINK_AS_BRIGHT_BG |
-                                USE_256_COLORS | USE_TRUE_COLORS);
-            ts->term_flags |= USE_256_COLORS;
-        } else
-        if (strstr(p, "16")) {
-            ts->term_flags &= ~(USE_BOLD_AS_BRIGHT_FG | USE_BLINK_AS_BRIGHT_BG |
-                                USE_256_COLORS | USE_TRUE_COLORS);
-        }
-    }
-#if TTY_STYLE_BITS == 32
-    if (ts->term_flags & USE_TRUE_COLORS) {
-        ts->term_fg_colors_count = 0x1000000;
-        ts->term_bg_colors_count = 0x1000000;
-    } else
-    if (ts->term_flags & USE_256_COLORS) {
-        ts->term_fg_colors_count = 256;
-        ts->term_bg_colors_count = 256;
-    }
+    ts->term_fg_colors_count = 0x1000000;
+    ts->term_bg_colors_count = 0x1000000;
 #else
-    ts->term_flags &= ~USE_TRUE_COLORS;
-    if (ts->term_flags & USE_256_COLORS) {
-        ts->term_fg_colors_count = 256;
-    }
+    ts->term_fg_colors_count = 256;
+    ts->term_bg_colors_count = 256;
 #endif
+
+    /* Enable all advanced features by default */
+    if (tty_mk < 0)
+        tty_mk = 2;
+    if (tty_mouse < 0)
+        tty_mouse = 1;
+    if (tty_clipboard < 0)
+        tty_clipboard = 1;
 
     ts->tty_bg_colors_count = min_int(ts->term_bg_colors_count, TTY_BG_COLORS);
     ts->tty_fg_colors_count = min_int(ts->term_fg_colors_count, TTY_FG_COLORS);
@@ -476,115 +295,14 @@ static int tty_dpy_init(QEditScreen *s, QEmacsState *qs,
      * We want read to return every single byte, without timeout. */
     tty.c_cc[VMIN] = 1;   /* 1 byte */
     tty.c_cc[VTIME] = 0;  /* no timer */
-    if (tty.c_cc[VERASE] == 8)
-        ts->term_flags |= KBS_CONTROL_H;
 
     ts->newtty = tty;
     tty_term_set_raw(s);
 
-    /* Get charset from command line option */
+    /* Ghostty always supports UTF-8; allow command-line override */
     s->charset = qe_find_charset(qs, qs->tty_charset);
-
-    if (ts->term_code == TERM_CYGWIN)
-        s->charset = &charset_8859_1;
-
-    if (ts->term_code == TERM_TW100)
-        s->charset = qe_find_charset(qs, "atarist");
-
-    /* Default to UTF-8 for non-tty invocations */
-    if (!s->charset && !isatty(fileno(s->STDOUT)))
+    if (!s->charset)
         s->charset = &charset_utf8;
-
-    if (!s->charset) {
-        /* Check locale environment for UTF-8 indication */
-        const char *locale = getenv("LC_ALL");
-        if (!locale) locale = getenv("LC_CTYPE");
-        if (!locale) locale = getenv("LANG");
-        if (locale && (strstr(locale, "UTF-8") || strstr(locale, "utf-8")
-                   ||  strstr(locale, "UTF8") || strstr(locale, "utf8"))) {
-            s->charset = &charset_utf8;
-        }
-    }
-
-    if (!s->charset) {
-        int y, x, n;
-
-        /* Default to UTF-8; probe may confirm or we keep this default.
-         * Nearly all modern terminals support UTF-8. */
-        s->charset = &charset_utf8;
-
-        /* Test UTF8 support by looking at the cursor position (idea
-         * from Ricardas Cepas <rch@pub.osf.lt>). Since uClibc actually
-         * tests to ensure that the format string is a valid multibyte
-         * sequence in the current locale (ANSI/ISO C99), use a format
-         * specifier of %s to avoid printf() failing with EILSEQ.
-         */
-
-        /*               ^X  ^Z    ^M   \170101  */
-        //printf("%s", "\030\032" "\r\xEF\x81\x81" "\033[6n\033D");
-        /* Just print UTF-8 encoding for eacute and check cursor position */
-        TTY_FPRINTF(s->STDOUT, "%s",
-                    "\030\032"
-                    "\r\xC3\xA9"
-                    "\033[6n"
-                    /* "\033D" */);
-        fflush(s->STDOUT);
-        /* XXX: should have a timeout to avoid locking on unsupported terminals */
-        n = fscanf(s->STDIN, "\033[%d;%dR", &y, &x);  /* get cursor position */
-        TTY_FPRINTF(s->STDOUT, "\r   \r");        /* go back, erase 3 chars */
-        if (n == 2 && x != 2) {
-            /* Terminal is not UTF-8: é took more than 1 column */
-            s->charset = &charset_8859_1;
-        }
-        if (n == 2 && x == 2) {
-#if 0
-            /* determine the unicode version supported */
-            static char const wide_by_version[][6] = {
-                /*  4.1.0: default, 5.0.0: same wide characters */
-                {  41, 0x00 },
-                /*  5.1.0:  40892 U+9FBC  */
-                {  51, 0xE9, 0xBE, 0xBC },
-                /*  5.2.0: 127535 U+1F22F */
-                {  52, 0xF0, 0x9F, 0x88, 0xAF },
-                /*  6.0.0: 127489 U+1F201 SQUARED KATAKANA KOKO */
-                {  60, 0xF0, 0x9F, 0x88, 0x81 },
-                /*  8.0.0: 127568 U+1F250 CIRCLED IDEOGRAPH ADVANTAGE */
-                {  80, 0xF0, 0x9F, 0x89, 0x90 },
-                /*  9.0.0: 128057 U+1F439 HAMSTER FACE */
-                {  90, 0xF0, 0x9F, 0x90, 0xB9 },
-                /* 10.0.0: 129430 U+1F996 T-REX */
-                { 100, 0xF0, 0x9F, 0xA6, 0x96 },
-                /* 11.0.0: 129514 U+1F9EA TEST TUBE */
-                { 110, 0xF0, 0x9F, 0xA7, 0xAA },
-                /* 12.0.0: 129680 U+1FA90 RINGED PLANET */
-                { 120, 0xF0, 0x9F, 0xAA, 0x90 },
-                /* 12.1.0:  13055 U+32FF  SQUARE ERA NAME REIWA */
-                { 121, 0xE3, 0x8B, 0xBF },
-                /* 13.0.0: 129749 U+1FAD5 FONDUE */
-                { 130, 0xF0, 0x9F, 0xAB, 0x95 },
-                /* 14.0.0: 128733 U+1F6DD PLAYGROUND SLIDE */
-                { 140, 0xF0, 0x9F, 0x9B, 0x9D },
-                /* 15.0.0: 128732 U+1F6DC WIRELESS */
-                { 150, 0xF0, 0x9F, 0x9B, 0x9C },
-            };
-            int i;
-            for (i = countof(wide_by_version); i --> 1;) {
-                TTY_FPRINTF(s->STDOUT, "\r%s\033[6n", wide_by_version[i] + 1);
-                fflush(s->STDOUT);
-                n = fscanf(s->STDIN, "\033[%d;%dR", &y, &x);  /* get cursor position */
-                TTY_FPRINTF(s->STDOUT, "\r    \r");          /* go back, erase 4 chars */
-                if (n != 2)
-                    break;
-                if (x == 3) {
-                    s->unicode_version = (unsigned char)wide_by_version[i][0];
-                    break;
-                }
-            }
-#endif
-            s->charset = &charset_utf8;
-        }
-    }
-    put_status(qs->active_window, "TTY charset: %s", s->charset->name);
 
     atexit(tty_term_exit);
 
@@ -608,11 +326,6 @@ static int tty_dpy_init(QEditScreen *s, QEmacsState *qs,
 
     tty_dpy_invalidate(s);
 
-#if 0
-    if (ts->term_flags & KBS_CONTROL_H) {
-        qe_toggle_control_h(qs, 1);
-    }
-#endif
     return 0;
 }
 
@@ -1042,11 +755,6 @@ static void tty_read_handler(void *opaque)
             }
             break;
         }
-        if (ch == '\010') {
-            /* backspace */
-            if (ts->term_flags & KBS_CONTROL_H)
-                ch = KEY_DEL;
-        }
         goto the_end_meta;
 
     case IS_ESC:
@@ -1057,7 +765,6 @@ static void tty_read_handler(void *opaque)
                 ch = KEY_META(KEY_ESC);
                 goto the_end;
             }
-            /* cygwin A-right transmit ESC ESC[C ... */
             ts->has_meta = KEY_STATE_META;
             break;
         }
@@ -1138,10 +845,6 @@ static void tty_read_handler(void *opaque)
         n1 = ts->params[0] >= 0 ? ts->params[0] : 0;
         n2 = ts->params[1] >= 0 ? ts->params[1] : 1;
         switch ((ts->leader << 16) | (ts->interm << 8) | ch) {
-        case '[':
-            /* cygwin/linux terminal: non standard sequence */
-            ts->input_state = IS_CSI2;
-            break;
         case '~':
             /* bracketed paste: CSI 200~ starts, CSI 201~ ends */
             if (n1 == 200) {
@@ -1165,13 +868,6 @@ static void tty_read_handler(void *opaque)
             if (n1 == 27 && ts->nb_params >= 3 && ts->params[2] >= 0) {
                 /* xterm modifyOtherKeys extension */
                 ch = ts->params[2];
-                if (ch == 8 && (ts->term_flags |= KBS_CONTROL_H))
-                    ch = KEY_DEL;
-                // XXX: iTerm2 3.14.19 encoding bug for M-C-a to M-C-z
-                if (n2 == 4 && ch >= 'A' && ch <= 'Z') {
-                    n2 |= 2;
-                    ch += 'a' - 'A';
-                }
                 ch = get_modified_key(ch, n2);
                 goto the_end_meta;
             }
@@ -1315,18 +1011,6 @@ static void tty_read_handler(void *opaque)
             goto the_end;
         }
         break;
-    case IS_CSI2:
-        /* cygwin/linux terminal */
-        switch (ch) {
-        case 'A': ch = KEY_F1; goto the_end_meta;
-        case 'B': ch = KEY_F2; goto the_end_meta;
-        case 'C': ch = KEY_F3; goto the_end_meta;
-        case 'D': ch = KEY_F4; goto the_end_meta;
-        case 'E': ch = KEY_F5; goto the_end_meta;
-        }
-        ch = KEY_UNKNOWN;
-        goto the_end;
-
     case IS_SS3:       // "\EO"
         /* xterm/vt100 fn */
         if (ch >= '0' && ch <= '9') {
@@ -1700,32 +1384,66 @@ static void tty_dpy_set_clip(qe__unused__ QEditScreen *s,
 {
 }
 
+/* DEC Special Graphics to Unicode mapping for line drawing characters.
+ * Internal codes 128..159 map to DEC bytes 0x60..0x7F.
+ * Ghostty renders Unicode box drawing natively, so we emit UTF-8 directly
+ * instead of switching to the G0 alternate character set.
+ */
+static const char32_t dec_to_unicode[32] = {
+    0x25C6, /* 0x60 ` = diamond */
+    0x2592, /* 0x61 a = checkerboard */
+    0x2409, /* 0x62 b = HT symbol */
+    0x240C, /* 0x63 c = FF symbol */
+    0x240D, /* 0x64 d = CR symbol */
+    0x240A, /* 0x65 e = LF symbol */
+    0x00B0, /* 0x66 f = degree */
+    0x00B1, /* 0x67 g = plus/minus */
+    0x2424, /* 0x68 h = NL symbol */
+    0x240B, /* 0x69 i = VT symbol */
+    0x2518, /* 0x6A j = lower right corner */
+    0x2510, /* 0x6B k = upper right corner */
+    0x250C, /* 0x6C l = upper left corner */
+    0x2514, /* 0x6D m = lower left corner */
+    0x253C, /* 0x6E n = crossing */
+    0x23BA, /* 0x6F o = scan line 1 */
+    0x23BB, /* 0x70 p = scan line 3 */
+    0x2500, /* 0x71 q = horizontal line */
+    0x23BC, /* 0x72 r = scan line 7 */
+    0x23BD, /* 0x73 s = scan line 9 */
+    0x251C, /* 0x74 t = left tee */
+    0x2524, /* 0x75 u = right tee */
+    0x2534, /* 0x76 v = bottom tee */
+    0x252C, /* 0x77 w = top tee */
+    0x2502, /* 0x78 x = vertical line */
+    0x2264, /* 0x79 y = less than or equal */
+    0x2265, /* 0x7A z = greater than or equal */
+    0x03C0, /* 0x7B { = pi */
+    0x2260, /* 0x7C | = not equal */
+    0x00A3, /* 0x7D } = pound sign */
+    0x00B7, /* 0x7E ~ = middle dot */
+    0x0020, /* 0x7F DEL = space (placeholder) */
+};
+
 static void tty_dpy_flush(QEditScreen *s)
 {
     TTYState *ts = s->priv_data;
     TTYChar *ptr, *ptr1, *ptr2, *ptr3, *ptr4, cc, blankcc;
-    int y, shadow, ch, bgcolor, fgcolor, shifted, gotopos, attr;
+    int y, shadow, ch, bgcolor, fgcolor, gotopos, attr;
     unsigned int default_bgcolor;
 
     /* Precompute the mapped color index for the default background */
     default_bgcolor = qe_map_color(qe_styles[QE_STYLE_DEFAULT].bg_color,
                                    ts->tty_colors, ts->tty_bg_colors_count, NULL);
 
-    /* CG: Should optimize output by computing it in a temporary buffer
-     * and flushing it in one call to fwrite()
-     */
+    /* Begin synchronized update (Ghostty CSI ?2026h) to prevent tearing */
+    TTY_FPUTS("\033[?2026h", s->STDOUT);
 
     /* Hide cursor, goto home, reset attributes */
     TTY_FPUTS("\033[?25l\033[H\033[0m", s->STDOUT);
 
-    if (ts->term_code != TERM_CYGWIN) {
-        TTY_FPUTS("\033(B\033)0", s->STDOUT);
-    }
-
     bgcolor = -1;
     fgcolor = -1;
     attr = 0;
-    shifted = 0;
     gotopos = 0;
 
     shadow = ts->screen_size;
@@ -1768,13 +1486,9 @@ static void tty_dpy_flush(QEditScreen *s)
              * color spaces from the end of the row.  If this run
              * starts before the last difference, the row is a
              * candidate for a partial update with erase-end-of-line.
-             * exception: do not use erase end of line for a bright
-             * background color if emulated as bright.
              */
             if ((ts->term_flags & USE_ERASE_END_OF_LINE)
-            &&  TTY_CHAR_GET_CH(ptr4[-1]) == ' '
-            &&  (/*!(ts->term_flags & USE_BLINK_AS_BRIGHT_BG) ||*/
-                 TTY_CHAR_GET_BG(ptr4[-1]) < 8))
+            &&  TTY_CHAR_GET_CH(ptr4[-1]) == ' ')
             {
                 /* find the last non blank char on row */
                 blankcc = TTY_CHAR2(' ', TTY_CHAR_GET_COL(ptr3[-1]));
@@ -1819,70 +1533,35 @@ static void tty_dpy_flush(QEditScreen *s)
                 }
                 /* output attributes */
                 if (bgcolor != (int)TTY_CHAR_GET_BG(cc)) {
-                    int lastbg = bgcolor;
                     bgcolor = TTY_CHAR_GET_BG(cc);
                     if (bgcolor == (int)default_bgcolor) {
                         /* Use terminal default background instead of explicit black */
                         TTY_FPUTS("\033[49m", s->STDOUT);
                     } else
 #if TTY_STYLE_BITS == 32
-                    if (ts->term_bg_colors_count > 256 && bgcolor >= 256) {
-                        /* XXX: should special case dynamic palette */
+                    if (bgcolor >= 256) {
                         QEColor rgb = qe_unmap_color(bgcolor, ts->tty_bg_colors_count);
                         TTY_FPRINTF(s->STDOUT, "\033[48;2;%u;%u;%um",
                                     (rgb >> 16) & 255, (rgb >> 8) & 255, (rgb >> 0) & 255);
                     } else
 #endif
-                    if (ts->term_bg_colors_count > 16 && bgcolor >= 16) {
+                    {
                         TTY_FPRINTF(s->STDOUT, "\033[48;5;%dm", bgcolor);
-                    } else
-                    if (ts->term_flags & USE_BLINK_AS_BRIGHT_BG) {
-                        if (bgcolor > 7) {
-                            if (lastbg <= 7) {
-                                TTY_FPUTS("\033[5m", s->STDOUT);
-                            }
-                        } else {
-                            if (lastbg > 7) {
-                                TTY_FPUTS("\033[25m", s->STDOUT);
-                            }
-                        }
-                        TTY_FPRINTF(s->STDOUT, "\033[%dm", 40 + (bgcolor & 7));
-                    } else {
-                        TTY_FPRINTF(s->STDOUT, "\033[%dm",
-                                    bgcolor > 7 ? 100 + bgcolor - 8 :
-                                    40 + bgcolor);
                     }
                 }
                 /* do not special case SPC on fg color change
                  * because of combining marks */
                 if (fgcolor != (int)TTY_CHAR_GET_FG(cc)) {
-                    int lastfg = fgcolor;
                     fgcolor = TTY_CHAR_GET_FG(cc);
 #if TTY_STYLE_BITS == 32
-                    if (ts->term_fg_colors_count > 256 && fgcolor >= 256) {
+                    if (fgcolor >= 256) {
                         QEColor rgb = qe_unmap_color(fgcolor, ts->tty_fg_colors_count);
                         TTY_FPRINTF(s->STDOUT, "\033[38;2;%u;%u;%um",
                                     (rgb >> 16) & 255, (rgb >> 8) & 255, (rgb >> 0) & 255);
                     } else
 #endif
-                    if (ts->term_fg_colors_count > 16 && fgcolor >= 16) {
+                    {
                         TTY_FPRINTF(s->STDOUT, "\033[38;5;%dm", fgcolor);
-                    } else
-                    if (ts->term_flags & USE_BOLD_AS_BRIGHT_FG) {
-                        if (fgcolor > 7) {
-                            if (lastfg <= 7) {
-                                TTY_FPUTS("\033[1m", s->STDOUT);
-                            }
-                        } else {
-                            if (lastfg > 7) {
-                                TTY_FPUTS("\033[22m", s->STDOUT);
-                            }
-                        }
-                        TTY_FPRINTF(s->STDOUT, "\033[%dm", 30 + (fgcolor & 7));
-                    } else {
-                        TTY_FPRINTF(s->STDOUT, "\033[%dm",
-                                    fgcolor > 8 ? 90 + fgcolor - 8 :
-                                    30 + fgcolor);
                     }
                 }
                 if (attr != (int)TTY_CHAR_GET_COL(cc)) {
@@ -1918,14 +1597,6 @@ static void tty_dpy_flush(QEditScreen *s)
                         }
                     }
                 }
-                if (shifted) {
-                    /* Kludge for linedrawing chars */
-                    if (ch < 128 || ch >= 128 + 32) {
-                        TTY_FPUTS("\033(B", s->STDOUT);
-                        shifted = 0;
-                    }
-                }
-
                 /* do not display escape codes or invalid codes */
                 if (ch < 32 || ch == 127) {
                     TTY_PUTC('.', s->STDOUT);
@@ -1934,18 +1605,14 @@ static void tty_dpy_flush(QEditScreen *s)
                     TTY_PUTC(ch, s->STDOUT);
                 } else
                 if (ch < 128 + 32) {
-                    /* Kludges for linedrawing chars */
-                    if (ts->term_code == TERM_CYGWIN) {
-                        static const char unitab_xterm_poorman[32] =
-                        "*#****o~**+++++-----++++|****L. ";
-                        TTY_PUTC(unitab_xterm_poorman[ch - 128],
-                                 s->STDOUT);
+                    /* Line drawing: emit Unicode box drawing directly */
+                    u8 ldbuf[4], *ldq;
+                    char32_t uc = dec_to_unicode[ch - 128];
+                    ldq = s->charset->encode_func(s->charset, ldbuf, uc);
+                    if (ldq) {
+                        TTY_FWRITE(ldbuf, 1, ldq - ldbuf, s->STDOUT);
                     } else {
-                        if (!shifted) {
-                            TTY_FPUTS("\033(0", s->STDOUT);
-                            shifted = 1;
-                        }
-                        TTY_PUTC(ch - 32, s->STDOUT);
+                        TTY_PUTC('?', s->STDOUT);
                     }
                 } else
 #if COMB_CACHE_SIZE > 1
@@ -1988,12 +1655,7 @@ static void tty_dpy_flush(QEditScreen *s)
                     /* s->charset is either Latin1 or UTF-8 */
                     q = s->charset->encode_func(s->charset, buf, ch);
                     if (!q) {
-                        if (s->charset == &charset_8859_1) {
-                            /* upside down question mark */
-                            buf[0] = 0xBF;
-                        } else {
-                            buf[0] = '?';
-                        }
+                        buf[0] = '?';
                         q = buf + 1;
                         if (tty_term_glyph_width(s, ch) == 2) {
                             *q++ = '?';
@@ -2013,10 +1675,6 @@ static void tty_dpy_flush(QEditScreen *s)
                     }
                 }
             }
-            if (shifted) {
-                TTY_FPUTS("\033(B", s->STDOUT);
-                shifted = 0;
-            }
             if (ptr1 < ptr2) {
                 /* More differences to synch in shadow, erase eol */
                 cc = *ptr1;
@@ -2034,19 +1692,9 @@ static void tty_dpy_flush(QEditScreen *s)
                     ptr1++;
                 }
             }
-            // XXX: should check if needed
-            //if (ts->term_flags & USE_BLINK_AS_BRIGHT_BG)
-            {
-                if (bgcolor > 7) {
-                    TTY_FPUTS("\033[0m", s->STDOUT);
-                    fgcolor = bgcolor = -1;
-                    attr = 0;
-                }
-            }
         }
     }
 
-    // XXX: should check if needed
     TTY_FPUTS("\033[0m", s->STDOUT);
     if (ts->cursor_y + 1 >= 0 && ts->cursor_x + 1 >= 0) {
         /* DECSCUSR: set cursor shape based on insert/overwrite mode
@@ -2056,6 +1704,9 @@ static void tty_dpy_flush(QEditScreen *s)
         TTY_FPRINTF(s->STDOUT, "\033[%d q\033[?25h\033[%d;%dH",
                     cursor_shape, ts->cursor_y + 1, ts->cursor_x + 1);
     }
+
+    /* End synchronized update (Ghostty CSI ?2026l) */
+    TTY_FPUTS("\033[?2026l", s->STDOUT);
     fflush(s->STDOUT);
 
     /* Update combination cache from screen.
@@ -2241,20 +1892,11 @@ static void tty_dpy_describe(QEditScreen *s, EditBuffer *b)
 
     eb_printf(b, "Device Description\n\n");
 
-    if (ts->term_name)
-        eb_printf(b, "%*s: %s\n", w, "term_name", ts->term_name);
-    eb_printf(b, "%*s: %u  %s\n", w, "term_code", ts->term_code,
-              term_code_name[ts->term_code]);
+    eb_printf(b, "%*s: ghostty (assumed)\n", w, "terminal");
     eb_printf(b, "%*s: %d\n", w, "tty_mk", tty_mk);
     eb_printf(b, "%*s: %d\n", w, "tty_mouse", tty_mouse);
     eb_printf(b, "%*s: %d\n", w, "tty_clipboard", tty_clipboard);
-    eb_printf(b, "%*s: %#x %s%s%s%s%s%s\n", w, "term_flags", ts->term_flags,
-              ts->term_flags & KBS_CONTROL_H ? " KBS_CONTROL_H" : "",
-              ts->term_flags & USE_ERASE_END_OF_LINE ? " USE_ERASE_END_OF_LINE" : "",
-              ts->term_flags & USE_BOLD_AS_BRIGHT_FG ? " USE_BOLD_AS_BRIGHT_FG" : "",
-              ts->term_flags & USE_BLINK_AS_BRIGHT_BG ? " USE_BLINK_AS_BRIGHT_BG" : "",
-              ts->term_flags & USE_256_COLORS ? " USE_256_COLORS" : "",
-              ts->term_flags & USE_TRUE_COLORS ? " USE_TRUE_COLORS" : "");
+    eb_printf(b, "%*s: true color, synchronized output\n", w, "features");
     eb_printf(b, "%*s: fg:%d, bg:%d\n", w, "terminal colors",
               ts->term_fg_colors_count, ts->term_bg_colors_count);
     eb_printf(b, "%*s: fg:%d, bg:%d\n", w, "virtual tty colors",
