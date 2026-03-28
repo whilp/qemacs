@@ -63,4 +63,5 @@ cflags.mk
 tests/test_cosmo
 tests/test_unix
 tests/test_embed
+tests/test_mkd_render
 o/
