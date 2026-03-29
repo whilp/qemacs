@@ -35,10 +35,8 @@ COSMOCC_DIR ?= o/cosmocc
 
 export PATH := $(CURDIR)/$(COSMOCC_DIR)/bin:$(PATH)
 
-# Use ccache if available for faster incremental builds
-CCACHE := $(shell command -v ccache 2>/dev/null)
-CC = $(CCACHE) cosmocc
-HOST_CC ?= $(CCACHE) cc
+CC = cosmocc
+HOST_CC ?= cc
 AR = cosmoar
 STRIP ?= true
 INSTALL_DIR ?= /persist/whilp/.local/bin
