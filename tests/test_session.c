@@ -1342,6 +1342,283 @@ TEST(session_lifecycle, concurrent_clients_one_detaches) {
     stop_test_server(srv, sock);
 }
 
+/* ---- Regression tests for busy-loop bugs ---- */
+
+/*
+ * Helper: read utime + stime (in clock ticks) for a given pid from
+ * /proc/pid/stat.  Returns 0 on success, -1 on failure.
+ */
+static int get_cpu_ticks(pid_t pid, unsigned long *ticks) {
+    char path[64];
+    snprintf(path, sizeof(path), "/proc/%d/stat", (int)pid);
+    FILE *f = fopen(path, "r");
+    if (!f) return -1;
+    char buf[1024];
+    if (!fgets(buf, sizeof(buf), f)) { fclose(f); return -1; }
+    fclose(f);
+    /* Fields: pid (comm) state ppid ... field14=utime field15=stime */
+    /* Skip past the (comm) field which may contain spaces */
+    char *p = strrchr(buf, ')');
+    if (!p) return -1;
+    p++;  /* past ')' */
+    unsigned long utime = 0, stime = 0;
+    /* After ')' we need fields: state(3) ppid(4) pgrp(5) session(6)
+     * tty_nr(7) tpgid(8) flags(9) minflt(10) cminflt(11) majflt(12)
+     * cmajflt(13) utime(14) stime(15) — that's 13 fields after ')' */
+    char state;
+    long dummy;
+    if (sscanf(p, " %c %ld %ld %ld %ld %ld %lu %lu %lu %lu %lu %lu %lu",
+               &state, &dummy, &dummy, &dummy, &dummy, &dummy,
+               (unsigned long *)&dummy, (unsigned long *)&dummy,
+               (unsigned long *)&dummy, (unsigned long *)&dummy,
+               (unsigned long *)&dummy, &utime, &stime) < 13)
+        return -1;
+    *ticks = utime + stime;
+    return 0;
+}
+
+/*
+ * Regression: server must not busy-loop after abrupt client disconnect.
+ *
+ * Before the fix, recv_packet failure on a dead client socket was ignored,
+ * leaving the socket in the select set.  select() returned immediately
+ * (EOF readable), causing 100% CPU spin.
+ */
+TEST(busyloop, abrupt_disconnect_no_cpu_spin) {
+    const char *sock = "/tmp/qe-test-busyloop-disc";
+    unlink(sock);
+
+    pid_t srv = start_test_server(sock);
+    ASSERT_TRUE(srv > 0);
+
+    /* Client connects and attaches */
+    int cfd = session_connect(sock);
+    ASSERT_TRUE(cfd >= 0);
+    drain_packets(cfd, 200);
+    ASSERT_EQ(send_attach(cfd, 0), 0);
+    ASSERT_EQ(send_content(cfd, "hi\n", 3), 0);
+    ASSERT_TRUE(wait_for_content(cfd, 2000));
+
+    /* Abrupt disconnect: close without MSG_DETACH */
+    close(cfd);
+
+    /* Let server notice the disconnect and (hopefully) clean up */
+    usleep(300000);
+
+    /* Measure CPU usage over a 1-second window */
+    unsigned long ticks_before = 0, ticks_after = 0;
+    ASSERT_EQ(get_cpu_ticks(srv, &ticks_before), 0);
+    usleep(1000000);  /* 1 second */
+    ASSERT_EQ(get_cpu_ticks(srv, &ticks_after), 0);
+
+    unsigned long ticks_used = ticks_after - ticks_before;
+    long tps = sysconf(_SC_CLK_TCK);
+    if (tps <= 0) tps = 100;
+
+    /*
+     * A well-behaved idle server should use near-zero CPU.
+     * Allow up to 10% of one core (0.1s of CPU per 1s wall).
+     * A busy-loop would use ~100% (== tps ticks per second).
+     */
+    unsigned long max_ticks = (unsigned long)tps / 10;
+    if (ticks_used > max_ticks) {
+        fprintf(stderr, "  FAIL: server used %lu ticks in 1s (max %lu, tps=%ld)\n",
+                ticks_used, max_ticks, tps);
+    }
+    ASSERT_TRUE(ticks_used <= max_ticks);
+
+    /* Verify server is still functional */
+    int cfd2 = session_connect(sock);
+    ASSERT_TRUE(cfd2 >= 0);
+    drain_packets(cfd2, 200);
+    ASSERT_EQ(send_attach(cfd2, 0), 0);
+    ASSERT_EQ(send_content(cfd2, "ok\n", 3), 0);
+    ASSERT_TRUE(wait_for_content(cfd2, 2000));
+    close(cfd2);
+
+    stop_test_server(srv, sock);
+}
+
+/*
+ * Regression: server must not busy-loop when multiple clients disconnect
+ * abruptly in sequence.
+ */
+TEST(busyloop, multiple_abrupt_disconnects) {
+    const char *sock = "/tmp/qe-test-busyloop-multi";
+    unlink(sock);
+
+    pid_t srv = start_test_server(sock);
+    ASSERT_TRUE(srv > 0);
+
+    /* Connect and abruptly disconnect 3 clients */
+    int i;
+    for (i = 0; i < 3; i++) {
+        int cfd = session_connect(sock);
+        ASSERT_TRUE(cfd >= 0);
+        drain_packets(cfd, 200);
+        ASSERT_EQ(send_attach(cfd, 0), 0);
+        ASSERT_EQ(send_content(cfd, "x\n", 2), 0);
+        ASSERT_TRUE(wait_for_content(cfd, 2000));
+        close(cfd);  /* abrupt disconnect */
+        usleep(200000);
+    }
+
+    /* Measure CPU after all disconnects */
+    unsigned long ticks_before = 0, ticks_after = 0;
+    ASSERT_EQ(get_cpu_ticks(srv, &ticks_before), 0);
+    usleep(1000000);
+    ASSERT_EQ(get_cpu_ticks(srv, &ticks_after), 0);
+
+    unsigned long ticks_used = ticks_after - ticks_before;
+    long tps = sysconf(_SC_CLK_TCK);
+    if (tps <= 0) tps = 100;
+    unsigned long max_ticks = (unsigned long)tps / 10;
+
+    if (ticks_used > max_ticks) {
+        fprintf(stderr, "  FAIL: server used %lu ticks in 1s after 3 disconnects "
+                "(max %lu)\n", ticks_used, max_ticks);
+    }
+    ASSERT_TRUE(ticks_used <= max_ticks);
+
+    stop_test_server(srv, sock);
+}
+
+/*
+ * Regression: two concurrent clients, one disconnects abruptly.
+ * Server must not spin and the remaining client must still work.
+ */
+TEST(busyloop, concurrent_one_abrupt_disconnect) {
+    const char *sock = "/tmp/qe-test-busyloop-conc";
+    unlink(sock);
+
+    pid_t srv = start_test_server(sock);
+    ASSERT_TRUE(srv > 0);
+
+    /* Client 1 connects */
+    int cfd1 = session_connect(sock);
+    ASSERT_TRUE(cfd1 >= 0);
+    drain_packets(cfd1, 200);
+    ASSERT_EQ(send_attach(cfd1, 0), 0);
+
+    /* Client 2 connects */
+    int cfd2 = session_connect(sock);
+    ASSERT_TRUE(cfd2 >= 0);
+    drain_packets(cfd2, 200);
+    ASSERT_EQ(send_attach(cfd2, CLIENT_READONLY), 0);
+
+    /* Both exchange data */
+    ASSERT_EQ(send_content(cfd1, "both\n", 5), 0);
+    ASSERT_TRUE(wait_for_content(cfd1, 2000));
+    ASSERT_TRUE(wait_for_content(cfd2, 2000));
+
+    /* Client 1 disconnects abruptly */
+    close(cfd1);
+    usleep(300000);
+
+    /* Measure server CPU */
+    unsigned long ticks_before = 0, ticks_after = 0;
+    ASSERT_EQ(get_cpu_ticks(srv, &ticks_before), 0);
+    usleep(1000000);
+    ASSERT_EQ(get_cpu_ticks(srv, &ticks_after), 0);
+
+    unsigned long ticks_used = ticks_after - ticks_before;
+    long tps = sysconf(_SC_CLK_TCK);
+    if (tps <= 0) tps = 100;
+    unsigned long max_ticks = (unsigned long)tps / 10;
+
+    ASSERT_TRUE(ticks_used <= max_ticks);
+
+    /* Client 2 still works */
+    close(cfd2);
+    int cfd3 = session_connect(sock);
+    ASSERT_TRUE(cfd3 >= 0);
+    drain_packets(cfd3, 200);
+    ASSERT_EQ(send_attach(cfd3, 0), 0);
+    ASSERT_EQ(send_content(cfd3, "ok\n", 3), 0);
+    ASSERT_TRUE(wait_for_content(cfd3, 2000));
+    close(cfd3);
+
+    stop_test_server(srv, sock);
+}
+
+/* ---- Unit tests for read_all / write_all edge cases ---- */
+
+TEST(io, read_all_eof_returns_partial) {
+    int fds[2];
+    ASSERT_EQ(socketpair(AF_UNIX, SOCK_STREAM, 0, fds), 0);
+
+    /* Write 3 bytes, then close sender */
+    ASSERT_EQ(write_all(fds[0], "abc", 3), 3);
+    close(fds[0]);
+
+    /* read_all asking for 8 bytes should return 3 (partial read before EOF) */
+    char buf[8];
+    memset(buf, 0, sizeof(buf));
+    ASSERT_EQ(read_all(fds[1], buf, 8), 3);
+    ASSERT_MEMEQ(buf, "abc", 3);
+
+    close(fds[1]);
+}
+
+TEST(io, read_all_immediate_eof) {
+    int fds[2];
+    ASSERT_EQ(socketpair(AF_UNIX, SOCK_STREAM, 0, fds), 0);
+    close(fds[0]);  /* close writer immediately */
+
+    char buf[8];
+    memset(buf, 0, sizeof(buf));
+    /* Should return 0 (no data read before EOF) */
+    ASSERT_EQ(read_all(fds[1], buf, 8), 0);
+
+    close(fds[1]);
+}
+
+TEST(io, write_all_to_closed_pipe) {
+    int fds[2];
+    ASSERT_EQ(socketpair(AF_UNIX, SOCK_STREAM, 0, fds), 0);
+    close(fds[1]);  /* close reader */
+
+    /* Writing to a closed socket should fail (SIGPIPE ignored, returns -1) */
+    struct sigaction sa, old_sa;
+    sa.sa_handler = SIG_IGN;
+    sa.sa_flags = 0;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGPIPE, &sa, &old_sa);
+
+    ssize_t ret = write_all(fds[0], "data", 4);
+    ASSERT_TRUE(ret == -1);
+
+    sigaction(SIGPIPE, &old_sa, NULL);
+    close(fds[0]);
+}
+
+TEST(io, recv_packet_on_half_closed_socket) {
+    /* This directly tests the root cause of the busy-loop bug:
+     * recv_packet on a socket whose peer has closed must return -1 */
+    int fds[2];
+    ASSERT_EQ(socketpair(AF_UNIX, SOCK_STREAM, 0, fds), 0);
+
+    close(fds[0]);  /* simulate abrupt client disconnect */
+
+    Packet pkt;
+    memset(&pkt, 0, sizeof(pkt));
+    ASSERT_EQ(recv_packet(fds[1], &pkt), -1);
+
+    /* Verify the socket is reported as readable by select (EOF condition) */
+    fd_set rfds;
+    struct timeval tv = { .tv_sec = 0, .tv_usec = 0 };
+    FD_ZERO(&rfds);
+    FD_SET(fds[1], &rfds);
+    int ret = select(fds[1] + 1, &rfds, NULL, NULL, &tv);
+    ASSERT_TRUE(ret > 0);  /* EOF makes socket readable */
+    ASSERT_TRUE(FD_ISSET(fds[1], &rfds));
+
+    /* Second recv_packet must also return -1 (not hang or succeed) */
+    ASSERT_EQ(recv_packet(fds[1], &pkt), -1);
+
+    close(fds[1]);
+}
+
 #else /* !CONFIG_SESSION_DETACH */
 
 /* When session detach is disabled, just have a passing placeholder test */
