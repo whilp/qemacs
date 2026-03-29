@@ -37,28 +37,32 @@
 #include "qe.h"
 
 #if MAX_UNICODE_DISPLAY > 0xFFFF
-typedef uint64_t TTYChar;
-/* TTY composite style has 13-bit BG color, 4 attribute bits and 13-bit FG color */
+typedef __uint128_t TTYChar;
+/* TTY composite style has 25-bit FG color, 4 attribute bits and 25-bit BG color
+ * packed into a 128-bit cell for full 24-bit true color support.
+ * COL field (bits 32+): fg[24:0] | attrs[28:25] | bg[53:29]
+ */
 #define TTY_STYLE_BITS        32
-#define TTY_FG_COLORS         7936
-#define TTY_BG_COLORS         7936
-#define TTY_RGB_FG(r,g,b)     (0x1000 | (((r) & 0xF0) << 4) | ((g) & 0xF0) | ((b) >> 4))
-#define TTY_RGB_BG(r,g,b)     (0x1000 | (((r) & 0xF0) << 4) | ((g) & 0xF0) | ((b) >> 4))
-#define TTY_CHAR(ch,fg,bg)    ((uint32_t)(ch) | ((uint64_t)((fg) | ((bg) << 17)) << 32))
-#define TTY_CHAR2(ch,col)     ((uint32_t)(ch) | ((uint64_t)(col) << 32))
+#define TTY_FG_COLORS         0x1000000
+#define TTY_BG_COLORS         0x1000000
+#define TTY_RGB_FG(r,g,b)     (0x1000000 | ((r) << 16) | ((g) << 8) | (b))
+#define TTY_RGB_BG(r,g,b)     (0x1000000 | ((r) << 16) | ((g) << 8) | (b))
+#define TTY_CHAR(ch,fg,bg)    ((__uint128_t)(uint32_t)(ch) | \
+    ((__uint128_t)((uint64_t)(unsigned)(fg) | ((uint64_t)(unsigned)(bg) << 29)) << 32))
+#define TTY_CHAR2(ch,col)     ((__uint128_t)(uint32_t)(ch) | ((__uint128_t)(uint64_t)(col) << 32))
 #define TTY_CHAR_GET_CH(cc)   ((uint32_t)(cc))
-#define TTY_CHAR_GET_COL(cc)  ((uint32_t)((cc) >> 32))
-#define TTY_CHAR_GET_ATTR(cc) ((uint32_t)((cc) >> 32) & 0x1E000)
-#define TTY_CHAR_GET_FG(cc)   ((uint32_t)((cc) >> 32) & 0x1FFF)
-#define TTY_CHAR_GET_BG(cc)   ((uint32_t)((cc) >> (32 + 17)) & 0x1FFF)
+#define TTY_CHAR_GET_COL(cc)  ((uint64_t)((cc) >> 32))
+#define TTY_CHAR_GET_ATTR(cc) ((uint32_t)((cc) >> 32) & 0x1E000000U)
+#define TTY_CHAR_GET_FG(cc)   ((uint32_t)((cc) >> 32) & 0x1FFFFFFU)
+#define TTY_CHAR_GET_BG(cc)   ((uint32_t)((uint64_t)((cc) >> 61)) & 0x1FFFFFFU)
 #define TTY_CHAR_DEFAULT      TTY_CHAR(' ', 7, 0)
 #define TTY_CHAR_COMB         0x200000
 #define TTY_CHAR_BAD          0xFFFD
 #define TTY_CHAR_NONE         0xFFFFFFFF
-#define TTY_BOLD              0x02000
-#define TTY_UNDERLINE         0x04000
-#define TTY_ITALIC            0x08000
-#define TTY_BLINK             0x10000
+#define TTY_BOLD              0x02000000U
+#define TTY_UNDERLINE         0x04000000U
+#define TTY_ITALIC            0x08000000U
+#define TTY_BLINK             0x10000000U
 #define COMB_CACHE_SIZE       2048
 #else
 typedef uint32_t TTYChar;
@@ -272,8 +276,8 @@ static int tty_dpy_init(QEditScreen *s, QEmacsState *qs,
     if (tty_clipboard < 0)
         tty_clipboard = 1;
 
-    ts->tty_bg_colors_count = min_int(ts->term_bg_colors_count, TTY_BG_COLORS);
-    ts->tty_fg_colors_count = min_int(ts->term_fg_colors_count, TTY_FG_COLORS);
+    ts->tty_bg_colors_count = ts->term_bg_colors_count;
+    ts->tty_fg_colors_count = ts->term_fg_colors_count;
     ts->tty_colors = xterm_colors;
 
     tcgetattr(fileno(s->STDIN), &tty);
@@ -1082,15 +1086,15 @@ static void tty_dpy_xor_rectangle(QEditScreen *s,
             /* Reverse video: swap fg and bg colors, preserving attrs */
             TTYChar cc = *ptr;
             char32_t ch = TTY_CHAR_GET_CH(cc);
-            uint32_t col = TTY_CHAR_GET_COL(cc);
-            int fg = TTY_CHAR_GET_FG(cc);
-            int bg = TTY_CHAR_GET_BG(cc);
+            uint64_t col = TTY_CHAR_GET_COL(cc);
+            uint32_t fg = TTY_CHAR_GET_FG(cc);
+            uint32_t bg = TTY_CHAR_GET_BG(cc);
 #if TTY_STYLE_BITS == 32
+            /* 128-bit: col = fg[24:0] | attr[28:25] | bg[53:29] */
+            uint64_t new_col = (uint64_t)bg | (col & 0x1E000000ULL) | ((uint64_t)fg << 29);
+#else
             /* 32-bit: col = fg[7:0] | attr[11:8] | bg[15:12] */
             uint32_t new_col = (bg & 0xFF) | (col & 0x0F00) | ((fg & 0xF) << 12);
-#else
-            /* 64-bit: col = fg[12:0] | attr[16:13] | bg[29:17] */
-            uint32_t new_col = bg | (col & 0x1E000) | ((uint32_t)fg << 17);
 #endif
             *ptr = TTY_CHAR2(ch, new_col);
             ptr++;
@@ -1380,7 +1384,9 @@ static void tty_dpy_flush(QEditScreen *s)
 {
     TTYState *ts = s->priv_data;
     TTYChar *ptr, *ptr1, *ptr2, *ptr3, *ptr4, cc, blankcc;
-    int y, shadow, ch, bgcolor, fgcolor, gotopos, attr;
+    int y, shadow, ch, gotopos;
+    uint32_t bgcolor, fgcolor;
+    uint64_t attr;
     unsigned int default_bgcolor;
 
     /* Precompute the mapped color index for the default background */
@@ -1393,8 +1399,8 @@ static void tty_dpy_flush(QEditScreen *s)
     /* Hide cursor, goto home, reset attributes */
     TTY_FPUTS("\033[?25l\033[H\033[0m", s->STDOUT);
 
-    bgcolor = -1;
-    fgcolor = -1;
+    bgcolor = UINT32_MAX;
+    fgcolor = UINT32_MAX;
     attr = 0;
     gotopos = 0;
 
@@ -1484,9 +1490,9 @@ static void tty_dpy_flush(QEditScreen *s)
                                 y + 1, (int)(ptr1 - ptr));
                 }
                 /* output attributes */
-                if (bgcolor != (int)TTY_CHAR_GET_BG(cc)) {
+                if (bgcolor != TTY_CHAR_GET_BG(cc)) {
                     bgcolor = TTY_CHAR_GET_BG(cc);
-                    if (bgcolor == (int)default_bgcolor) {
+                    if (bgcolor == default_bgcolor) {
                         /* Use terminal default background instead of explicit black */
                         TTY_FPUTS("\033[49m", s->STDOUT);
                     } else
@@ -1503,7 +1509,7 @@ static void tty_dpy_flush(QEditScreen *s)
                 }
                 /* do not special case SPC on fg color change
                  * because of combining marks */
-                if (fgcolor != (int)TTY_CHAR_GET_FG(cc)) {
+                if (fgcolor != TTY_CHAR_GET_FG(cc)) {
                     fgcolor = TTY_CHAR_GET_FG(cc);
 #if TTY_STYLE_BITS == 32
                     if (fgcolor >= 256) {
@@ -1516,8 +1522,8 @@ static void tty_dpy_flush(QEditScreen *s)
                         TTY_FPRINTF(s->STDOUT, "\033[38;5;%dm", fgcolor);
                     }
                 }
-                if (attr != (int)TTY_CHAR_GET_COL(cc)) {
-                    int lastattr = attr;
+                if (attr != TTY_CHAR_GET_COL(cc)) {
+                    uint64_t lastattr = attr;
                     attr = TTY_CHAR_GET_COL(cc);
 
                     if ((attr ^ lastattr) & TTY_BOLD) {
