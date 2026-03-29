@@ -25,6 +25,7 @@
 
 #include "qe.h"
 
+#include <poll.h>
 #include <sys/wait.h>
 
 /* NOTE: it is strongly inspirated from the 'links' browser API */
@@ -339,6 +340,34 @@ void url_exit(void)
 void url_redisplay(void)
 {
     url_display_request = 1;
+}
+
+ssize_t qe_write_timeout(int fd, const char *buf, size_t len, int timeout_ms) {
+    ssize_t ret = len;
+    while (len > 0) {
+        ssize_t res = write(fd, buf, len);
+        if (res < 0) {
+            if (errno == EINTR)
+                continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (timeout_ms == 0)
+                    return -1;
+                struct pollfd pfd = { .fd = fd, .events = POLLOUT };
+                int pr = poll(&pfd, 1, timeout_ms);
+                if (pr <= 0)
+                    return -1;  /* timeout or poll error */
+                if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL))
+                    return -1;
+                continue;
+            }
+            return -1;
+        }
+        if (res == 0)
+            return ret - (ssize_t)len;
+        buf += res;
+        len -= res;
+    }
+    return ret;
 }
 
 int get_clock_ms(void) {

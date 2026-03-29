@@ -166,6 +166,10 @@ static int alternate_buffer;
  * write_all_timeout: write all bytes with a bounded poll timeout.
  * timeout_ms: milliseconds to wait per EAGAIN (-1 = infinite, 0 = no wait).
  * Returns number of bytes written, or -1 on error/timeout.
+ *
+ * Note: session.c is compiled as a standalone daemon and cannot link against
+ * the editor.  The canonical shared version is qe_write_timeout() in unix.c;
+ * this is a self-contained copy for the session proxy.
  */
 static ssize_t write_all_timeout(int fd, const char *buf, size_t len,
                                  int timeout_ms) {

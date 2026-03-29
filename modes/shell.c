@@ -483,27 +483,19 @@ static void qe_term_init(ShellState *s)
     }
 }
 
-// XXX: should use an auxiliary buffer to make this asynchous
 static void qe_term_write(ShellState *s, const char *buf, int len)
 {
-    int ret;
-
     if (len < 0)
         len = strlen(buf);
 
     if (s->base.qs->trace_buffer)
         qe_trace_bytes(s->base.qs, buf, len, EB_TRACE_PTY);
 
-    while (len > 0) {
-        ret = write(s->pty_fd, buf, len);
-        if (ret == -1 && (errno == EAGAIN || errno == EINTR))
-            continue;
-        if (ret <= 0)
-            break;
-        buf += ret;
-        len -= ret;
-        s->last_char = buf[-1];
-    }
+    /* Use bounded timeout to avoid busy-looping on EAGAIN when the
+     * PTY buffer is full (child process hung or suspended). */
+    ssize_t written = qe_write_timeout(s->pty_fd, buf, len, 5000);
+    if (written > 0)
+        s->last_char = buf[written - 1];
 }
 
 static inline void qe_term_set_style(ShellState *s) {
