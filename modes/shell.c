@@ -278,6 +278,7 @@ static int run_process(ShellState *s,
         setenv("LINES", lines_string, 1);
         setenv("COLUMNS", columns_string, 1);
         setenv("TERM", "xterm-256color", 1);
+        setenv("COLORTERM", "truecolor", 1);
         setenv("TERM_PROGRAM", "qemacs", 1);
         setenv("TERM_PROGRAM_VERSION", str_version, 1);
         unsetenv("PAGER");
@@ -2047,6 +2048,20 @@ static void qe_term_emulate(ShellState *s, int c)
                     //offset = qe_term_erase_chars(s, offset1, n1);
                     offset -= eb_delete(s->b, offset1, n1);
                     offset += eb_insert_spaces(s->b, offset1, col);
+                }
+                /* Set the style on the newline character for BCE (Back Color
+                 * Erase) support. This allows the display to extend the
+                 * erase background color to the full terminal width.
+                 */
+                {
+                    int nl_offset = eb_goto_eol(s->b, offset);
+                    if (nl_offset < s->b->total_size) {
+                        int next_off;
+                        if (eb_nextc(s->b, nl_offset, &next_off) == '\n') {
+                            eb_set_style(s->b, s->b->cur_style, LOGOP_WRITE,
+                                         nl_offset, next_off - nl_offset);
+                        }
+                    }
                 }
                 // XXX: could scan end of buffer for spaces with default style
                 //      and shrink it.

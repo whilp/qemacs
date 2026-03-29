@@ -4116,9 +4116,26 @@ static void flush_line(DisplayState *ds,
                 x += frag->width;
             }
             if (x < x1 && last != -1) {
-                /* XXX: color may be inappropriate for terminal mode */
+                /* For terminal/shell buffers, use the EOL style's
+                 * background color to implement Back Color Erase (BCE).
+                 * This makes background colors from programs like delta
+                 * and glow extend to the full terminal width, matching
+                 * real terminal behavior where \e[K inherits the current
+                 * background color.
+                 * Only override at actual end-of-line (last == 1), not
+                 * at line wraps (last == 0), and only when the EOL style
+                 * has a non-default background color.
+                 */
+                QEColor eol_bg = default_style.bg_color;
+                if (last == 1
+                &&  (ds->eol_style & QE_TERM_COMPOSITE)
+                &&  QE_TERM_GET_BG(ds->eol_style) != QE_TERM_DEF_BG) {
+                    QEStyleDef eol_styledef;
+                    get_style(e, &eol_styledef, ds->eol_style);
+                    eol_bg = eol_styledef.bg_color;
+                }
                 fill_rectangle(screen, e->xleft + x, e->ytop + y,
-                               x1 - x, line_height, default_style.bg_color);
+                               x1 - x, line_height, eol_bg);
             }
             if (x1 < e->width) {
                 /* right gutter like space beyond terminal right margin */
@@ -4923,6 +4940,16 @@ static int syntax_get_colorized_line(QEColorizeContext *cp,
             }
             offset = eb_next(b, offset);
         }
+        /* Read the newline's style for EOL background (BCE support).
+         * offset now points to the newline character; its style
+         * carries the background color set by \e[K (Erase in Line).
+         */
+        if (offset < b->total_size) {
+            QETermStyle eol_style = eb_get_style(b, offset);
+            if (eol_style) {
+                cp->sbuf[len] = eol_style;
+            }
+        }
     }
     if (!(s->colorize_mode->flags & MODEF_NO_TRAILING_BLANKS)) {
         /* Mark trailing blanks as errors if cursor is not at end of line */
@@ -5150,6 +5177,7 @@ int text_display_line(EditState *s, DisplayState *ds, int offset)
             /* the offset passed here is for cursor positioning
                when s->offset == s->b->total_size.
             */
+            ds->eol_style = 0;
             display_eol(ds, offset0, offset0 + 1);
             offset = -1; /* signal end of text */
             break;
@@ -5160,6 +5188,8 @@ int text_display_line(EditState *s, DisplayState *ds, int offset)
             }
             c = eb_nextc(s->b, offset, &offset);
             if (c == '\n' && !(s->flags & WF_MINIBUF)) {
+                /* Use the newline's style for EOL fill (BCE support) */
+                ds->eol_style = cp->sbuf[colored_nb_chars];
                 display_eol(ds, offset0, offset);
                 break;
             }
