@@ -2430,8 +2430,15 @@ static void shell_read_cb(void *opaque)
         return;
 
     len = read(s->pty_fd, buf, sizeof(buf));
-    if (len <= 0)
+    if (len <= 0) {
+        if (len == 0 || (errno != EAGAIN && errno != EINTR)) {
+            /* EOF or fatal error (e.g. EIO when slave pty closed):
+             * remove the read handler to avoid a tight select() spin
+             * while waiting for the child to be reaped by waitpid. */
+            set_read_handler(s->pty_fd, NULL, NULL);
+        }
         return;
+    }
 
     b = s->b;
     qs = s->base.qs;

@@ -39,6 +39,7 @@
 #include <dirent.h>
 #include <time.h>
 #include <pwd.h>
+#include <poll.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -166,8 +167,13 @@ static ssize_t write_all(int fd, const char *buf, size_t len) {
     while (len > 0) {
         ssize_t res = write(fd, buf, len);
         if (res < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+            if (errno == EINTR)
                 continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                struct pollfd pfd = { .fd = fd, .events = POLLOUT };
+                poll(&pfd, 1, -1);
+                continue;
+            }
             return -1;
         }
         if (res == 0)
@@ -183,10 +189,10 @@ static ssize_t read_all(int fd, char *buf, size_t len) {
     while (len > 0) {
         ssize_t res = read(fd, buf, len);
         if (res < 0) {
-            if (errno == EWOULDBLOCK)
-                return ret - (ssize_t)len;
-            if (errno == EAGAIN || errno == EINTR)
+            if (errno == EINTR)
                 continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                return ret - (ssize_t)len;
             return -1;
         }
         if (res == 0)
@@ -521,34 +527,39 @@ static void server_mainloop(void) {
         Client **prev_next = &server.clients;
         Client *c = server.clients;
         while (c) {
-            if (FD_ISSET(c->socket, &readfds) && recv_packet(c->socket, &client_pkt) == 0) {
-                switch (client_pkt.type) {
-                case MSG_CONTENT:
-                    write_all(server.pty, client_pkt.u.msg, client_pkt.len);
-                    break;
-                case MSG_ATTACH:
-                    c->flags = client_pkt.u.i;
-                    c->state = STATE_ATTACHED;
-                    break;
-                case MSG_RESIZE:
-                    c->state = STATE_ATTACHED;
-                    if (!(c->flags & CLIENT_READONLY) && c == server.clients) {
-                        struct winsize ws;
-                        memset(&ws, 0, sizeof(ws));
-                        ws.ws_row = client_pkt.u.ws.rows;
-                        ws.ws_col = client_pkt.u.ws.cols;
-                        ioctl(server.pty, TIOCSWINSZ, &ws);
-                    }
-                    kill(-server.pid, SIGWINCH);
-                    break;
-                case MSG_EXIT:
-                    exit_packet_delivered = 1;
-                    /* fall through */
-                case MSG_DETACH:
+            if (FD_ISSET(c->socket, &readfds)) {
+                if (recv_packet(c->socket, &client_pkt) != 0) {
+                    /* Client disconnected or I/O error */
                     c->state = STATE_DISCONNECTED;
-                    break;
-                default:
-                    break;
+                } else {
+                    switch (client_pkt.type) {
+                    case MSG_CONTENT:
+                        write_all(server.pty, client_pkt.u.msg, client_pkt.len);
+                        break;
+                    case MSG_ATTACH:
+                        c->flags = client_pkt.u.i;
+                        c->state = STATE_ATTACHED;
+                        break;
+                    case MSG_RESIZE:
+                        c->state = STATE_ATTACHED;
+                        if (!(c->flags & CLIENT_READONLY) && c == server.clients) {
+                            struct winsize ws;
+                            memset(&ws, 0, sizeof(ws));
+                            ws.ws_row = client_pkt.u.ws.rows;
+                            ws.ws_col = client_pkt.u.ws.cols;
+                            ioctl(server.pty, TIOCSWINSZ, &ws);
+                        }
+                        kill(-server.pid, SIGWINCH);
+                        break;
+                    case MSG_EXIT:
+                        exit_packet_delivered = 1;
+                        /* fall through */
+                    case MSG_DETACH:
+                        c->state = STATE_DISCONNECTED;
+                        break;
+                    default:
+                        break;
+                    }
                 }
             }
 

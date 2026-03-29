@@ -27,6 +27,7 @@ tests/test_buffer
 tests/test_cutils
 tests/test_session
 tests/test_terminal
+tests/test_tty_input
 tests/test_html
 tests/bench_buffer
 tqe1
