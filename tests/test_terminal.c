@@ -1760,6 +1760,118 @@ TEST(shell, output_wraps_in_split_window)
     session_cleanup(&sess);
 }
 
+/* Test: Back Color Erase (BCE) — when a terminal program sets a background
+ * color and then erases to end of line (\e[K), the background color should
+ * extend to the full terminal width, not stop at the last text character. */
+TEST(shell, bce_extends_bg_to_eol)
+{
+    TestSession sess;
+    if (session_start(&sess, NULL) != 0) {
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    if (!shell_open_and_wait(&sess)) {
+        session_stop(&sess);
+        session_cleanup(&sess);
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    /* Emit a line with red background (41) + erase to end of line.
+     * The marker "BCE_TEST" lets us find this line in the dump.
+     * \e[41m = set bg red, \e[K = erase to end of line, \e[0m = reset */
+    session_type(&sess, "printf '\\033[41mBCE_TEST\\033[K\\033[0m\\n'\r");
+    usleep(1000000);  /* wait for output */
+
+    /* Read the dump file mid-session so we capture the BCE state.
+     * The dump is in "last" mode, so it only has the latest flush.
+     * We must read it before session_stop rewrites it. */
+    char *mid_dump = NULL;
+    size_t mid_dump_len = 0;
+    {
+        FILE *f = fopen(sess.dump_path, "r");
+        if (f) {
+            mid_dump = malloc(MAX_DUMP_SIZE);
+            if (mid_dump) {
+                mid_dump_len = fread(mid_dump, 1, MAX_DUMP_SIZE - 1, f);
+                mid_dump[mid_dump_len] = '\0';
+            }
+            fclose(f);
+        }
+    }
+
+    /* Clean up the session */
+    session_ctrl(&sess, 'c');
+    usleep(100000);
+    session_stop(&sess);
+
+    ASSERT_TRUE(mid_dump != NULL);
+    ASSERT_TRUE(mid_dump_len > 0);
+
+    ScreenSnap *snap = get_last_snapshot(mid_dump, mid_dump_len);
+    ASSERT_TRUE(snap != NULL);
+
+    /* Find the OUTPUT line with "BCE_TEST" (not the command line).
+     * The command line shows the printf command with escape sequences,
+     * while the output line shows just "BCE_TEST". Take the last match. */
+    int bce_row = -1;
+    int test_col = -1;
+
+    for (int i = snap->num_lines - 1; i >= 0; i--) {
+        char *p = strstr(snap->lines[i], "BCE_TEST");
+        if (p) {
+            bce_row = i;
+            test_col = (p - snap->lines[i]) + 8;  /* column after "BCE_TEST" */
+            break;
+        }
+    }
+
+    if (bce_row < 0 || test_col < 0) {
+        fprintf(stderr, "DEBUG: BCE_TEST not found (row=%d col=%d). Screen:\n",
+                bce_row, test_col);
+        for (int i = 0; i < snap->num_lines && i < 24; i++)
+            fprintf(stderr, "  [%d]: '%s'\n", i, snap->lines[i]);
+    }
+
+    ASSERT_TRUE(bce_row >= 0);
+    ASSERT_TRUE(test_col >= 0);
+
+    /* Check that cells past the text have bg != 0 (non-default background).
+     * The red background (SGR 41 = xterm red) should map to bg index 1.
+     * Check several cells after the text to confirm BCE fills them. */
+    int found_bce_bg = 0;
+    for (int col = test_col; col < test_col + 10 && col < SCREEN_WIDTH; col++) {
+        int fg = -1, bg = -1;
+        char attrs[16] = "";
+        if (find_cell_color(mid_dump, snap->flush_num, bce_row, col, &fg, &bg, attrs)) {
+            if (bg != 0) {
+                found_bce_bg = 1;
+                break;
+            }
+        }
+    }
+
+    if (!found_bce_bg) {
+        fprintf(stderr, "DEBUG: BCE bg not found past col %d on row %d.\n",
+                test_col, bce_row);
+        fprintf(stderr, "DEBUG: Cells with color info on row %d:\n", bce_row);
+        for (int col = 0; col < SCREEN_WIDTH; col++) {
+            int fg = -1, bg = -1;
+            char attrs[16] = "";
+            if (find_cell_color(mid_dump, snap->flush_num, bce_row, col, &fg, &bg, attrs)) {
+                fprintf(stderr, "  col %d: fg=%d bg=%d\n", col, fg, bg);
+            }
+        }
+    }
+
+    ASSERT_TRUE(found_bce_bg);
+
+    free_snapshot(snap);
+    free(mid_dump);
+    session_cleanup(&sess);
+}
+
 /*--- Main ---*/
 
 int main(void)

@@ -66,6 +66,7 @@ typedef struct ShellState {
     int pty_fd;
     int pid; /* -1 if not launched */
     unsigned int attr, fgcolor, bgcolor, reverse;
+    QETermStyle bce_style; /* pending BCE style from \e[K, applied at next newline */
     int cur_offset; /* current offset at position x, y */
     int cur_offset_hack; /* the target position is in the middle of a wide glyph */
     int cur_prompt; /* offset of end of prompt on current line */
@@ -1487,13 +1488,37 @@ static void qe_term_emulate(ShellState *s, int c)
                     /* CG: XXX: ignoring charset */
                     qe_term_set_style(s);
                     offset += eb_insert_char32(s->b, offset, '\n');
+                    /* Apply pending BCE style to the newline character.
+                     * This handles the case where \e[K was processed before
+                     * the newline existed in the buffer.
+                     */
+                    if (s->bce_style) {
+                        int nl_offset = offset - 1;  /* the newline we just inserted */
+                        eb_set_style(s->b, s->bce_style, LOGOP_WRITE,
+                                     nl_offset, 1);
+                        s->bce_style = 0;
+                    }
                     s->cur_offset = offset;
                     /* update current screen_top */
                     qe_term_get_pos(s, offset, &x, &y);
                 } else {
                     // XXX: test if cursor is on last row and append a newline
                     // XXX: potential style issue if appending a newline
+                    QETermStyle saved_bce = s->bce_style;
+                    s->bce_style = 0;
                     qe_term_goto_xy(s, 0, 1, TG_RELATIVE | TG_NOCLIP);
+                    /* Apply pending BCE style to the newline that was
+                     * just created by the cursor movement. */
+                    if (saved_bce) {
+                        int nl_off = eb_goto_eol(s->b, offset);
+                        if (nl_off < s->b->total_size) {
+                            int next_off;
+                            if (eb_nextc(s->b, nl_off, &next_off) == '\n') {
+                                eb_set_style(s->b, saved_bce, LOGOP_WRITE,
+                                             nl_off, next_off - nl_off);
+                            }
+                        }
+                    }
                 }
             }
             s->b->last_log = 0; /* close undo record */
@@ -2061,6 +2086,11 @@ static void qe_term_emulate(ShellState *s, int c)
                             eb_set_style(s->b, s->b->cur_style, LOGOP_WRITE,
                                          nl_offset, next_off - nl_offset);
                         }
+                    } else {
+                        /* Newline doesn't exist yet — defer until LF is
+                         * inserted. Store the current style so it can be
+                         * applied to the newline when it's created. */
+                        s->bce_style = s->b->cur_style;
                     }
                 }
                 // XXX: could scan end of buffer for spaces with default style

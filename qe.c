@@ -4079,6 +4079,11 @@ static void flush_line(DisplayState *ds,
 
                 crc = compute_crc(fragments, sizeof(*fragments) * nb_fragments, 0);
                 crc = compute_crc(ds->line_chars, sizeof(*ds->line_chars) * ds->line_index, crc);
+                /* Include the EOL style in the CRC so that BCE background
+                 * color changes (from \e[K with a colored background) cause
+                 * the line to be redrawn.
+                 */
+                crc = compute_crc(&ds->eol_style, sizeof(ds->eol_style), crc);
                 ls = &e->line_shadow[ds->line_num];
                 if (ls->y != ds->y || ls->x != ds->x_line
                 ||  ls->height != line_height || ls->crc != crc) {
