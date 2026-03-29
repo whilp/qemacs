@@ -21,6 +21,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+# Default to parallel builds using all available cores
+MAKEFLAGS += -j$(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+
 OSNAME := $(shell uname -s)
 
 # Cosmopolitan toolchain — auto-fetched on first build
@@ -65,6 +68,8 @@ endif
 
 CFLAGS += -mcosmo -Wno-unused-result
 CFLAGS += -I.
+# Auto-generate .d dependency files so only affected objects rebuild on header changes
+CFLAGS += -MMD -MP
 
 ifeq ($(CC),$(HOST_CC))
   HOST_CFLAGS := $(CFLAGS)
@@ -140,6 +145,8 @@ SRCS := $(OBJS:.o=.c)
 SRCS := $(subst libqhtml/html_style.c,$(GENDIR)/libqhtml/html_style.c,$(SRCS))
 SRCS := $(subst libqhtml/docbook_style.c,$(GENDIR)/libqhtml/docbook_style.c,$(SRCS))
 
+# Header dependencies are auto-generated via -MMD -MP (see .d files in OBJS_DIR)
+# This list is only used for qe_modules.c generation and documentation
 DEPENDS := qe.h charset.h color.h cutils.h display.h \
 	qestyles.h unicode_join.h util.h variables.h session.h \
 	wcwidth.h lang/clang.h
@@ -198,7 +205,7 @@ debug qe_debug: force
 
 $(OBJS_DIR)/qe_modules.o: $(OBJS_DIR)/qe_modules.c Makefile | $(COSMOCC_DIR)/bin/cosmocc
 	$(echo) CC $(ECHO_CFLAGS) -c $<
-	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -o $@ -c $<
+	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -MT $@ -MF $(@:.o=.d) -o $@ -c $<
 
 $(OBJS_DIR)/qe_modules.c: $(SRCS) Makefile tools/gen-modules.sh
 	@echo creating $@
@@ -210,24 +217,28 @@ $(OBJS_DIR)/charsetjis.o: charsetjis.c charsetjis.def
 $(OBJS_DIR)/modes/stb.o: modes/stb.c modes/stb_image.h
 $(OBJS_DIR)/libunicode.o: libunicode.c libunicode.h libunicode-table.h
 $(OBJS_DIR)/libregexp.o: libregexp.c libregexp.h libregexp-opcode.h
-$(OBJS_DIR)/libqhtml/html_style.o: $(GENDIR)/libqhtml/html_style.c $(DEPENDS) Makefile | $(COSMOCC_DIR)/bin/cosmocc
+$(OBJS_DIR)/libqhtml/html_style.o: $(GENDIR)/libqhtml/html_style.c Makefile | $(COSMOCC_DIR)/bin/cosmocc
 	$(echo) CC $(ECHO_CFLAGS) -c $<
 	$(cmd)  mkdir -p $(dir $@)
-	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -o $@ -c $<
+	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -MT $@ -MF $(@:.o=.d) -o $@ -c $<
 
-$(OBJS_DIR)/libqhtml/docbook_style.o: $(GENDIR)/libqhtml/docbook_style.c $(DEPENDS) Makefile | $(COSMOCC_DIR)/bin/cosmocc
+$(OBJS_DIR)/libqhtml/docbook_style.o: $(GENDIR)/libqhtml/docbook_style.c Makefile | $(COSMOCC_DIR)/bin/cosmocc
 	$(echo) CC $(ECHO_CFLAGS) -c $<
 	$(cmd)  mkdir -p $(dir $@)
-	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -o $@ -c $<
+	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -MT $@ -MF $(@:.o=.d) -o $@ -c $<
 
 $(OBJS_DIR)/libqhtml/css.o: libqhtml/css.c libqhtml/css.h libqhtml/cssid.h
 $(OBJS_DIR)/libqhtml/cssparse.o: libqhtml/cssparse.c libqhtml/css.h libqhtml/cssid.h
 $(OBJS_DIR)/libqhtml/xmlparse.o: libqhtml/xmlparse.c libqhtml/css.h libqhtml/htmlent.h
 
-$(OBJS_DIR)/%.o: %.c $(DEPENDS) Makefile | $(COSMOCC_DIR)/bin/cosmocc
+$(OBJS_DIR)/%.o: %.c Makefile | $(COSMOCC_DIR)/bin/cosmocc
 	$(echo) CC $(ECHO_CFLAGS) -c $<
 	$(cmd)  mkdir -p $(dir $@)
-	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -o $@ -c $<
+	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -MT $@ -MF $(@:.o=.d) -o $@ -c $<
+
+# Include auto-generated dependency files (created by -MMD -MP)
+DEPS := $(OBJS:.o=.d)
+-include $(DEPS)
 
 #
 # Host utilities (pattern rule covers tools/*.c -> o/bin/*)
