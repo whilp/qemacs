@@ -23,11 +23,6 @@ bin
 html2png
 qe
 tqe
-tests/test_*
-tests/bench_*
-!tests/test_*.c
-!tests/test_*.h
-!tests/bench_*.c
 tqe1
 xqe
 .embed
