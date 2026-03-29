@@ -166,6 +166,10 @@ static int alternate_buffer;
  * write_all_timeout: write all bytes with a bounded poll timeout.
  * timeout_ms: milliseconds to wait per EAGAIN (-1 = infinite, 0 = no wait).
  * Returns number of bytes written, or -1 on error/timeout.
+ *
+ * Note: session.c is compiled as a standalone daemon and cannot link against
+ * the editor.  The canonical shared version is qe_write_timeout() in unix.c;
+ * this is a self-contained copy for the session proxy.
  */
 static ssize_t write_all_timeout(int fd, const char *buf, size_t len,
                                  int timeout_ms) {
@@ -227,14 +231,19 @@ static int send_packet(int fd, Packet *pkt) {
 }
 
 /*
- * send_packet_nonblock: try to send a packet without blocking.
- * Returns 0 on success, -1 if the write would block or fails.
+ * send_packet_timeout: send a packet with a bounded timeout.
+ * timeout_ms: -1 = infinite, 0 = nonblocking, >0 = milliseconds.
+ * Returns 0 on success, -1 if the write would block, times out, or fails.
  */
-static int send_packet_nonblock(int fd, Packet *pkt) {
+static int send_packet_timeout(int fd, Packet *pkt, int timeout_ms) {
     size_t size = packet_size(pkt);
     if (size > sizeof(*pkt))
         return -1;
-    return write_all_timeout(fd, (char *)pkt, size, 0) == (ssize_t)size ? 0 : -1;
+    return write_all_timeout(fd, (char *)pkt, size, timeout_ms) == (ssize_t)size ? 0 : -1;
+}
+
+static int send_packet_nonblock(int fd, Packet *pkt) {
+    return send_packet_timeout(fd, pkt, 0);
 }
 
 static int recv_packet(int fd, Packet *pkt) {
@@ -472,7 +481,12 @@ static Client *server_accept_client(void) {
     pkt.type = MSG_PID;
     pkt.len = sizeof(pkt.u.l);
     pkt.u.l = getpid();
-    send_packet(c->socket, &pkt);
+    if (send_packet_nonblock(c->socket, &pkt) < 0) {
+        /* Client already dead or buffer full — drop it */
+        server.clients = c->next;
+        client_free(c);
+        return NULL;
+    }
 
     return c;
 }
@@ -487,14 +501,13 @@ static Client *server_accept_client(void) {
 } while (0)
 
 static void server_mainloop(void) {
-    fd_set new_readfds, new_writefds;
+    fd_set new_readfds;
     int new_fdmax;
     int exit_packet_delivered = 0;
 
     atexit(server_atexit_handler);
 
     FD_ZERO(&new_readfds);
-    FD_ZERO(&new_writefds);
     FD_SET(server.socket, &new_readfds);
     new_fdmax = server.socket;
     FD_SET_MAX(server.pty, &new_readfds, new_fdmax);
@@ -502,17 +515,15 @@ static void server_mainloop(void) {
     while (server.clients || !exit_packet_delivered) {
         int fdmax = new_fdmax;
         fd_set readfds = new_readfds;
-        fd_set writefds = new_writefds;
         FD_SET_MAX(server.socket, &readfds, fdmax);
 
-        if (select(fdmax + 1, &readfds, &writefds, NULL, NULL) == -1) {
+        if (select(fdmax + 1, &readfds, NULL, NULL, NULL) == -1) {
             if (errno == EINTR)
                 continue;
             break;
         }
 
         FD_ZERO(&new_readfds);
-        FD_ZERO(&new_writefds);
         new_fdmax = server.socket;
 
         int pty_data = 0;
@@ -561,7 +572,11 @@ static void server_mainloop(void) {
                 } else {
                     switch (client_pkt.type) {
                     case MSG_CONTENT:
-                        write_all(server.pty, client_pkt.u.msg, client_pkt.len);
+                        /* Bounded write to PTY: if the child process is not
+                         * reading (stopped, hung, buffer full), drop the input
+                         * rather than blocking the entire server. */
+                        write_all_timeout(server.pty, client_pkt.u.msg,
+                                          client_pkt.len, 1000);
                         break;
                     case MSG_ATTACH:
                         c->flags = client_pkt.u.i;
@@ -590,6 +605,7 @@ static void server_mainloop(void) {
                 }
             }
 
+            /* Clean up disconnected clients before attempting sends */
             if (c->state == STATE_DISCONNECTED) {
                 int first = (c == server.clients);
                 Client *t = c->next;
@@ -600,40 +616,40 @@ static void server_mainloop(void) {
                     memset(&rpkt, 0, sizeof(rpkt));
                     rpkt.type = MSG_RESIZE;
                     rpkt.len = 0;
-                    send_packet(server.clients->socket, &rpkt);
+                    /* Best-effort: don't block if new first client is stalled */
+                    send_packet_nonblock(server.clients->socket, &rpkt);
                 } else if (!server.clients) {
                     server_mark_socket_exec(0, 1);
                 }
                 continue;
             }
 
-            FD_SET_MAX(c->socket, &new_readfds, new_fdmax);
-
+            /* Forward PTY output to client (nonblocking) */
             if (pty_data) {
                 if (send_packet_nonblock(c->socket, &server_pkt) < 0)
                     c->state = STATE_DISCONNECTED;
             }
 
+            /* Deliver exit status (nonblocking — best effort) */
+            if (c->state != STATE_DISCONNECTED && !server.running
+                && server.exit_status != -1) {
+                Packet epkt;
+                memset(&epkt, 0, sizeof(epkt));
+                epkt.type = MSG_EXIT;
+                epkt.u.i = server.exit_status;
+                epkt.len = sizeof(epkt.u.i);
+                if (send_packet_nonblock(c->socket, &epkt) < 0)
+                    c->state = STATE_DISCONNECTED;
+            }
+
+            /* Only add live clients to the read set */
             if (c->state == STATE_DISCONNECTED) {
                 prev_next = &c->next;
                 c = c->next;
                 continue;
             }
 
-            if (!server.running) {
-                if (server.exit_status != -1) {
-                    Packet epkt;
-                    memset(&epkt, 0, sizeof(epkt));
-                    epkt.type = MSG_EXIT;
-                    epkt.u.i = server.exit_status;
-                    epkt.len = sizeof(epkt.u.i);
-                    if (send_packet(c->socket, &epkt) < 0)
-                        FD_SET_MAX(c->socket, &new_writefds, new_fdmax);
-                } else {
-                    FD_SET_MAX(c->socket, &new_writefds, new_fdmax);
-                }
-            }
-
+            FD_SET_MAX(c->socket, &new_readfds, new_fdmax);
             prev_next = &c->next;
             c = c->next;
         }
@@ -711,12 +727,13 @@ static int client_mainloop(void) {
     client.need_resize = 1;
     client.running = 1;
 
-    /* Send attach packet */
+    /* Send attach packet (bounded — server should be ready) */
     memset(&pkt, 0, sizeof(pkt));
     pkt.type = MSG_ATTACH;
     pkt.u.i = client.flags;
     pkt.len = sizeof(pkt.u.i);
-    send_packet(client.server_socket, &pkt);
+    if (send_packet_timeout(client.server_socket, &pkt, 5000) < 0)
+        return -2;
 
     while (client.running) {
         fd_set fds;
@@ -733,7 +750,7 @@ static int client_mainloop(void) {
                 rpkt.u.ws.rows = ws.ws_row;
                 rpkt.u.ws.cols = ws.ws_col;
                 rpkt.len = sizeof(rpkt.u.ws);
-                if (send_packet(client.server_socket, &rpkt) == 0)
+                if (send_packet_timeout(client.server_socket, &rpkt, 5000) == 0)
                     client.need_resize = 0;
             }
         }
@@ -760,7 +777,7 @@ static int client_mainloop(void) {
                     client.need_resize = 1;
                     break;
                 case MSG_EXIT:
-                    send_packet(client.server_socket, &rpkt);
+                    send_packet_nonblock(client.server_socket, &rpkt);
                     close(client.server_socket);
                     return rpkt.u.i;
                 default:
@@ -785,11 +802,14 @@ static int client_mainloop(void) {
                     memset(&dpkt, 0, sizeof(dpkt));
                     dpkt.type = MSG_DETACH;
                     dpkt.len = 0;
-                    send_packet(client.server_socket, &dpkt);
+                    send_packet_nonblock(client.server_socket, &dpkt);
                     close(client.server_socket);
                     return -1;  /* detached */
                 }
-                send_packet(client.server_socket, &ipkt);
+                if (send_packet_timeout(client.server_socket, &ipkt, 5000) < 0) {
+                    client.running = 0;
+                    break;
+                }
             } else if (len == 0) {
                 /* stdin EOF */
                 return -1;

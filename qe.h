@@ -128,6 +128,13 @@ int url_main_loop(int (*init)(void *opaque), void *opaque);
 int get_clock_ms(void);
 int get_clock_usec(void);
 
+/*
+ * qe_write_timeout: write all bytes with a bounded poll timeout.
+ * timeout_ms: -1 = infinite, 0 = non-blocking, >0 = milliseconds.
+ * Returns number of bytes written, or -1 on error/timeout.
+ */
+ssize_t qe_write_timeout(int fd, const char *buf, size_t len, int timeout_ms);
+
 /* extendable completion system */
 struct CompleteState {
     StringArray cs;

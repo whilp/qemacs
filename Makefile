@@ -311,6 +311,29 @@ $(o)/qe-manual.md: $(BINDIR)/scandoc qe-manual.c $(SRCS) $(DEPENDS)
 test:
 	$(MAKE) -C tests test
 
+# Lint: catch unbounded blocking I/O patterns that cause deadlocks.
+# Allowlist:
+#   session.c select/pselect: top-level event-loop multiplexers (safe)
+#   write_all_timeout/qe_write_timeout definitions: the bounded helpers themselves
+lint:
+	@echo "==> checking for unbounded blocking I/O patterns"
+	@fail=0; \
+	if grep -rn 'poll(.*,\s*-1)' --include='*.c' \
+	   | grep -v 'tests/' | grep -v '^\s*//' \
+	   | grep -v 'write_all_timeout\|qe_write_timeout'; then \
+	    echo "ERROR: found poll(..., -1) outside of write helpers"; \
+	    fail=1; \
+	fi; \
+	if grep -rn 'write_all\b' --include='*.c' \
+	   | grep -v 'tests/' | grep -v '^\s*//' \
+	   | grep -v 'write_all_timeout\|qe_write_timeout' \
+	   | grep -v 'session\.c'; then \
+	    echo "ERROR: found write_all() usage — use write_all_timeout/qe_write_timeout with bounded timeout"; \
+	    fail=1; \
+	fi; \
+	if [ "$$fail" -eq 1 ]; then exit 1; fi
+	@echo "==> lint passed"
+
 #
 # Fetch and verify cosmocc toolchain
 #
@@ -327,9 +350,10 @@ $(COSMOCC_FETCH_DIR)/bin/cosmocc:
 	@rm -f $(COSMOCC_FETCH_DIR)/cosmocc.zip
 	@echo "==> cosmocc installed to $(COSMOCC_FETCH_DIR)"
 
-# CI target: build, test, and verify
+# CI target: build, test, lint, and verify
 ci: all
 	$(MAKE) -C tests test
+	$(MAKE) lint
 	file $(o)/qe
 	test -f $(o)/qe
 
