@@ -162,7 +162,13 @@ static int alternate_buffer;
  * I/O helpers
  *------------------------------------------------------------------------*/
 
-static ssize_t write_all(int fd, const char *buf, size_t len) {
+/*
+ * write_all_timeout: write all bytes with a bounded poll timeout.
+ * timeout_ms: milliseconds to wait per EAGAIN (-1 = infinite, 0 = no wait).
+ * Returns number of bytes written, or -1 on error/timeout.
+ */
+static ssize_t write_all_timeout(int fd, const char *buf, size_t len,
+                                 int timeout_ms) {
     ssize_t ret = len;
     while (len > 0) {
         ssize_t res = write(fd, buf, len);
@@ -170,8 +176,14 @@ static ssize_t write_all(int fd, const char *buf, size_t len) {
             if (errno == EINTR)
                 continue;
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (timeout_ms == 0)
+                    return -1;
                 struct pollfd pfd = { .fd = fd, .events = POLLOUT };
-                poll(&pfd, 1, -1);
+                int pr = poll(&pfd, 1, timeout_ms);
+                if (pr <= 0)
+                    return -1;  /* timeout or poll error */
+                if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL))
+                    return -1;
                 continue;
             }
             return -1;
@@ -182,6 +194,10 @@ static ssize_t write_all(int fd, const char *buf, size_t len) {
         len -= res;
     }
     return ret;
+}
+
+static ssize_t write_all(int fd, const char *buf, size_t len) {
+    return write_all_timeout(fd, buf, len, -1);
 }
 
 static ssize_t read_all(int fd, char *buf, size_t len) {
@@ -208,6 +224,17 @@ static int send_packet(int fd, Packet *pkt) {
     if (size > sizeof(*pkt))
         return -1;
     return write_all(fd, (char *)pkt, size) == (ssize_t)size ? 0 : -1;
+}
+
+/*
+ * send_packet_nonblock: try to send a packet without blocking.
+ * Returns 0 on success, -1 if the write would block or fails.
+ */
+static int send_packet_nonblock(int fd, Packet *pkt) {
+    size_t size = packet_size(pkt);
+    if (size > sizeof(*pkt))
+        return -1;
+    return write_all_timeout(fd, (char *)pkt, size, 0) == (ssize_t)size ? 0 : -1;
 }
 
 static int recv_packet(int fd, Packet *pkt) {
@@ -582,8 +609,16 @@ static void server_mainloop(void) {
 
             FD_SET_MAX(c->socket, &new_readfds, new_fdmax);
 
-            if (pty_data)
-                send_packet(c->socket, &server_pkt);
+            if (pty_data) {
+                if (send_packet_nonblock(c->socket, &server_pkt) < 0)
+                    c->state = STATE_DISCONNECTED;
+            }
+
+            if (c->state == STATE_DISCONNECTED) {
+                prev_next = &c->next;
+                c = c->next;
+                continue;
+            }
 
             if (!server.running) {
                 if (server.exit_status != -1) {
@@ -716,7 +751,10 @@ static int client_mainloop(void) {
             if (recv_packet(client.server_socket, &rpkt) == 0) {
                 switch (rpkt.type) {
                 case MSG_CONTENT:
-                    write_all(STDOUT_FILENO, rpkt.u.msg, rpkt.len);
+                    if (write_all_timeout(STDOUT_FILENO, rpkt.u.msg,
+                                          rpkt.len, 5000) < 0) {
+                        client.running = 0;  /* terminal dead, disconnect */
+                    }
                     break;
                 case MSG_RESIZE:
                     client.need_resize = 1;

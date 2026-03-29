@@ -1592,6 +1592,175 @@ TEST(io, write_all_to_closed_pipe) {
     close(fds[0]);
 }
 
+/* ---- write_all_timeout tests ---- */
+
+TEST(io, write_all_timeout_basic) {
+    /* write_all_timeout with generous timeout should succeed normally */
+    int fds[2];
+    ASSERT_EQ(socketpair(AF_UNIX, SOCK_STREAM, 0, fds), 0);
+
+    ssize_t ret = write_all_timeout(fds[0], "hello", 5, 5000);
+    ASSERT_EQ(ret, 5);
+
+    char buf[8];
+    memset(buf, 0, sizeof(buf));
+    ASSERT_EQ(read_all(fds[1], buf, 5), 5);
+    ASSERT_MEMEQ(buf, "hello", 5);
+
+    close(fds[0]);
+    close(fds[1]);
+}
+
+TEST(io, write_all_timeout_to_closed_pipe) {
+    /* write_all_timeout to a closed socket should return -1, not hang */
+    int fds[2];
+    ASSERT_EQ(socketpair(AF_UNIX, SOCK_STREAM, 0, fds), 0);
+    close(fds[1]);  /* close reader */
+
+    struct sigaction sa, old_sa;
+    sa.sa_handler = SIG_IGN;
+    sa.sa_flags = 0;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGPIPE, &sa, &old_sa);
+
+    ssize_t ret = write_all_timeout(fds[0], "data", 4, 1000);
+    ASSERT_TRUE(ret == -1);
+
+    sigaction(SIGPIPE, &old_sa, NULL);
+    close(fds[0]);
+}
+
+TEST(io, write_all_timeout_returns_on_full_buffer) {
+    /* When the socket buffer is full and the reader is gone,
+     * write_all_timeout must return -1 within the timeout period,
+     * NOT block forever like the old write_all did.
+     * This is the core test for issue #47. */
+    int fds[2];
+    ASSERT_EQ(socketpair(AF_UNIX, SOCK_STREAM, 0, fds), 0);
+
+    /* Set non-blocking so writes return EAGAIN when buffer full */
+    set_socket_non_blocking(fds[0]);
+
+    /* Fill the send buffer */
+    char big[4096];
+    memset(big, 'x', sizeof(big));
+    for (int i = 0; i < 1000; i++) {
+        ssize_t w = write(fds[0], big, sizeof(big));
+        if (w < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            break;
+    }
+
+    /* Now write_all_timeout with a short timeout should fail, not block */
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    ssize_t ret = write_all_timeout(fds[0], "more", 4, 200);
+    clock_gettime(CLOCK_MONOTONIC, &end);
+
+    long elapsed_ms = (end.tv_sec - start.tv_sec) * 1000 +
+                      (end.tv_nsec - start.tv_nsec) / 1000000;
+
+    /* Must return failure (-1), indicating timeout/error */
+    ASSERT_TRUE(ret == -1);
+    /* Must return within reasonable time (not infinite) */
+    ASSERT_TRUE(elapsed_ms < 5000);
+
+    close(fds[0]);
+    close(fds[1]);
+}
+
+TEST(io, write_all_timeout_zero_means_nonblocking) {
+    /* timeout_ms=0 should mean pure non-blocking: no poll at all */
+    int fds[2];
+    ASSERT_EQ(socketpair(AF_UNIX, SOCK_STREAM, 0, fds), 0);
+    set_socket_non_blocking(fds[0]);
+
+    /* Fill the send buffer */
+    char big[4096];
+    memset(big, 'x', sizeof(big));
+    for (int i = 0; i < 1000; i++) {
+        ssize_t w = write(fds[0], big, sizeof(big));
+        if (w < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            break;
+    }
+
+    /* With timeout=0, should fail immediately on full buffer */
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    ssize_t ret = write_all_timeout(fds[0], "data", 4, 0);
+    clock_gettime(CLOCK_MONOTONIC, &end);
+
+    long elapsed_ms = (end.tv_sec - start.tv_sec) * 1000 +
+                      (end.tv_nsec - start.tv_nsec) / 1000000;
+
+    ASSERT_TRUE(ret == -1);
+    ASSERT_TRUE(elapsed_ms < 100);  /* should be nearly instant */
+
+    close(fds[0]);
+    close(fds[1]);
+}
+
+/* ---- send_packet_nonblock tests ---- */
+
+TEST(io, send_packet_nonblock_basic) {
+    /* send_packet_nonblock should succeed on a writable socket */
+    int fds[2];
+    ASSERT_EQ(socketpair(AF_UNIX, SOCK_STREAM, 0, fds), 0);
+    set_socket_non_blocking(fds[0]);
+
+    Packet out;
+    memset(&out, 0, sizeof(out));
+    out.type = MSG_CONTENT;
+    out.len = 5;
+    memcpy(out.u.msg, "hello", 5);
+    ASSERT_EQ(send_packet_nonblock(fds[0], &out), 0);
+
+    Packet in;
+    memset(&in, 0, sizeof(in));
+    ASSERT_EQ(recv_packet(fds[1], &in), 0);
+    ASSERT_EQ(in.type, MSG_CONTENT);
+    ASSERT_EQ(in.len, 5);
+    ASSERT_MEMEQ(in.u.msg, "hello", 5);
+
+    close(fds[0]);
+    close(fds[1]);
+}
+
+TEST(io, send_packet_nonblock_full_buffer) {
+    /* send_packet_nonblock must return -1 when buffer is full, not block */
+    int fds[2];
+    ASSERT_EQ(socketpair(AF_UNIX, SOCK_STREAM, 0, fds), 0);
+    set_socket_non_blocking(fds[0]);
+
+    /* Fill the send buffer */
+    char big[4096];
+    memset(big, 'x', sizeof(big));
+    for (int i = 0; i < 1000; i++) {
+        ssize_t w = write(fds[0], big, sizeof(big));
+        if (w < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            break;
+    }
+
+    Packet out;
+    memset(&out, 0, sizeof(out));
+    out.type = MSG_CONTENT;
+    out.len = 100;
+    memset(out.u.msg, 'z', 100);
+
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    int ret = send_packet_nonblock(fds[0], &out);
+    clock_gettime(CLOCK_MONOTONIC, &end);
+
+    long elapsed_ms = (end.tv_sec - start.tv_sec) * 1000 +
+                      (end.tv_nsec - start.tv_nsec) / 1000000;
+
+    ASSERT_EQ(ret, -1);
+    ASSERT_TRUE(elapsed_ms < 100);  /* must not block */
+
+    close(fds[0]);
+    close(fds[1]);
+}
+
 TEST(io, recv_packet_on_half_closed_socket) {
     /* This directly tests the root cause of the busy-loop bug:
      * recv_packet on a socket whose peer has closed must return -1 */
