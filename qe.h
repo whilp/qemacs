@@ -1302,6 +1302,7 @@ struct DisplayState {
     int eol_reached;
     EditState *edit_state;
     QETermStyle style;   /* current style for display_printf... */
+    QETermStyle eol_style;  /* style for EOL fill (BCE support for terminal mode) */
 
     /* fragment buffers */
     TextFragment fragments[MAX_SCREEN_WIDTH];

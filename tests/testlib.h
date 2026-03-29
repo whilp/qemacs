@@ -47,7 +47,16 @@ static void testlib_register(const char *suite, const char *name, void (*func)(v
 
 static int testlib_run_all(void) {
     int i, passed = 0;
+    const char *filter = getenv("TESTLIB_FILTER");
     for (i = 0; i < testlib_count; i++) {
+        if (filter && *filter) {
+            /* match "suite.name" or just "name" or "suite" */
+            char fullname[256];
+            snprintf(fullname, sizeof(fullname), "%s.%s",
+                     testlib_tests[i].suite, testlib_tests[i].name);
+            if (!strstr(fullname, filter))
+                continue;
+        }
         testlib_current_suite = testlib_tests[i].suite;
         testlib_current_name = testlib_tests[i].name;
         testlib_current_failed = 0;
