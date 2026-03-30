@@ -33,7 +33,7 @@ tests/               Test suite
 kmap/                Keyboard mapping files for input methods
 cp/                  Character set data files (ISO 8859-x)
 fonts/               Bitmap font files (.fbf format)
-plugin.c             Lua 5.4 plugin system (embeds Lua, exposes qe.* API)
+plugin.c             Lua 5.4 plugin/config/eval system (embeds Lua, exposes qe.* API)
 third_party/lua/     Vendored Lua 5.4.6 amalgamation from whilp/cosmopolitan
 plugins/             Example Lua plugins (.lua files installed to ~/.qe/)
 docs/                Developer documentation (testing, debugging, plugins)

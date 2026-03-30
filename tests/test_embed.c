@@ -90,15 +90,15 @@ TEST(embed, ligatures_readable) {
 }
 
 /*
- * Test that config.eg is a text file starting with expected comment
+ * Test that config.eg is a text file starting with expected Lua comment
  */
 TEST(embed, config_eg_content) {
     char buf[64] = {0};
     int n = read_head("/zip/share/qe/config.eg", buf, 2);
     ASSERT_TRUE(n >= 2);
-    /* config.eg starts with "//" comment */
-    ASSERT_TRUE(buf[0] == '/');
-    ASSERT_TRUE(buf[1] == '/');
+    /* config.eg starts with "--" Lua comment */
+    ASSERT_TRUE(buf[0] == '-');
+    ASSERT_TRUE(buf[1] == '-');
 }
 
 /*

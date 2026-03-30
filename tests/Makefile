@@ -61,6 +61,9 @@ LUA_AMALG = ../third_party/lua/lua-amalg.c
 $(OUTDIR)/test_lua: test_lua.c $(LUA_AMALG) ../third_party/lua/lua-amalg.h ../plugin.c testlib.h | $(OUTDIR)
 	$(CC) $(TEST_CFLAGS) -DTEST_LUA_STANDALONE -o $@ test_lua.c $(LUA_AMALG) ../plugin.c -lm
 
+$(OUTDIR)/test_lua_config: test_lua_config.c $(LUA_AMALG) ../third_party/lua/lua-amalg.h ../plugin.c testlib.h | $(OUTDIR)
+	$(CC) $(TEST_CFLAGS) -DTEST_LUA_STANDALONE -o $@ test_lua_config.c $(LUA_AMALG) ../plugin.c -lm
+
 # Embed test: validates resource files are accessible via /zip/ paths
 EMBED_FILES = ../o/kmaps ../o/ligatures ../config.eg ../o/qe-manual.md ../qe.1
 

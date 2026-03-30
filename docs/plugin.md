@@ -1,7 +1,8 @@
 # QEmacs Lua Plugin System
 
-QEmacs embeds Lua 5.4 for extensibility. Plugins are `.lua` files that use
-the `qe` API to register commands, manipulate buffers, and extend the editor.
+QEmacs embeds Lua 5.4 as its scripting engine. Lua replaces the legacy qscript
+system for configuration, scripting, and plugins. All `.lua` files in `~/.qe/`
+are loaded at startup, including `config.lua` for editor configuration.
 
 ## Quick Start
 
@@ -16,6 +17,23 @@ end)
 
 Restart qemacs — the plugin loads automatically. Press `C-c h` to run it.
 
+## Configuration
+
+Editor configuration uses Lua. Create `~/.qe/config.lua`:
+
+```lua
+-- Key bindings
+qe.bind('set-style', 'C-x s')
+
+-- Styles
+qe.call('set-style', 'comment', 'font-style', 'italic')
+```
+
+Project-local configuration files (`.qerc.lua`) in parent directories of
+opened files are also loaded automatically.
+
+See `config.eg` for a full example configuration.
+
 ## Loading Plugins
 
 **Automatic**: All `.lua` files in `~/.qe/` are loaded at startup.
@@ -26,6 +44,15 @@ Restart qemacs — the plugin loads automatically. Press `C-c h` to run it.
 ```
 Lua: qe.message("it works")
 ```
+
+**Eval**: Use `M-:` (`eval-expression`) to evaluate Lua and see the result:
+```
+Eval: return 1 + 2
+-> 3
+```
+
+Use `M-C-z` (`eval-region`) to evaluate selected Lua code, or
+`M-x eval-buffer` to evaluate the entire buffer as Lua.
 
 Plugins can also `require` other Lua modules from `~/.qe/`:
 ```lua
@@ -165,4 +192,17 @@ The Lua engine is compiled from an amalgamated source (`third_party/lua/lua-amal
 generated from [whilp/cosmopolitan](https://github.com/whilp/cosmopolitan)'s
 Lua 5.4.6 distribution. The amalgamation is vendored directly in the repository.
 
-Plugin system source: `plugin.c`. Tests: `tests/test_lua.c`.
+Plugin system source: `plugin.c`. Tests: `tests/test_lua.c`, `tests/test_lua_config.c`.
+
+## Migration from QScript
+
+QEmacs previously used a C-like scripting language called qscript for
+configuration. This has been replaced entirely by Lua. Key differences:
+
+| QScript | Lua |
+|---------|-----|
+| `global_set_key("C-x s", "set-style");` | `qe.bind('set-style', 'C-x s')` |
+| `set_style("comment", "font-style", "italic");` | `qe.call('set-style', 'comment', 'font-style', 'italic')` |
+| `~/.qe/config` | `~/.qe/config.lua` |
+| `.qerc` | `.qerc.lua` |
+| `M-:` eval-expression (qscript) | `M-:` eval-expression (Lua, use `return` to see values) |

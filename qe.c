@@ -6132,14 +6132,14 @@ static void do_insert_kbd_macro(EditState *s, const char *name)
         if (d && d->action.ESs == do_execute_macro_keys) {
             const char *keys = d->spec + 2;   /* skip @{ */
             b->offset = s->offset;
-            eb_printf(b, "define_kbd_macro(\"%s\", \"", name);
+            eb_printf(b, "qe.call('define-kbd-macro', \"%s\", \"", name);
             while (keys[1]) {                   /* stop at } */
                 char32_t c = utf8_decode(&keys);
                 if (c == '\\' || c == '"')
                     eb_putc(b, '\\');
                 eb_putc(b, c);
             }
-            eb_puts(b, "\", \"\");\n");
+            eb_puts(b, "\", \"\")\n");
             s->offset = b->offset;
         }
     } else {
@@ -6418,7 +6418,7 @@ static void qe_save_macro(EditState *s, const CmdDef *def, EditBuffer *b)
     if (def)
         name = def->name;
 
-    eb_printf(b, "define_kbd_macro(\"%s\", \"", name);
+    eb_printf(b, "qe.call('define-kbd-macro', \"%s\", \"", name);
 
     if (def) {
         const char *keys = def->spec + 2;   /* skip @{ */
@@ -6432,7 +6432,7 @@ static void qe_save_macro(EditState *s, const CmdDef *def, EditBuffer *b)
             eb_puts(b, out->buf);
         }
     }
-    eb_puts(b, "\", \"\");\n");
+    eb_puts(b, "\", \"\")\n");
 }
 
 void qe_save_macros(EditState *s, EditBuffer *b)
@@ -6441,7 +6441,7 @@ void qe_save_macros(EditState *s, EditBuffer *b)
     const CmdDef *d;
     int i, j;
 
-    eb_puts(b, "// macros:\n");
+    eb_puts(b, "-- macros:\n");
     qe_save_macro(s, NULL, b);
 
     /* Enumerate defined macros */
@@ -9115,10 +9115,10 @@ void qe_save_open_files(EditState *s, EditBuffer *b)
     QEmacsState *qs = s->qs;
     EditBuffer *b1;
 
-    eb_puts(b, "// open files:\n");
+    eb_puts(b, "-- open files:\n");
     for (b1 = qs->first_buffer; b1 != NULL; b1 = b1->next) {
         if (!(b1->flags & BF_SYSTEM) && *b1->filename)
-            eb_printf(b, "find_file(\"%s\");\n", b1->filename);
+            eb_printf(b, "qe.call('find-file', \"%s\")\n", b1->filename);
     }
     eb_putc(b, '\n');
 }
@@ -9922,18 +9922,18 @@ void qe_save_window_layout(EditState *s, EditBuffer *b)
     int mark_row, mark_col;
     int top_row, top_col;
 
-    eb_puts(b, "// window layout:\n");
+    eb_puts(b, "-- window layout:\n");
     /* Get rid of default window */
     // XXX: should simplify layout management
     // XXX: should save mark, offset, offset_top
-    eb_puts(b, "delete_other_windows();\n");
-    eb_puts(b, "hide_window();\n");
+    eb_puts(b, "qe.call('delete-other-windows')\n");
+    eb_puts(b, "qe.call('hide-window')\n");
     for (e = qs->first_window; e != NULL; e = e->next_window) {
         if (*e->b->filename) {
             eb_get_pos(e->b, &offset_row, &offset_col, e->offset);
             eb_get_pos(e->b, &mark_row, &mark_col, e->b->mark);
             eb_get_pos(e->b, &top_row, &top_col, e->offset_top);
-            eb_printf(b, "create_window(\"%s\", "
+            eb_printf(b, "qe.call('create-window', \"%s\", "
                       "\"%d,%d,%d,%d flags:%d wrap:%u",
                       e->b->filename,
                       scale(e->x1, 1000, qs->width),
@@ -9949,10 +9949,10 @@ void qe_save_window_layout(EditState *s, EditBuffer *b)
                 eb_printf(b, " top:%d,%d", top_row, top_col);
             if (e == qs->active_window)
                 eb_printf(b, " active:1");
-            eb_printf(b, " mode:%s\");\n", e->mode->name);
+            eb_printf(b, " mode:%s\")\n", e->mode->name);
         }
     }
-    eb_puts(b, "delete_hidden_windows();\n");
+    eb_puts(b, "qe.call('delete-hidden-windows')\n");
     eb_putc(b, '\n');
 }
 #endif  /* !CONFIG_TINY */
@@ -9972,9 +9972,9 @@ void do_save_session(EditState *s, int popup)
     if (!b)
         return;
 
-    eb_printf(b, "// qemacs version: %s\n", QE_VERSION);
+    eb_printf(b, "-- qemacs version: %s\n", QE_VERSION);
     now = time(NULL);
-    eb_printf(b, "// session saved: %s\n", ctime(&now));
+    eb_printf(b, "-- session saved: %s\n", ctime(&now));
 
     qe_save_variables(s, b);
     qe_save_macros(s, b);
@@ -10716,7 +10716,7 @@ void do_load_config_file(EditState *e, const char *file)
         return;
     }
 
-    ffst = find_file_open(qs->res_path, "config", FF_PATH | FF_NODIR);
+    ffst = find_file_open(qs->res_path, "config.lua", FF_PATH | FF_NODIR);
     if (!ffst)
         return;
     while (find_file_next(ffst, filename, sizeof(filename)) == 0) {
@@ -10746,7 +10746,7 @@ void do_load_qerc(EditState *e, const char *filename)
         if (!p)
             break;
         p += 1;
-        pstrcpy(p, buf + sizeof(buf) - p, ".qerc");
+        pstrcpy(p, buf + sizeof(buf) - p, ".qerc.lua");
         qs->active_window = e;
         parse_config_file(e, buf);
     }
@@ -11391,7 +11391,7 @@ static const CmdDef basic_commands[] = {
           do_name_last_kbd_macro, ESs,
           "s{Macro name: }[command]")
     CMD2( "insert-kbd-macro", "C-x C-k i",
-          "Insert in buffer the definition of kbd macro MACRONAME, as qescript code",
+          "Insert in buffer the definition of kbd macro MACRONAME, as Lua code",
           do_insert_kbd_macro, ESs,
           "*s{Macro name: }[command]")
     CMD2( "read-kbd-macro", "C-x C-k r",

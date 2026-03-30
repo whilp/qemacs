@@ -1,39 +1,35 @@
-// Sample qemacs config file
-//
-// copy it in ~/.qe/config
-//
-// You can call any Qemacs command with a C like syntax.
-//
-// underscores can be used in command names instead of dash.
-//
+-- Sample qemacs Lua config file
+--
+-- Copy to ~/.qe/config.lua
+--
+-- Configuration uses Lua syntax. The qe.* API provides access
+-- to editor commands and key bindings.
 
-// simple key definition
-// C-key : Control + key
-// M-key : Meta + key
-// Read util.c to get all the key names
-// CG: should be save-all-buffers?
-global_set_key("C-x s", "set-style");
+-- Simple key binding
+-- C-key : Control + key
+-- M-key : Meta + key
+qe.bind('set-style', 'C-x s')
 
-// set X11 display size
-set_display_size(80, 50);
+-- Set X11 display size
+qe.call('set-display-size', '80', '50')
 
-// set default input method
-//set_input_method("HebrewIsraeli");
+-- Set default input method
+-- qe.call('set-input-method', 'HebrewIsraeli')
 
-// set X11 fonts and fall backs
-set_system_font("fixed", "fixed,unifont");
-set_system_font("sans", "helvetica,unifont");
-set_system_font("serif", "times,unifont");
+-- Set X11 fonts and fall backs
+qe.call('set-system-font', 'fixed', 'fixed,unifont')
+qe.call('set-system-font', 'sans', 'helvetica,unifont')
+qe.call('set-system-font', 'serif', 'times,unifont')
 
-// simple styles
-set_style("mode-line", "background-color", "white");
-set_style("comment", "font-family", "sans");
-set_style("comment", "font-size", "12");
-set_style("comment", "font-style", "italic");
+-- Simple styles
+qe.call('set-style', 'mode-line', 'background-color', 'white')
+qe.call('set-style', 'comment', 'font-family', 'sans')
+qe.call('set-style', 'comment', 'font-size', '12')
+qe.call('set-style', 'comment', 'font-style', 'italic')
 
-set_style("keyword", "font-family", "serif");
-set_style("keyword", "font-size", "18");
+qe.call('set-style', 'keyword', 'font-family', 'serif')
+qe.call('set-style', 'keyword', 'font-size', '18')
 
-set_style("function", "font-family", "serif");
-set_style("function", "font-size", "18");
-set_style("function", "font-weight", "bold");
+qe.call('set-style', 'function', 'font-family', 'serif')
+qe.call('set-style', 'function', 'font-size', '18')
+qe.call('set-style', 'function', 'font-weight', 'bold')
