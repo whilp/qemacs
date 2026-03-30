@@ -2989,50 +2989,6 @@ static ModeDef enscript_mode = {
     .fallback = &c_mode,
 };
 
-/*---------------- QuickScript programming language ----------------*/
-
-static const char qs_keywords[] = {
-    "break|case|catch|class|continue|default|delete|do|else|"
-    "finally|for|function|if|import|in|instanceof|module|new|"
-    "return|switch|this|throw|try|typeof|while|"
-    "true|false|null|void|"
-    "get|set|"
-    "struct|self|def|func|as|from|arguments|target|super|"
-};
-
-static const char qs_types[] = {
-    "const|let|var|bool|char|double|int|string|"
-    "Array|Boolean|Function|Number|Object|String|Date|"
-};
-
-static int qs_mode_probe(ModeDef *mode, ModeProbeData *p)
-{
-    if (match_extension(p->filename, mode->extensions)
-    ||  match_shell_handler(cs8(p->buf), mode->shell_handlers)) {
-        return 80;
-    }
-    if (strequal(p->filename, ".qerc")
-    ||  strstr(p->real_filename, "/.qe/config"))
-        return 80;
-
-    return 1;
-}
-
-static ModeDef qscript_mode = {
-    .name = "QScript",
-    .alt_name = "qs",
-    .extensions = "qe|qs",
-    .shell_handlers = "qscript|qs|qsn",
-    .mode_probe = qs_mode_probe,
-    .colorize_func = js_colorize_line,
-    .colorize_flags = CLANG_QSCRIPT | CLANG_STR3 | CLANG_REGEX,
-    .keywords = qs_keywords,
-    .types = qs_types,
-    .indent_func = c_indent_line,
-    .auto_indent = 1,
-    .fallback = &c_mode,
-};
-
 /*---------------- Elastic C like language ----------------*/
 
 static const char ec_keywords[] = {
@@ -4765,7 +4721,7 @@ static int c_init(QEmacsState *qs)
     qe_register_mode(qs, &idl_mode, MODEF_SYNTAX);
     qe_register_mode(qs, &calc_mode, MODEF_SYNTAX);
     qe_register_mode(qs, &enscript_mode, MODEF_SYNTAX);
-    qe_register_mode(qs, &qscript_mode, MODEF_SYNTAX);
+
     qe_register_mode(qs, &ec_mode, MODEF_SYNTAX);
     qe_register_mode(qs, &sl_mode, MODEF_SYNTAX);
     qe_register_mode(qs, &csl_mode, MODEF_SYNTAX);

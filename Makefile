@@ -99,7 +99,7 @@ EMBED_FILES := $(o)/kmaps $(o)/ligatures config.eg $(o)/qe-manual.md qe.1
 
 # Object files
 OBJS := qe.o cutils.o util.o color.o charset.o buffer.o search.o input.o display.o \
-        qescript.o modes/hex.o test_display.o extras.o variables.o
+        modes/hex.o test_display.o extras.o variables.o
 
 OBJS += unix.o tty.o session.o plugin.o third_party/lua/lua-amalg.o
 LIBS += $(EXTRALIBS)

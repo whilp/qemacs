@@ -1724,100 +1724,11 @@ int window_resize(EditState *s, int target_w, int target_h);
 void wheel_scroll_up_down(EditState *s, int dir);
 void qe_mouse_event(QEmacsState *qs, QEEvent *ev);
 
-/* values */
-
-typedef struct QEValue {
-    int type : 16;  // value type: TOK_VOID, TOK_NUMBER, TOK_CHAR, TOK_STRING
-                    // also errors: TOK_ERR?
-                    // should also have TOK_WINDOW, TOK_BUFFER, TOK_MODE...
-    unsigned int alloc : 8; // u.str should be freed
-    unsigned int flags : 8;
-    // XXX: could have flags for owning allocated block pointed to by `str`
-    // XXX: should have token precedence for operator tokens
-    int len;                // string length
-    union {
-        long long value;    // number value
-        unsigned long long uvalue; // same as unsigned
-        char *str;          // string value
-        // XXX: should have other object pointer types
-        // XXX: could have floating point values with type double
-        // XXX: should have short inline strings (7 bytes)
-    } u;
-} QEValue;
-
-enum {
-    TOK_VOID = 0, TOK_NUMBER = 128, TOK_STRING, TOK_CHAR, TOK_ID,
-};
-
-static inline void qe_cfg_set_void(QEValue *sp) {
-    if (sp->alloc) {
-        qe_free(&sp->u.str);
-        sp->alloc = 0;
-    }
-    sp->type = TOK_VOID;
-}
-
-static inline void qe_cfg_set_num(QEValue *sp, long long value) {
-    if (sp->alloc) {
-        qe_free(&sp->u.str);
-        sp->alloc = 0;
-    }
-    sp->u.value = value;
-    sp->type = TOK_NUMBER;
-}
-
-static inline void qe_cfg_set_char(QEValue *sp, char32_t c) {
-    if (sp->alloc) {
-        qe_free(&sp->u.str);
-        sp->alloc = 0;
-    }
-    sp->u.value = c;
-    sp->type = TOK_CHAR;
-}
-
-static inline void qe_cfg_set_str(QEValue *sp, const char *str, int len) {
-    if (sp->alloc)
-        qe_free(&sp->u.str);
-    sp->u.str = qe_malloc_array(char, len + 1);
-    memcpy(sp->u.str, str, len);
-    sp->u.str[len] = '\0';
-    sp->len = len;
-    sp->type = TOK_STRING;
-    sp->alloc = 1;
-}
-
-static inline void qe_cfg_set_pstr(QEValue *sp, char *str, int len, int alloc) {
-    if (sp->alloc) {
-        qe_free(&sp->u.str);
-        sp->alloc = 0;
-    }
-    sp->u.str = str;
-    sp->len = len;
-    sp->type = TOK_STRING;
-    sp->alloc = alloc;
-}
-
-static inline void qe_cfg_move(QEValue *sp, QEValue *sp1) {
-    if (sp != sp1) {
-        if (sp->alloc)
-            qe_free(&sp->u.str);
-        *sp = *sp1;
-        sp1->alloc = 0;
-        sp1->type = TOK_VOID;
-    }
-}
-
-static inline void qe_cfg_swap(QEValue *sp, QEValue *sp1) {
-    QEValue tmp = *sp;
-    *sp = *sp1;
-    *sp1 = tmp;
-}
-
-/* qescript.c */
+/* plugin.c — Lua-based config and eval (replaces qescript) */
 
 int parse_config_file(EditState *s, const char *filename);
 void do_eval_expression(EditState *s, const char *expression, int argval);
-void do_eval_region(EditState *s, int argval); /* should pass actual offsets */
+void do_eval_region(EditState *s, int argval);
 void do_eval_buffer(EditState *s, int argval);
 #ifdef CONFIG_SESSION
 extern int use_session_file;

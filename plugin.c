@@ -57,6 +57,84 @@ int qe_lua_eval(lua_State *L, const char *code, char *errbuf, int errsize)
     return rc;
 }
 
+/*
+ * Load and execute a Lua configuration file.
+ * Returns 0 on success, non-zero on error.
+ * If errbuf is provided, the error message is copied there.
+ */
+int qe_lua_load_config(lua_State *L, const char *filename,
+                       char *errbuf, int errsize)
+{
+    int rc;
+
+    if (errbuf && errsize > 0)
+        errbuf[0] = '\0';
+
+    rc = luaL_dofile(L, filename);
+    if (rc != 0) {
+        if (errbuf && errsize > 0) {
+            const char *msg = lua_tostring(L, -1);
+            if (msg) {
+                int len = strlen(msg);
+                if (len >= errsize)
+                    len = errsize - 1;
+                memcpy(errbuf, msg, len);
+                errbuf[len] = '\0';
+            }
+        }
+        lua_pop(L, 1);
+    }
+    return rc;
+}
+
+/*
+ * Evaluate a Lua expression and return the result as a string.
+ * The code is wrapped in a chunk; if it starts with "return" the result
+ * is captured. Returns 0 on success, non-zero on error.
+ */
+int qe_lua_eval_expression(lua_State *L, const char *code,
+                           char *result, int resultsize,
+                           char *errbuf, int errsize)
+{
+    int rc;
+
+    if (result && resultsize > 0)
+        result[0] = '\0';
+    if (errbuf && errsize > 0)
+        errbuf[0] = '\0';
+
+    rc = luaL_dostring(L, code);
+    if (rc != 0) {
+        if (errbuf && errsize > 0) {
+            const char *msg = lua_tostring(L, -1);
+            if (msg) {
+                int len = strlen(msg);
+                if (len >= errsize)
+                    len = errsize - 1;
+                memcpy(errbuf, msg, len);
+                errbuf[len] = '\0';
+            }
+        }
+        lua_pop(L, 1);
+        return rc;
+    }
+
+    /* Capture any return value */
+    if (result && resultsize > 0 && !lua_isnoneornil(L, -1)) {
+        const char *s = luaL_tolstring(L, -1, NULL);
+        if (s) {
+            int len = strlen(s);
+            if (len >= resultsize)
+                len = resultsize - 1;
+            memcpy(result, s, len);
+            result[len] = '\0';
+        }
+        lua_pop(L, 1); /* pop tolstring result */
+    }
+
+    return 0;
+}
+
 /* ---- Helper: check if file has .lua extension ---- */
 
 static int is_lua_file(const char *name)
@@ -491,6 +569,116 @@ void qe_exit_all_plugins(QEmacsState *qs)
     lua_qs = NULL;
 }
 
+/* ---- Config file and eval (replaces qescript.c) ---- */
+
+/*
+ * Load and execute a Lua configuration file.
+ * This replaces parse_config_file() from qescript.c.
+ */
+int parse_config_file(EditState *s, const char *filename) {
+    char errbuf[512];
+
+    if (!qe_L) return -1;
+    /* Silently skip non-existent files (like the old qscript behavior) */
+    if (access(filename, R_OK) != 0)
+        return -1;
+    if (qe_lua_load_config(qe_L, filename, errbuf, sizeof(errbuf)) != 0) {
+        put_error(s, "Config: %s", errbuf);
+        return -1;
+    }
+    return 0;
+}
+
+/*
+ * Evaluate a Lua expression string.
+ * With argval > 0, insert result into buffer; otherwise show in status bar.
+ * This replaces do_eval_expression() from qescript.c.
+ */
+void do_eval_expression(EditState *s, const char *expression, int argval) {
+    char errbuf[512];
+    char result[512];
+
+    if (!qe_L) {
+        put_error(s, "Lua not initialized");
+        return;
+    }
+    if (qe_lua_eval_expression(qe_L, expression, result, sizeof(result),
+                               errbuf, sizeof(errbuf)) != 0) {
+        put_error(s, "Lua: %s", errbuf);
+        return;
+    }
+    if (result[0]) {
+        if (argval != NO_ARG && argval > 0) {
+            s->offset += eb_insert_str(s->b, s->offset, result);
+        } else {
+            put_status(s, "-> %s", result);
+        }
+    }
+}
+
+/*
+ * Evaluate Lua code in a buffer region.
+ * This replaces do_eval_region() from qescript.c.
+ */
+void do_eval_region(EditState *s, int argval) {
+    char *buf;
+    char errbuf[512];
+    int start, stop, size;
+
+    start = s->b->mark;
+    stop = s->offset;
+    if (stop < start) {
+        int tmp = start;
+        start = stop;
+        stop = tmp;
+    }
+    size = stop - start;
+    if (size <= 0) return;
+
+    buf = qe_malloc_array(char, size + 1);
+    if (!buf) return;
+    eb_read(s->b, start, buf, size);
+    buf[size] = '\0';
+
+    if (!qe_L) {
+        put_error(s, "Lua not initialized");
+        qe_free(&buf);
+        return;
+    }
+    if (qe_lua_eval(qe_L, buf, errbuf, sizeof(errbuf)) != 0) {
+        put_error(s, "Lua: %s", errbuf);
+    }
+    qe_free(&buf);
+}
+
+/*
+ * Evaluate Lua code in the entire buffer.
+ * This replaces do_eval_buffer() from qescript.c.
+ */
+void do_eval_buffer(EditState *s, int argval) {
+    char *buf;
+    char errbuf[512];
+    int size;
+
+    size = s->b->total_size;
+    if (size <= 0) return;
+
+    buf = qe_malloc_array(char, size + 1);
+    if (!buf) return;
+    eb_read(s->b, 0, buf, size);
+    buf[size] = '\0';
+
+    if (!qe_L) {
+        put_error(s, "Lua not initialized");
+        qe_free(&buf);
+        return;
+    }
+    if (qe_lua_eval(qe_L, buf, errbuf, sizeof(errbuf)) != 0) {
+        put_error(s, "Lua: %s", errbuf);
+    }
+    qe_free(&buf);
+}
+
 /* ---- Interactive commands ---- */
 
 static void do_load_plugin(EditState *s, const char *filename)
@@ -529,6 +717,17 @@ static const CmdDef plugin_commands[] = {
           "Evaluate a Lua expression",
           do_eval_lua, ESs,
           "s{Lua: }|lua|", 0)
+    CMD3( "eval-expression", "M-:",
+          "Evaluate a Lua expression and display result",
+          do_eval_expression, ESsi,
+          "s{Eval: }|expression|"
+          "P", 0)
+    CMD3( "eval-region", "M-C-z",
+          "Evaluate Lua code in the selected region",
+          do_eval_region, ESi, "P", 0)
+    CMD3( "eval-buffer", "",
+          "Evaluate Lua code in the current buffer",
+          do_eval_buffer, ESi, "P", 0)
 };
 
 /* ---- Module init ---- */

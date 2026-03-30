@@ -33,19 +33,18 @@ evaluation of arbitrary code by the user. The implications are far-reaching:
 
 ### What QEmacs offers instead
 
-QEmacs has a small built-in scripting language ("qscript") used for
-configuration files (`.qerc`, `config`). It supports:
+QEmacs embeds Lua 5.4 as its scripting engine for configuration and plugins.
+Configuration files (`~/.qe/config.lua`, `.qerc.lua`) use Lua syntax. The
+`qe.*` API provides access to:
 
-- Variable assignment and arithmetic expressions
-- Conditionals (`if`/`else`) and loops (`for`, `while`)
-- Calling any registered QEmacs command by name
-- Defining keyboard macros via `define_kbd_macro()`
-- Key rebinding via `global_set_key()` and `local_set_key()`
+- Buffer editing (`qe.insert`, `qe.delete`, `qe.region_text`)
+- Cursor navigation (`qe.point`, `qe.goto_line`, `qe.bol`, `qe.eol`)
+- Command execution (`qe.call`, `qe.bind`)
+- Command registration (`qe.command`)
+- Status messages (`qe.message`, `qe.error`)
 
-This is sufficient for setting preferences, rebinding keys, and defining simple
-macros, but it is not a general-purpose programming language. You cannot define
-new buffer-manipulating functions, create new modes, or extend the editor's
-behavior in fundamental ways.
+Lua plugins can define new commands, manipulate buffers, bind keys, and use
+the full Lua 5.4 standard library (including `io`, `os`, `string`, `math`).
 
 ## Keybindings and commands
 
@@ -181,9 +180,9 @@ undo/redo but without the full tree model.
 
 | Aspect | GNU Emacs | QEmacs |
 |--------|-----------|--------|
-| Config file | `~/.emacs` or `~/.emacs.d/init.el` (Elisp) | `~/.qe/config` or `.qerc` files (qscript) |
-| Config language | Full Emacs Lisp | Minimal qscript (variables, conditionals, commands) |
-| Directory-local | `.dir-locals.el` | `.qerc` files in parent directories |
+| Config file | `~/.emacs` or `~/.emacs.d/init.el` (Elisp) | `~/.qe/config.lua` (Lua) |
+| Config language | Full Emacs Lisp | Lua 5.4 with `qe.*` API |
+| Directory-local | `.dir-locals.el` | `.qerc.lua` files in parent directories |
 | Customization UI | `M-x customize` GUI | None — edit config files directly |
 | Theme system | `load-theme`, `custom-theme` | Built-in color schemes, no theme framework |
 | Per-mode config | Mode hooks in Elisp | Limited per-mode variables |
@@ -243,7 +242,7 @@ or any form of programmatic customization — you need GNU Emacs.
 
 | Feature | GNU Emacs | QEmacs |
 |---------|-----------|--------|
-| Extension language | Emacs Lisp (full language) | qscript (config-level) |
+| Extension language | Emacs Lisp (full language) | Lua 5.4 (plugins + config) |
 | Package ecosystem | Thousands of packages | None |
 | Language support | LSP, Tree-sitter, REPL | Syntax highlighting only |
 | Version control | Magit, VC, Ediff | None |

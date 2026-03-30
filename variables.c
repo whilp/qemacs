@@ -496,21 +496,15 @@ void qe_list_variables(EditState *s, EditBuffer *b)
 void qe_save_variables(EditState *s, EditBuffer *b)
 {
     char buf[MAX_FILENAME_SIZE];
-    char varname[32], *p;
     const VarDef *vp;
 
-    eb_puts(b, "// variables:\n");
+    eb_puts(b, "-- variables:\n");
     /* Only save customized variables */
     for (vp = s->qs->first_variable; vp; vp = vp->next) {
         if (vp->rw != VAR_RW_SAVE || !vp->modified)
             continue;
-        pstrcpy(varname, countof(varname), vp->name);
-        for (p = varname; *p; p++) {
-            if (*p == '-')
-                *p = '_';
-        }
         qe_get_variable(s, vp->name, buf, sizeof(buf), NULL, 1);
-        eb_printf(b, "%s = %s;\n", varname, buf);
+        eb_printf(b, "qe.call('set-variable', '%s', '%s')\n", vp->name, buf);
     }
     eb_putc(b, '\n');
 }
