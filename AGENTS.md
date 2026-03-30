@@ -33,7 +33,10 @@ tests/               Test suite
 kmap/                Keyboard mapping files for input methods
 cp/                  Character set data files (ISO 8859-x)
 fonts/               Bitmap font files (.fbf format)
-plugins/             Plugin development examples
+plugin.c             Lua 5.4 plugin system (embeds Lua, exposes qe.* API)
+third_party/lua/     Vendored Lua 5.4.6 amalgamation from whilp/cosmopolitan
+plugins/             Example Lua plugins (.lua files installed to ~/.qe/)
+docs/                Developer documentation (testing, debugging, plugins)
 Makefile             Single build file (cosmocc-only)
 .github/workflows/   CI configuration (ci.yml, release.yml)
 ```
@@ -139,6 +142,12 @@ make ci
 ```bash
 make test
 ```
+
+**Write a Lua plugin:**
+1. Create a `.lua` file (see `plugins/hello.lua` for an example)
+2. Use the `qe.*` API to register commands, manipulate buffers, etc.
+3. Install to `~/.qe/` for auto-loading, or load with `M-x load-plugin`
+4. See `docs/plugin.md` for the full API reference
 
 **Create a release locally:**
 ```bash
