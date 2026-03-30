@@ -194,9 +194,11 @@ if these arguments are not provided, if the current region is
 highlighted, operate on the contents of the region, otherwise,
 operate from point to the end of the buffer.
 
-This function is usually the wrong thing to use in a Lua script.
-What you probably want is a loop that calls `qe.call('search-forward', ...)`
-and `qe.call('replace-match', ...)` directly.
+This function is usually the wrong thing to use in a qscript program.
+What you probably want is a loop like this:
+
+    while (search_forward(FROM-STRING))
+        replace_match(TO-STRING);
 
 which will run faster and will not set the mark or print anything.
 The loop will not work if FROM-STRING can match the null string
