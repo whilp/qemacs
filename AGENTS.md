@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-QEmacs is a small but powerful multimode text editor written in C (~100K+ lines).
+QEmacs is a small but powerful multimode text editor written in C.
 Originally by Fabrice Bellard (2000), maintained by Charlie Gordon. Licensed under MIT.
 
 This fork builds exclusively with **cosmocc** (Cosmopolitan C compiler) to produce
