@@ -664,7 +664,7 @@ void qe_exit_all_modules(QEmacsState *qs);
 
 #endif /* QE_MODULE */
 
-/* dynamic plugin loading */
+/* Lua plugin system */
 void qe_load_all_plugins(QEmacsState *qs);
 void qe_exit_all_plugins(QEmacsState *qs);
 

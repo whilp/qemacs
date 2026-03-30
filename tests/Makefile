@@ -56,6 +56,11 @@ $(OUTDIR)/test_session: test_session.c ../session.c ../session.h testlib.h | $(O
 $(OUTDIR)/test_mkd_render: test_mkd_render.c ../modes/mkd_render_parse.c ../modes/mkd_render.h testlib.h | $(OUTDIR)
 	$(CC) $(TEST_CFLAGS) -o $@ test_mkd_render.c ../modes/mkd_render_parse.c
 
+LUA_AMALG = ../third_party/lua/lua-amalg.c
+
+$(OUTDIR)/test_lua: test_lua.c $(LUA_AMALG) ../third_party/lua/lua-amalg.h ../plugin.c testlib.h | $(OUTDIR)
+	$(CC) $(TEST_CFLAGS) -DTEST_LUA_STANDALONE -o $@ test_lua.c $(LUA_AMALG) ../plugin.c -lm
+
 # Embed test: validates resource files are accessible via /zip/ paths
 EMBED_FILES = ../o/kmaps ../o/ligatures ../config.eg ../o/qe-manual.md ../qe.1
 
