@@ -11979,7 +11979,12 @@ int main(int argc, char **argv)
         const char *sess_name = NULL;
         int no_session = 0;
 
+        int help_requested = 0;
         for (i = 1; i < argc; i++) {
+            if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0
+            ||  strcmp(argv[i], "-?") == 0) {
+                help_requested = 1;
+            }
             if ((strcmp(argv[i], "-S") == 0 || strcmp(argv[i], "--session-create") == 0) && i + 1 < argc) {
                 sess_action = SESSION_ACTION_CREATE;
                 sess_name = argv[++i];
@@ -12000,6 +12005,7 @@ int main(int argc, char **argv)
          * --no-session was given or we're already inside a session
          * (QE_SESSION is set by the session server in the child). */
         if (sess_action == SESSION_ACTION_NONE && !no_session
+        &&  !help_requested
         &&  !getenv("QE_SESSION") && !getenv("QE_TEST_DISPLAY")) {
             sess_action = SESSION_ACTION_CREATE_ATTACH;
             sess_name = "main";
