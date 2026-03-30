@@ -2339,9 +2339,7 @@ static void qe_term_emulate(ShellState *s, int c)
                         s->grab_keys = 0;
                     }
                     if (s->use_alternate_screen) {
-                        // XXX: this will actually go to row s->rows-1
-                        qe_term_goto_xy(s, 0, s->rows, 0);
-                        eb_delete_range(s->b, s->cur_offset, s->b->total_size);
+                        eb_delete_range(s->b, s->alternate_screen_top, s->b->total_size);
                         s->use_alternate_screen = 0;
                     }
                     s->cur_offset = s->b->total_size;
