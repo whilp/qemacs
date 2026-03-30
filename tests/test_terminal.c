@@ -1872,6 +1872,85 @@ TEST(shell, bce_extends_bg_to_eol)
     session_cleanup(&sess);
 }
 
+/*--- Alternate screen buffer tests ---*/
+
+/* Test: when a program uses the alternate screen buffer (ESC[?1049h)
+ * and then exits it (ESC[?1049l), the alternate screen content must
+ * be completely removed from the display.
+ *
+ * Reproduces: "top output persists after quit + clear"
+ * Steps: M-x shell, run a command that enters alternate screen,
+ *        writes identifiable content, then exits alternate screen.
+ *        After exit, the alternate screen content must not be visible. */
+TEST(shell, alternate_screen_cleanup)
+{
+    TestSession sess;
+    if (session_start(&sess, NULL) != 0) {
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    if (!shell_open_and_wait(&sess)) {
+        session_stop(&sess);
+        session_cleanup(&sess);
+        ASSERT_TRUE(0);
+        return;
+    }
+
+    /* Run a command that:
+     * 1. Enters alternate screen (ESC[?1049h)
+     * 2. Homes cursor (ESC[H)
+     * 3. Writes identifiable content on multiple lines
+     * 4. Exits alternate screen (ESC[?1049l)
+     *
+     * This simulates what `top` does: enter alt screen, paint content, exit.
+     */
+    /* Use a helper script to avoid the marker text appearing in the
+     * command echo.  The script enters alternate screen, writes content,
+     * then exits alternate screen. */
+    session_type(&sess,
+        "sh -c '"
+        "printf \"\\033[?1049h\\033[H\""
+        " && printf \"ALTSCR_L1\\nALTSCR_L2\\nALTSCR_L3\\n\""
+        " && printf \"\\033[?1049l\"'\r");
+
+    /* Wait for the shell prompt to return after the command completes */
+    usleep(1500000);
+
+    ScreenSnap *snap = session_take_screenshot(&sess);
+    ASSERT_TRUE(snap != NULL);
+
+    /* After exiting alternate screen, the alternate screen content
+     * must not appear on any line by itself.  We check each line
+     * individually: the marker should not appear on any line that
+     * is NOT the command echo (the echo line contains "sh -c"). */
+    int leaked = 0;
+    for (int i = 0; i < snap->num_lines; i++) {
+        if (strstr(snap->lines[i], "sh -c") != NULL)
+            continue;  /* skip command echo line */
+        if (strstr(snap->lines[i], "ALTSCR_L1") != NULL ||
+            strstr(snap->lines[i], "ALTSCR_L2") != NULL ||
+            strstr(snap->lines[i], "ALTSCR_L3") != NULL) {
+            leaked = 1;
+            break;
+        }
+    }
+
+    if (leaked) {
+        fprintf(stderr, "DETECTED BUG: Alternate screen content persists after exit.\n");
+        fprintf(stderr, "Screen dump:\n");
+        for (int i = 0; i < snap->num_lines; i++)
+            fprintf(stderr, "  [%d]: '%s'\n", i, snap->lines[i]);
+    }
+
+    free_snapshot(snap);
+
+    ASSERT_FALSE(leaked);
+
+    session_stop(&sess);
+    session_cleanup(&sess);
+}
+
 /*--- Main ---*/
 
 int main(void)
