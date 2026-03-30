@@ -101,7 +101,7 @@ EMBED_FILES := $(o)/kmaps $(o)/ligatures config.eg $(o)/qe-manual.md qe.1
 OBJS := qe.o cutils.o util.o color.o charset.o buffer.o search.o input.o display.o \
         qescript.o modes/hex.o test_display.o extras.o variables.o
 
-OBJS += unix.o tty.o session.o
+OBJS += unix.o tty.o session.o plugin.o
 LIBS += $(EXTRALIBS)
 
 OBJS += kmap.o

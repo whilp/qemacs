@@ -664,6 +664,10 @@ void qe_exit_all_modules(QEmacsState *qs);
 
 #endif /* QE_MODULE */
 
+/* dynamic plugin loading */
+void qe_load_all_plugins(QEmacsState *qs);
+void qe_exit_all_plugins(QEmacsState *qs);
+
 /* Convenience macro for modules that register a single mode.
  * Replaces the common boilerplate:
  *   static int foo_init(QEmacsState *qs) {

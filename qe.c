@@ -11819,6 +11819,9 @@ static int qe_init(void *opaque)
     /* init all external modules in link order */
     qe_init_all_modules(qs);
 
+    /* load dynamic plugins from ~/.qe/ */
+    qe_load_all_plugins(qs);
+
     /* create first buffer */
     b = qe_new_buffer(qs, "*scratch*", BF_SAVELOG | BF_UTF8);
     if (!b)
@@ -12051,6 +12054,9 @@ int main(int argc, char **argv)
     dpy_close(qs->screen);
 
 #ifndef CONFIG_TINY
+    /* unload dynamic plugins (reverse order) */
+    qe_exit_all_plugins(qs);
+
     /* exit all external modules in link order */
     qe_exit_all_modules(qs);
 

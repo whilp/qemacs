@@ -1,37 +1,65 @@
 #
-# QEmacs sample Makefile to develop plugins
+# QEmacs plugin Makefile
 #
-# QEmacs plugins can contain modes, bindings, or any other qemacs
-# dynamically registerable resource.
+# Builds native shared libraries that qemacs loads from ~/.qe/ at startup.
+# Plugins can contain modes, key bindings, or any dynamically registerable
+# resource. They are compiled with -DQE_MODULE and export __qe_module_init.
+#
+# On Linux:  produces .so  files
+# On macOS:  produces .dylib files
+# On Windows/Cygwin: produces .dll files
 #
 
-# modify to get the path of the qemacs sources
-QEMACS_PATH=../
-# define the name of your plugin
-LIB=my_plugin.so
-# define the object files it contains
-OBJS=my_plugin.o
+# Path to QEmacs source tree
+QEMACS_PATH := ..
 
-INCLUDES=-I$(QEMACS_PATH)
-DEFINES=-DQE_MODULE
-DIST_LIB:=$(HOME)/.qe/$(LIB)
-CC=gcc
-CFLAGS=-O2 -Wall -g -fPIC $(INCLUDES) $(DEFINES)
+# Plugin name (without extension — set automatically per platform)
+PLUGIN_NAME := my_plugin
 
-# by default, the plugin is copied in ~/.qe/ some that qemacs can load
-# it automatically.
+# Object files
+OBJS := $(PLUGIN_NAME).o
+
+# Detect platform and set shared library extension/flags
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+  SHARED_EXT := .dylib
+  SHARED_FLAGS := -dynamiclib
+else ifeq ($(findstring CYGWIN,$(UNAME_S)),CYGWIN)
+  SHARED_EXT := .dll
+  SHARED_FLAGS := -shared
+else ifeq ($(findstring MINGW,$(UNAME_S)),MINGW)
+  SHARED_EXT := .dll
+  SHARED_FLAGS := -shared
+else
+  SHARED_EXT := .so
+  SHARED_FLAGS := -shared
+endif
+
+LIB := $(PLUGIN_NAME)$(SHARED_EXT)
+DIST_DIR := $(HOME)/.qe
+DIST_LIB := $(DIST_DIR)/$(LIB)
+
+CC ?= cc
+CFLAGS := -O2 -Wall -g -fPIC -I$(QEMACS_PATH) -DQE_MODULE
+
+# Default: build and install to ~/.qe/
 all: $(DIST_LIB)
 
-$(DIST_LIB): $(LIB)
-	install -s -m 644 $< $@
+$(DIST_LIB): $(LIB) | $(DIST_DIR)
+	install -m 644 $< $@
 
-install: $(DIST_LIB)
+$(DIST_DIR):
+	mkdir -p $@
 
 $(LIB): $(OBJS) Makefile
-	$(CC) -shared -o $@ $(OBJS)
+	$(CC) $(SHARED_FLAGS) -o $@ $(OBJS)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+install: $(DIST_LIB)
+
 clean:
-	rm -f *.o *.so *~
+	rm -f *.o *$(SHARED_EXT) *~
+
+.PHONY: all install clean
