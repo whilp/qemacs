@@ -1310,7 +1310,7 @@ static void shell_display_hook(EditState *e)
                 s->rows = e->rows;
                 for (e1 = qs->first_window; e1 != NULL; e1 = e1->next_window) {
                     if (e1->b == e->b) {
-                        e1->wrap_cols = s->cols;
+                        e1->wrap_cols = e1->cols;
                     }
                 }
                 if (s->pty_fd > 0) {
@@ -3351,7 +3351,7 @@ static void do_shell_refresh(EditState *e, int flags)
 
         for (e1 = qs->first_window; e1 != NULL; e1 = e1->next_window) {
             if (e1->b == e->b) {
-                e1->wrap_cols = s->cols;
+                e1->wrap_cols = e1->cols;
             }
         }
 
@@ -4004,7 +4004,7 @@ static int shell_mode_init(EditState *e, EditBuffer *b, int flags)
         e->b->tab_width = 8;
         /* XXX: should come from mode.default_wrap */
         e->wrap = WRAP_TERM;
-        e->wrap_cols = s->cols;
+        e->wrap_cols = e->cols;
         if ((s->shell_flags & SF_INTERACTIVE) && !s->grab_keys)
             e->interactive = 1;
     }
