@@ -101,7 +101,7 @@ EMBED_FILES := $(o)/kmaps $(o)/ligatures config.eg $(o)/qe-manual.md qe.1
 OBJS := qe.o cutils.o util.o color.o charset.o buffer.o search.o input.o display.o \
         qescript.o modes/hex.o test_display.o extras.o variables.o
 
-OBJS += unix.o tty.o session.o
+OBJS += unix.o tty.o session.o plugin.o third_party/lua/lua-amalg.o
 LIBS += $(EXTRALIBS)
 
 OBJS += kmap.o
@@ -230,6 +230,12 @@ $(OBJS_DIR)/libqhtml/docbook_style.o: $(GENDIR)/libqhtml/docbook_style.c Makefil
 $(OBJS_DIR)/libqhtml/css.o: libqhtml/css.c libqhtml/css.h libqhtml/cssid.h
 $(OBJS_DIR)/libqhtml/cssparse.o: libqhtml/cssparse.c libqhtml/css.h libqhtml/cssid.h
 $(OBJS_DIR)/libqhtml/xmlparse.o: libqhtml/xmlparse.c libqhtml/css.h libqhtml/htmlent.h
+
+# Lua amalgamation: compile without QEmacs defines
+$(OBJS_DIR)/third_party/lua/lua-amalg.o: third_party/lua/lua-amalg.c third_party/lua/lua-amalg.h Makefile | $(COSMOCC_DIR)/bin/cosmocc
+	$(echo) CC -c $<
+	$(cmd)  mkdir -p $(dir $@)
+	$(cmd)  $(CC) $(CFLAGS) -MT $@ -MF $(@:.o=.d) -o $@ -c $<
 
 $(OBJS_DIR)/%.o: %.c Makefile | $(COSMOCC_DIR)/bin/cosmocc
 	$(echo) CC $(ECHO_CFLAGS) -c $<

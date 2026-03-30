@@ -1,37 +1,23 @@
 #
-# QEmacs sample Makefile to develop plugins
+# QEmacs Lua plugin examples
 #
-# QEmacs plugins can contain modes, bindings, or any other qemacs
-# dynamically registerable resource.
+# Plugins are .lua files installed to ~/.qe/ where qemacs loads them
+# automatically at startup. You can also load them at runtime with
+# M-x load-plugin.
 #
 
-# modify to get the path of the qemacs sources
-QEMACS_PATH=../
-# define the name of your plugin
-LIB=my_plugin.so
-# define the object files it contains
-OBJS=my_plugin.o
+DIST_DIR := $(HOME)/.qe
+LUA_PLUGINS := $(wildcard *.lua)
 
-INCLUDES=-I$(QEMACS_PATH)
-DEFINES=-DQE_MODULE
-DIST_LIB:=$(HOME)/.qe/$(LIB)
-CC=gcc
-CFLAGS=-O2 -Wall -g -fPIC $(INCLUDES) $(DEFINES)
+all: install
 
-# by default, the plugin is copied in ~/.qe/ some that qemacs can load
-# it automatically.
-all: $(DIST_LIB)
+install: $(LUA_PLUGINS) | $(DIST_DIR)
+	cp $(LUA_PLUGINS) $(DIST_DIR)/
 
-$(DIST_LIB): $(LIB)
-	install -s -m 644 $< $@
-
-install: $(DIST_LIB)
-
-$(LIB): $(OBJS) Makefile
-	$(CC) -shared -o $@ $(OBJS)
-
-%.o: %.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+$(DIST_DIR):
+	mkdir -p $@
 
 clean:
-	rm -f *.o *.so *~
+	@echo "Nothing to clean (Lua plugins need no compilation)"
+
+.PHONY: all install clean

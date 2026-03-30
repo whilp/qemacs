@@ -110,6 +110,7 @@ void put_error(EditState *s, const char *fmt, ...) { (void)s; (void)fmt; }
 | `test_terminal.c` | Terminal handling |
 | `test_unix.c` | Unix/POSIX compatibility |
 | `test_html.c` | HTML rendering library |
+| `test_lua.c` | Lua plugin system: state lifecycle, eval, error handling, C bindings, module tables, function refs, file loading |
 | `bench_buffer.c` | Buffer performance benchmarks (run with `make bench`, not part of test suite) |
 
 ## Compiler Flags
