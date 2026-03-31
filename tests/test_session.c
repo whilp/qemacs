@@ -4,6 +4,7 @@
 
 #define _GNU_SOURCE
 #include "testlib.h"
+#include <sys/mman.h>
 
 #ifdef CONFIG_SESSION_DETACH
 
@@ -977,13 +978,31 @@ static int recv_with_timeout(int fd, Packet *pkt, int timeout_ms) {
     return recv_packet(fd, pkt);
 }
 
+/* Shared loop counter for cross-platform busy-loop detection.
+ * Allocated via mmap(MAP_SHARED) before fork so both parent and
+ * server child share the same page. */
+static volatile unsigned long *test_loop_counter;
+
 /* Start a server process with 'cat' running in a PTY.
- * Returns server PID on success, -1 on failure. */
+ * Returns server PID on success, -1 on failure.
+ * Sets test_loop_counter to a shared counter incremented each
+ * server_mainloop iteration (for busy-loop detection). */
 static pid_t start_test_server(const char *sock_path) {
     SessionServer saved = server;
     memset(&server, 0, sizeof(server));
     server.running = 1;
     server.exit_status = -1;
+
+    /* Allocate shared memory for loop counter (cross-platform) */
+    test_loop_counter = mmap(NULL, sizeof(unsigned long),
+                             PROT_READ | PROT_WRITE,
+                             MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    if (test_loop_counter == MAP_FAILED) {
+        test_loop_counter = NULL;
+    } else {
+        *test_loop_counter = 0;
+        server.loop_counter = test_loop_counter;
+    }
 
     server.socket = server_create_socket(sock_path);
     if (server.socket < 0) {
@@ -1345,37 +1364,16 @@ TEST(session_lifecycle, concurrent_clients_one_detaches) {
 /* ---- Regression tests for busy-loop bugs ---- */
 
 /*
- * Helper: read utime + stime (in clock ticks) for a given pid from
- * /proc/pid/stat.  Returns 0 on success, -1 on failure.
+ * Busy-loop detection uses a shared-memory loop counter that the server
+ * increments on each server_mainloop iteration.  This is completely
+ * platform-independent (no /proc dependency).
+ *
+ * An idle server with blocking select() will have ~0 iterations/sec.
+ * A busy-looping server will have thousands or more.
+ * We allow up to 100 iterations in a 1-second window as a generous margin
+ * for legitimate wakeups (signals, timer adjustments, etc.).
  */
-static int get_cpu_ticks(pid_t pid, unsigned long *ticks) {
-    char path[64];
-    snprintf(path, sizeof(path), "/proc/%d/stat", (int)pid);
-    FILE *f = fopen(path, "r");
-    if (!f) return -1;
-    char buf[1024];
-    if (!fgets(buf, sizeof(buf), f)) { fclose(f); return -1; }
-    fclose(f);
-    /* Fields: pid (comm) state ppid ... field14=utime field15=stime */
-    /* Skip past the (comm) field which may contain spaces */
-    char *p = strrchr(buf, ')');
-    if (!p) return -1;
-    p++;  /* past ')' */
-    unsigned long utime = 0, stime = 0;
-    /* After ')' we need fields: state(3) ppid(4) pgrp(5) session(6)
-     * tty_nr(7) tpgid(8) flags(9) minflt(10) cminflt(11) majflt(12)
-     * cmajflt(13) utime(14) stime(15) — that's 13 fields after ')' */
-    char state;
-    long dummy;
-    if (sscanf(p, " %c %ld %ld %ld %ld %ld %lu %lu %lu %lu %lu %lu %lu",
-               &state, &dummy, &dummy, &dummy, &dummy, &dummy,
-               (unsigned long *)&dummy, (unsigned long *)&dummy,
-               (unsigned long *)&dummy, (unsigned long *)&dummy,
-               (unsigned long *)&dummy, &utime, &stime) < 13)
-        return -1;
-    *ticks = utime + stime;
-    return 0;
-}
+#define BUSYLOOP_MAX_ITERATIONS 100
 
 /*
  * Regression: server must not busy-loop after abrupt client disconnect.
@@ -1390,6 +1388,7 @@ TEST(busyloop, abrupt_disconnect_no_cpu_spin) {
 
     pid_t srv = start_test_server(sock);
     ASSERT_TRUE(srv > 0);
+    ASSERT_TRUE(test_loop_counter != NULL);
 
     /* Client connects and attaches */
     int cfd = session_connect(sock);
@@ -1405,27 +1404,17 @@ TEST(busyloop, abrupt_disconnect_no_cpu_spin) {
     /* Let server notice the disconnect and (hopefully) clean up */
     usleep(300000);
 
-    /* Measure CPU usage over a 1-second window */
-    unsigned long ticks_before = 0, ticks_after = 0;
-    ASSERT_EQ(get_cpu_ticks(srv, &ticks_before), 0);
+    /* Measure loop iterations over a 1-second window */
+    unsigned long count_before = *test_loop_counter;
     usleep(1000000);  /* 1 second */
-    ASSERT_EQ(get_cpu_ticks(srv, &ticks_after), 0);
+    unsigned long count_after = *test_loop_counter;
+    unsigned long iterations = count_after - count_before;
 
-    unsigned long ticks_used = ticks_after - ticks_before;
-    long tps = sysconf(_SC_CLK_TCK);
-    if (tps <= 0) tps = 100;
-
-    /*
-     * A well-behaved idle server should use near-zero CPU.
-     * Allow up to 10% of one core (0.1s of CPU per 1s wall).
-     * A busy-loop would use ~100% (== tps ticks per second).
-     */
-    unsigned long max_ticks = (unsigned long)tps / 10;
-    if (ticks_used > max_ticks) {
-        fprintf(stderr, "  FAIL: server used %lu ticks in 1s (max %lu, tps=%ld)\n",
-                ticks_used, max_ticks, tps);
+    if (iterations > BUSYLOOP_MAX_ITERATIONS) {
+        fprintf(stderr, "  FAIL: server looped %lu times in 1s (max %d)\n",
+                iterations, BUSYLOOP_MAX_ITERATIONS);
     }
-    ASSERT_TRUE(ticks_used <= max_ticks);
+    ASSERT_TRUE(iterations <= BUSYLOOP_MAX_ITERATIONS);
 
     /* Verify server is still functional */
     int cfd2 = session_connect(sock);
@@ -1449,6 +1438,7 @@ TEST(busyloop, multiple_abrupt_disconnects) {
 
     pid_t srv = start_test_server(sock);
     ASSERT_TRUE(srv > 0);
+    ASSERT_TRUE(test_loop_counter != NULL);
 
     /* Connect and abruptly disconnect 3 clients */
     int i;
@@ -1463,22 +1453,17 @@ TEST(busyloop, multiple_abrupt_disconnects) {
         usleep(200000);
     }
 
-    /* Measure CPU after all disconnects */
-    unsigned long ticks_before = 0, ticks_after = 0;
-    ASSERT_EQ(get_cpu_ticks(srv, &ticks_before), 0);
+    /* Measure loop iterations after all disconnects */
+    unsigned long count_before = *test_loop_counter;
     usleep(1000000);
-    ASSERT_EQ(get_cpu_ticks(srv, &ticks_after), 0);
+    unsigned long count_after = *test_loop_counter;
+    unsigned long iterations = count_after - count_before;
 
-    unsigned long ticks_used = ticks_after - ticks_before;
-    long tps = sysconf(_SC_CLK_TCK);
-    if (tps <= 0) tps = 100;
-    unsigned long max_ticks = (unsigned long)tps / 10;
-
-    if (ticks_used > max_ticks) {
-        fprintf(stderr, "  FAIL: server used %lu ticks in 1s after 3 disconnects "
-                "(max %lu)\n", ticks_used, max_ticks);
+    if (iterations > BUSYLOOP_MAX_ITERATIONS) {
+        fprintf(stderr, "  FAIL: server looped %lu times in 1s after 3 disconnects "
+                "(max %d)\n", iterations, BUSYLOOP_MAX_ITERATIONS);
     }
-    ASSERT_TRUE(ticks_used <= max_ticks);
+    ASSERT_TRUE(iterations <= BUSYLOOP_MAX_ITERATIONS);
 
     stop_test_server(srv, sock);
 }
@@ -1493,6 +1478,7 @@ TEST(busyloop, concurrent_one_abrupt_disconnect) {
 
     pid_t srv = start_test_server(sock);
     ASSERT_TRUE(srv > 0);
+    ASSERT_TRUE(test_loop_counter != NULL);
 
     /* Client 1 connects */
     int cfd1 = session_connect(sock);
@@ -1515,18 +1501,13 @@ TEST(busyloop, concurrent_one_abrupt_disconnect) {
     close(cfd1);
     usleep(300000);
 
-    /* Measure server CPU */
-    unsigned long ticks_before = 0, ticks_after = 0;
-    ASSERT_EQ(get_cpu_ticks(srv, &ticks_before), 0);
+    /* Measure loop iterations */
+    unsigned long count_before = *test_loop_counter;
     usleep(1000000);
-    ASSERT_EQ(get_cpu_ticks(srv, &ticks_after), 0);
+    unsigned long count_after = *test_loop_counter;
+    unsigned long iterations = count_after - count_before;
 
-    unsigned long ticks_used = ticks_after - ticks_before;
-    long tps = sysconf(_SC_CLK_TCK);
-    if (tps <= 0) tps = 100;
-    unsigned long max_ticks = (unsigned long)tps / 10;
-
-    ASSERT_TRUE(ticks_used <= max_ticks);
+    ASSERT_TRUE(iterations <= BUSYLOOP_MAX_ITERATIONS);
 
     /* Client 2 still works */
     close(cfd2);

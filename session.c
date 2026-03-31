@@ -138,6 +138,7 @@ typedef struct {
     volatile sig_atomic_t running;
     const char *session_name;
     char socket_path[256];
+    volatile unsigned long *loop_counter;  /* test-visible iteration counter */
 } SessionServer;
 
 static SessionServer server;
@@ -513,6 +514,9 @@ static void server_mainloop(void) {
     FD_SET_MAX(server.pty, &new_readfds, new_fdmax);
 
     while (server.clients || !exit_packet_delivered) {
+        if (server.loop_counter)
+            (*server.loop_counter)++;
+
         int fdmax = new_fdmax;
         fd_set readfds = new_readfds;
         FD_SET_MAX(server.socket, &readfds, fdmax);
@@ -642,10 +646,21 @@ static void server_mainloop(void) {
                     c->state = STATE_DISCONNECTED;
             }
 
-            /* Only add live clients to the read set */
+            /* Clean up clients that became disconnected during sends */
             if (c->state == STATE_DISCONNECTED) {
-                prev_next = &c->next;
-                c = c->next;
+                int first = (c == server.clients);
+                Client *t = c->next;
+                client_free(c);
+                *prev_next = c = t;
+                if (first && server.clients) {
+                    Packet rpkt;
+                    memset(&rpkt, 0, sizeof(rpkt));
+                    rpkt.type = MSG_RESIZE;
+                    rpkt.len = 0;
+                    send_packet_nonblock(server.clients->socket, &rpkt);
+                } else if (!server.clients) {
+                    server_mark_socket_exec(0, 1);
+                }
                 continue;
             }
 
