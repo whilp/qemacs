@@ -39,11 +39,11 @@ CC = $(COSMOCC_DIR)/bin/cosmocc
 HOST_CC ?= cc
 AR = $(COSMOCC_DIR)/bin/cosmoar
 STRIP ?= true
-INSTALL_DIR ?= /persist/whilp/.local/bin
-
-prefix ?= /usr/local
+prefix ?= $(HOME)/.local
+bindir ?= $(prefix)/bin
 datadir ?= $(prefix)/share
 mandir ?= $(prefix)/man
+INSTALL_DIR ?= $(bindir)
 CFLAGS ?= -O2
 LDFLAGS ?=
 LIBS ?=
