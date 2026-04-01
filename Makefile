@@ -35,11 +35,11 @@ COSMOCC_DIR ?= o/cosmocc
 
 export PATH := $(CURDIR)/$(COSMOCC_DIR)/bin:$(PATH)
 
-CC = cosmocc
+CC = $(COSMOCC_DIR)/bin/cosmocc
 HOST_CC ?= cc
-AR = cosmoar
+AR = $(COSMOCC_DIR)/bin/cosmoar
 STRIP ?= true
-prefix ?= /usr/local
+prefix ?= $(HOME)/.local
 bindir ?= $(prefix)/bin
 datadir ?= $(prefix)/share
 mandir ?= $(prefix)/man
