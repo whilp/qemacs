@@ -39,11 +39,11 @@ CC = cosmocc
 HOST_CC ?= cc
 AR = cosmoar
 STRIP ?= true
-INSTALL_DIR ?= /persist/whilp/.local/bin
-
 prefix ?= /usr/local
+bindir ?= $(prefix)/bin
 datadir ?= $(prefix)/share
 mandir ?= $(prefix)/man
+INSTALL_DIR ?= $(bindir)
 CFLAGS ?= -O2
 LDFLAGS ?=
 LIBS ?=
