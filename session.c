@@ -314,14 +314,15 @@ int qe_session_get_dir(char *buf, size_t size) {
 }
 
 static int set_socket_path(char *path, size_t size, const char *name) {
-    char dir[200];
+    char dir[108];  /* sized to match sun_path */
     if (name[0] == '/' || name[0] == '.') {
         snprintf(path, size, "%s", name);
         return 0;
     }
     if (qe_session_get_dir(dir, sizeof(dir)) < 0)
         return -1;
-    snprintf(path, size, "%s/%s", dir, name);
+    if ((size_t)snprintf(path, size, "%s/%s", dir, name) >= size)
+        return -1;  /* path truncated */
     return 0;
 }
 
@@ -878,9 +879,12 @@ static int create_session(const char *name, int argc, char **argv) {
             sa.sa_handler = server_sigchld_handler;
             sigaction(SIGCHLD, &sa, NULL);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wnonnull"
             switch (server.pid = forkpty(&server.pty, NULL,
                                          has_term ? &server.term : NULL,
                                          &server.winsize)) {
+#pragma GCC diagnostic pop
             case 0:  /* grandchild: exec qemacs */
                 close(server.socket);
                 close(server_pipe[0]);

@@ -2001,7 +2001,7 @@ static void quote_key(void *opaque, int key)
     QEmacsState *qs = s->qs;
     int repeat = qa->argval;
 
-    put_status(s, "");  /* erase "Quote: " message */
+    put_status(s, "%s", "");  /* erase "Quote: " message */
     /* Achtung! this should free the grab data */
     qe_ungrab_keys(qs);
 
@@ -3888,9 +3888,9 @@ void display_close(DisplayState *ds)
 }
 
 void display_init(DisplayState *ds, EditState *e, enum DisplayType do_disp,
-                  int (*cursor_func)(DisplayState *ds,
-                                     int offset1, int offset2, int line_num,
-                                     int x, int y, int w, int h, int hex_mode),
+                  int (*cursor_cb)(DisplayState *ds,
+                                   int offset1, int offset2, int line_num,
+                                   int x, int y, int w, int h, int hex_mode),
                   void *cursor_opaque)
 {
     QEFont *font;
@@ -3899,7 +3899,7 @@ void display_init(DisplayState *ds, EditState *e, enum DisplayType do_disp,
     memset(ds, 0, sizeof(*ds));
     ds->edit_state = e;
     ds->do_disp = do_disp;
-    ds->cursor_func = cursor_func;
+    ds->cursor_func = cursor_cb;
     ds->cursor_opaque = cursor_opaque;
     ds->wrap = e->wrap;
     if (ds->wrap == WRAP_AUTO) {

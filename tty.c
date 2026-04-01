@@ -395,7 +395,6 @@ static void tty_dpy_invalidate(QEditScreen *s)
     TTYState *ts;
     struct winsize ws;
     int i, count, size;
-    const char *p;
     TTYChar tc;
 
     if (s == NULL)
@@ -404,8 +403,8 @@ static void tty_dpy_invalidate(QEditScreen *s)
     ts = s->priv_data;
 
     /* get screen default values from environment */
-    s->width = (p = getenv("COLUMNS")) != NULL ? atoi(p) : 80;
-    s->height = (p = getenv("LINES")) != NULL ? atoi(p) : 25;
+    s->width = qe_atoi(getenv("COLUMNS"), 80);
+    s->height = qe_atoi(getenv("LINES"), 25);
 
     /* update screen dimensions from pseudo tty ioctl */
     if (ioctl(fileno(s->STDIN), TIOCGWINSZ, &ws) == 0) {

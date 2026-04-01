@@ -158,15 +158,15 @@ static int get_pty(int *master_fd, int *slave_fd)
             ptydev[len-2] = ttydev[len-2] = *c1;
             for (c2 = ptychar2; *c2; c2++) {
                 ptydev[len-1] = ttydev[len-1] = *c2;
-                int mfd = open(ptydev, O_RDWR);
-                if (mfd >= 0) {
+                int pty_fd = open(ptydev, O_RDWR);
+                if (pty_fd >= 0) {
                     int sfd = open(ttydev, O_RDWR);
                     if (sfd >= 0) {
-                        *master_fd = mfd;
+                        *master_fd = pty_fd;
                         *slave_fd = sfd;
                         return 0;
                     }
-                    close(mfd);
+                    close(pty_fd);
                 }
             }
         }
@@ -287,7 +287,7 @@ static int run_process(ShellState *s,
         setenv("TERM_PROGRAM_VERSION", str_version, 1);
         unsetenv("PAGER");
         vp = getenv("QELEVEL");
-        snprintf(qelevel, sizeof qelevel, "%d", 1 + (vp ? atoi(vp) : 0));
+        snprintf(qelevel, sizeof qelevel, "%d", 1 + qe_atoi(vp, 0));
         setenv("QELEVEL", qelevel, 1);
 
         if (path) {
@@ -332,7 +332,7 @@ static const char *shell_osc_get_string(ShellState *s, int *slen) {
 
 static void qe_term_init(ShellState *s)
 {
-    char *term;
+    const char *term;
 
     s->state = QE_TERM_STATE_NORM;
     /* Should compute def_color from shell default style at display

@@ -8,7 +8,10 @@
  * Uses the Lua amalgamation from whilp/cosmopolitan.
  */
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-value"
 #include "third_party/lua/lua-amalg.h"
+#pragma GCC diagnostic pop
 
 #ifdef QE_MODULE
 /* When compiled as a standalone test, skip qe.h dependencies */
@@ -19,6 +22,16 @@
 #endif
 
 #include <dirent.h>
+
+/* ---- Forward declarations (used by tests) ---- */
+
+lua_State *qe_lua_get_state(void);
+int qe_lua_eval(lua_State *L, const char *code, char *errbuf, int errsize);
+int qe_lua_load_config(lua_State *L, const char *filename,
+                       char *errbuf, int errsize);
+int qe_lua_eval_expression(lua_State *L, const char *code,
+                           char *result, int result_size,
+                           char *errbuf, int errsize);
 
 /* ---- Lua state management ---- */
 
@@ -523,7 +536,8 @@ static void qe_load_lua_plugins_from_dir(lua_State *L, const char *dir)
     while ((de = readdir(d)) != NULL) {
         if (!is_lua_file(de->d_name))
             continue;
-        snprintf(path, sizeof(path), "%s/%s", dir, de->d_name);
+        if ((size_t)snprintf(path, sizeof(path), "%s/%s", dir, de->d_name) >= sizeof(path))
+            continue;  /* path too long, skip */
         if (qe_load_lua_file(L, path) != LUA_OK) {
             /* Log error but continue loading other plugins */
             fprintf(stderr, "qe: error loading plugin %s: %s\n",
@@ -753,7 +767,7 @@ static int plugin_init(QEmacsState *qs)
             char lua_code[1024];
             snprintf(lua_code, sizeof(lua_code),
                      "package.path = '%s/.qe/?.lua;' .. package.path", home);
-            luaL_dostring(qe_L, lua_code);
+            (void)luaL_dostring(qe_L, lua_code);
         }
     }
 

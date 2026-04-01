@@ -208,10 +208,8 @@ static int test_dpy_init(QEditScreen *s, QEmacsState *qs,
     s->charset = &charset_utf8;
 
     /* Determine screen size from env or defaults */
-    p = getenv("QE_TEST_WIDTH");
-    s->width = p ? atoi(p) : 80;
-    p = getenv("QE_TEST_HEIGHT");
-    s->height = p ? atoi(p) : 24;
+    s->width = qe_atoi(getenv("QE_TEST_WIDTH"), 80);
+    s->height = qe_atoi(getenv("QE_TEST_HEIGHT"), 24);
 
     if (s->width < 10) s->width = 80;
     if (s->height < 3) s->height = 24;
@@ -221,7 +219,7 @@ static int test_dpy_init(QEditScreen *s, QEmacsState *qs,
     /* Set up input fd */
     p = getenv("QE_TEST_INPUT_FD");
     if (p) {
-        ts->input_fd = atoi(p);
+        ts->input_fd = qe_atoi(p, fileno(stdin));
     } else {
         ts->input_fd = fileno(stdin);
     }

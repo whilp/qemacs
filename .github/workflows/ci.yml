@@ -11,6 +11,10 @@ on:
     branches:
       - master
 
+# Security: CI jobs cannot write back to the repository
+permissions:
+  contents: read
+
 jobs:
   ci:
     name: Build and test (cosmocc)
@@ -20,3 +24,11 @@ jobs:
 
       - name: Build and test
         run: make -j$(nproc) ci
+
+      - name: Check for binary blobs in new source files
+        run: |
+          if git diff origin/master...HEAD --diff-filter=A -- '*.c' '*.h' 2>/dev/null \
+             | grep -P '^\+[A-Za-z0-9+/=]{80,}$'; then
+            echo "ERROR: possible base64 blob detected in new source files"
+            exit 1
+          fi

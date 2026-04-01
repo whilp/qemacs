@@ -66,7 +66,23 @@ endif
 
 -include cflags.mk
 
-CFLAGS += -mcosmo -Wno-unused-result
+CFLAGS += -mcosmo
+# Security: strict warnings — zero tolerance (inspired by curl's hardening)
+CFLAGS += -Wall -Wextra -Werror
+CFLAGS += -Wformat=2 -Wformat-security
+CFLAGS += -Wshadow -Wwrite-strings
+CFLAGS += -Wcast-align
+CFLAGS += -Wunused -Wno-unused-parameter -Wno-unused-result
+CFLAGS += -Wstrict-prototypes -Wmissing-prototypes
+CFLAGS += -Wold-style-definition
+CFLAGS += -Wnull-dereference
+CFLAGS += -Wdouble-promotion
+CFLAGS += -Wimplicit-fallthrough
+# Promote these to errors once existing warnings are fixed:
+CFLAGS += -Wno-error=sign-conversion -Wno-error=conversion
+CFLAGS += -Wsign-conversion -Wconversion
+# Runtime buffer overflow detection for libc functions
+CFLAGS += -D_FORTIFY_SOURCE=2
 CFLAGS += -I.
 # Auto-generate .d dependency files so only affected objects rebuild on header changes
 CFLAGS += -MMD -MP
@@ -214,7 +230,11 @@ $(OBJS_DIR)/qe_modules.c: $(SRCS) Makefile tools/gen-modules.sh
 
 $(OBJS_DIR)/charset.o: charset.c wcwidth.c
 $(OBJS_DIR)/charsetjis.o: charsetjis.c charsetjis.def
-$(OBJS_DIR)/modes/stb.o: modes/stb.c modes/stb_image.h
+# stb_image.h is vendored third-party code: relax warnings
+$(OBJS_DIR)/modes/stb.o: modes/stb.c modes/stb_image.h Makefile | $(COSMOCC_DIR)/bin/cosmocc
+	$(echo) CC $(ECHO_CFLAGS) -c $<
+	$(cmd)  mkdir -p $(dir $@)
+	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -Wno-error -Wno-double-promotion -Wno-sign-conversion -Wno-conversion -Wno-unused-but-set-variable -MT $@ -MF $(@:.o=.d) -o $@ -c $<
 $(OBJS_DIR)/libunicode.o: libunicode.c libunicode.h libunicode-table.h
 $(OBJS_DIR)/libregexp.o: libregexp.c libregexp.h libregexp-opcode.h
 $(OBJS_DIR)/libqhtml/html_style.o: $(GENDIR)/libqhtml/html_style.c Makefile | $(COSMOCC_DIR)/bin/cosmocc
@@ -231,11 +251,11 @@ $(OBJS_DIR)/libqhtml/css.o: libqhtml/css.c libqhtml/css.h libqhtml/cssid.h
 $(OBJS_DIR)/libqhtml/cssparse.o: libqhtml/cssparse.c libqhtml/css.h libqhtml/cssid.h
 $(OBJS_DIR)/libqhtml/xmlparse.o: libqhtml/xmlparse.c libqhtml/css.h libqhtml/htmlent.h
 
-# Lua amalgamation: compile without QEmacs defines
+# Lua amalgamation: compile without QEmacs defines, relaxed warnings for vendored code
 $(OBJS_DIR)/third_party/lua/lua-amalg.o: third_party/lua/lua-amalg.c third_party/lua/lua-amalg.h Makefile | $(COSMOCC_DIR)/bin/cosmocc
 	$(echo) CC -c $<
 	$(cmd)  mkdir -p $(dir $@)
-	$(cmd)  $(CC) $(CFLAGS) -MT $@ -MF $(@:.o=.d) -o $@ -c $<
+	$(cmd)  $(CC) $(CFLAGS) -Wno-error -Wno-format-nonliteral -Wno-null-dereference -Wno-unused-value -MT $@ -MF $(@:.o=.d) -o $@ -c $<
 
 $(OBJS_DIR)/%.o: %.c Makefile | $(COSMOCC_DIR)/bin/cosmocc
 	$(echo) CC $(ECHO_CFLAGS) -c $<
@@ -335,6 +355,41 @@ lint:
 	   | grep -v 'write_all_timeout\|qe_write_timeout' \
 	   | grep -v 'session\.c'; then \
 	    echo "ERROR: found write_all() usage — use write_all_timeout/qe_write_timeout with bounded timeout"; \
+	    fail=1; \
+	fi; \
+	if [ "$$fail" -eq 1 ]; then exit 1; fi
+	@echo "==> checking for banned function usage in source"
+	@fail=0; \
+	if grep -rn '\bsprintf\s*(' --include='*.c' \
+	   | grep -v 'tests/' | grep -v 'third_party/' | grep -v 'tools/' \
+	   | grep -v 'snprintf\|do_not_use\|vsnprintf'; then \
+	    echo "ERROR: found sprintf() — use snprintf instead"; \
+	    fail=1; \
+	fi; \
+	if grep -rn '\bstrcpy\s*(' --include='*.c' \
+	   | grep -v 'tests/' | grep -v 'third_party/' | grep -v 'tools/' \
+	   | grep -v 'pstrcpy\|do_not_use'; then \
+	    echo "ERROR: found strcpy() — use pstrcpy instead"; \
+	    fail=1; \
+	fi; \
+	if grep -rn '\bstrcat\s*(' --include='*.c' \
+	   | grep -v 'tests/' | grep -v 'third_party/' | grep -v 'tools/' \
+	   | grep -v 'pstrcat\|pstrncat\|do_not_use'; then \
+	    echo "ERROR: found strcat() — use pstrcat instead"; \
+	    fail=1; \
+	fi; \
+	if grep -rn '\batoi\s*(' --include='*.c' \
+	   | grep -v 'tests/' | grep -v 'third_party/' | grep -v 'tools/' \
+	   | grep -v 'qe_atoi'; then \
+	    echo "ERROR: found atoi() — use qe_atoi instead"; \
+	    fail=1; \
+	fi; \
+	if [ "$$fail" -eq 1 ]; then exit 1; fi
+	@echo "==> checking for dangerous Unicode (bidi overrides, zero-width chars)"
+	@fail=0; \
+	if grep -rPn '\xe2\x80[\xaa-\xae\x8b-\x8f]|\xe2\x81[\xa6-\xa9]|\xef\xbb\xbf' --include='*.c' --include='*.h' \
+	   | grep -v 'third_party/' | grep -v 'tests/' | grep -v 'tools/'; then \
+	    echo "ERROR: dangerous Unicode (bidi override or zero-width) in source"; \
 	    fail=1; \
 	fi; \
 	if [ "$$fail" -eq 1 ]; then exit 1; fi
