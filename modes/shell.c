@@ -122,55 +122,52 @@ static void set_error_offset(EditBuffer *b, int offset)
     *error_filename = '\0';
 }
 
-#define PTYCHAR1 "pqrstuvwxyzabcde"
-#define PTYCHAR2 "0123456789abcdef"
-
-/* allocate one pty/tty pair */
-static int get_pty(char *tty_str, int size)
+/* Allocate a pty pair, returning both master and slave fds.
+ * The slave fd is pre-opened so the child can use dup2() instead of
+ * opening the slave device by name after closing all fds — the
+ * open-by-name approach fails on some platforms (notably macOS in
+ * certain sandboxed environments) where the slave device becomes
+ * inaccessible after setsid() + close-all. */
+static int get_pty(int *master_fd, int *slave_fd)
 {
-    int fd;
-    char ptydev[] = "/dev/pty??";
-    char ttydev[] = "/dev/tty??";
-    int len = strlen(ttydev);
-    const char *c1, *c2;
-
 #ifdef CONFIG_PTSNAME
-    /* First try Unix98 pseudo tty master */
-
-    /* CG: should check if posix_openpt is more appropriate than /dev/ptmx */
-    fd = posix_openpt(O_RDWR | O_NOCTTY);
-    //fd = open("/dev/ptmx", O_RDWR);
-    if (fd >= 0) {
-#if 0
-        /* ptsname_r is a sensible renentrant version of ptsname, but
-         * it lacks portability, notably on OpenBSD and cygwin. So we
-         * have to use ill conceived ptsname.
-         */
-        if (!ptsname_r(fd, tty_str, size) && !grantpt(fd) && !unlockpt(fd))
-            return fd;
-#else
-        const char *name = ptsname(fd);
-
-        if (name) {
-            pstrcpy(tty_str, size, name);
-            if (!grantpt(fd) && !unlockpt(fd))
-                return fd;
+    int mfd = posix_openpt(O_RDWR | O_NOCTTY);
+    if (mfd >= 0) {
+        const char *name = ptsname(mfd);
+        if (name && !grantpt(mfd) && !unlockpt(mfd)) {
+            int sfd = open(name, O_RDWR | O_NOCTTY);
+            if (sfd >= 0) {
+                *master_fd = mfd;
+                *slave_fd = sfd;
+                return 0;
+            }
         }
-#endif
-        close(fd);
+        close(mfd);
     }
 #endif
-    /* then try BSD pseudo tty pre-created pairs */
-    for (c1 = PTYCHAR1; *c1; c1++) {
-        ptydev[len-2] = ttydev[len-2] = *c1;
-        for (c2 = PTYCHAR2; *c2; c2++) {
-            ptydev[len-1] = ttydev[len-1] = *c2;
-            if ((fd = open(ptydev, O_RDWR)) >= 0) {
-                if (access(ttydev, R_OK|W_OK) == 0) {
-                    pstrcpy(tty_str, size, ttydev);
-                    return fd;
+    /* Fall back to BSD pseudo tty pre-created pairs */
+    {
+        static const char ptychar1[] = "pqrstuvwxyzabcde";
+        static const char ptychar2[] = "0123456789abcdef";
+        char ptydev[] = "/dev/pty??";
+        char ttydev[] = "/dev/tty??";
+        int len = strlen(ttydev);
+        const char *c1, *c2;
+
+        for (c1 = ptychar1; *c1; c1++) {
+            ptydev[len-2] = ttydev[len-2] = *c1;
+            for (c2 = ptychar2; *c2; c2++) {
+                ptydev[len-1] = ttydev[len-1] = *c2;
+                int mfd = open(ptydev, O_RDWR);
+                if (mfd >= 0) {
+                    int sfd = open(ttydev, O_RDWR);
+                    if (sfd >= 0) {
+                        *master_fd = mfd;
+                        *slave_fd = sfd;
+                        return 0;
+                    }
+                    close(mfd);
                 }
-                close(fd);
             }
         }
     }
@@ -198,22 +195,20 @@ static int run_process(ShellState *s,
                        int cols, int rows, const char *path,
                        int shell_flags)
 {
-    long i, nb_fds;
-    int pty_fd, pid;
-    char tty_name[MAX_FILENAME_SIZE];
+    int pty_fd, slave_fd, pid;
     char lines_string[20];
     char columns_string[20];
     struct winsize ws;
 
-    pty_fd = get_pty(tty_name, sizeof(tty_name));
-    if (pty_fd < 0) {
+    if (get_pty(&pty_fd, &slave_fd) < 0) {
         put_error(s->b->qs->active_window, "run_process: cannot get tty: %s",
                   strerror(errno));
         return -1;
     }
     fcntl(pty_fd, F_SETFL, O_NONBLOCK);
+    fcntl(pty_fd, F_SETFD, FD_CLOEXEC);
 
-    /* set dummy screen size */
+    /* set screen size on the master */
     ws.ws_col = cols;
     ws.ws_row = rows;
     ws.ws_xpixel = ws.ws_col;
@@ -223,6 +218,8 @@ static int run_process(ShellState *s,
     pid = fork();
     if (pid < 0) {
         put_error(s->b->qs->active_window, "run_process: cannot fork");
+        close(pty_fd);
+        close(slave_fd);
         return -1;
     }
     if (pid == 0) {
@@ -231,7 +228,6 @@ static int run_process(ShellState *s,
         char qelevel[16];
         char *vp;
         int argc = 0;
-        int fd0, fd1, fd2;
 
         argv[argc++] = get_shell();
         if (cmd) {
@@ -240,42 +236,49 @@ static int run_process(ShellState *s,
         }
         argv[argc] = NULL;
 
-        /* detach controlling terminal */
+        /* detach controlling terminal and start a new session */
         setsid();
-        /* close all files */
-        nb_fds = sysconf(_SC_OPEN_MAX);
-        for (i = 0; i < nb_fds; i++)
-            close(i);
 
-        /* open pseudo tty for standard I/O */
+        /* close the master side — parent owns it */
+        close(pty_fd);
+
+        /* Set up stdio using the pre-opened slave fd.
+         * Using dup2 with the already-open slave fd avoids the
+         * fragile pattern of closing all fds then reopening the
+         * slave by device path, which fails on some platforms. */
         if (shell_flags & SF_INTERACTIVE) {
-            /* interactive shell: input from / output to pseudo terminal */
-            fd0 = open(tty_name, O_RDWR);
-            fd1 = dup(0);
-            fd2 = dup(0);
+            dup2(slave_fd, 0);
+            dup2(slave_fd, 1);
+            dup2(slave_fd, 2);
         } else {
-            /* collect output from non interactive process: no input */
-            fd0 = open("/dev/null", O_RDONLY);
-            fd1 = open(tty_name, O_RDWR);
-            fd2 = dup(1);
+            int devnull = open("/dev/null", O_RDONLY);
+            if (devnull >= 0) {
+                dup2(devnull, 0);
+                if (devnull > 0) close(devnull);
+            }
+            dup2(slave_fd, 1);
+            dup2(slave_fd, 2);
         }
-        if (fd0 != 0 || fd1 != 1 || fd2 != 2) {
-            setenv("QESTATUS", "invalid handles", 1);
-        }
+        if (slave_fd > 2)
+            close(slave_fd);
+
+        /* Make the slave our controlling terminal */
+#ifdef TIOCSCTTY
+        ioctl(0, TIOCSCTTY, 0);
+#endif
+
+        /* NOTE: intentionally NOT closing fds 3+ here.
+         * Cosmopolitan libc keeps internal fds open after fork()
+         * and closing them (or setting CLOEXEC) crashes its
+         * runtime before execv() can replace the process image.
+         * The execv below replaces the process anyway. */
+
         if (shell_flags & SF_INFINITE) {
             rows += QE_TERM_YSIZE_INFINITE;
         }
         snprintf(lines_string, sizeof lines_string, "%d", rows);
         snprintf(columns_string, sizeof columns_string, "%d", cols);
 
-        // XXX: should prevent less from paging:
-        //      update the terminal size because
-        //         ioctl TIOCGWINSZ or WIOCGETD take precedence
-        //         over LINES and COLUMNS in linux
-        //      MANWIDTH overrides COLUMNS and ioctl stuff?
-        //      MAN_KEEP_FORMATING count be used
-        //      "PAGER=less -E -z1000" does not seem to work
-        //      "LESS=-E -z1000" does not work either
         setenv("LINES", lines_string, 1);
         setenv("COLUMNS", columns_string, 1);
         setenv("TERM", "xterm-256color", 1);
@@ -296,7 +299,8 @@ static int run_process(ShellState *s,
         execv(argv[0], unconst(char * const *)argv);
         exit(1);
     }
-    /* return file info */
+    /* parent: close slave side — child owns it */
+    close(slave_fd);
     *fd_ptr = pty_fd;
     *pid_ptr = pid;
     return 0;
