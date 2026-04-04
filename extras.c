@@ -1453,7 +1453,7 @@ static int str_get_word7(char *buf, int size, const char *p, const char **pp)
     } else {
         for (; *p != '\0' && *p != ' ' && *p != '/'; p++, len++) {
             if (len + 1 < size) {
-                buf[len] = qe_tolower((u8)*p);
+                buf[len] = (char)qe_tolower((u8)*p);
             }
         }
     }
@@ -1528,7 +1528,7 @@ static int qe_term_get_style_string(char *dest, size_t size, QEStyleDef *stp)
     char buf[16];
     const char *p;
 
-    buf_init(out, dest, size);
+    buf_init(out, dest, (int)size);
 #if 0
     if (stp->attr & QE_TERM_BOLD)
         buf_printf(out, " %s", "bold");
@@ -1577,7 +1577,7 @@ static void do_set_style_color(EditState *e, const char *stylestr, const char *v
     /* accept "fgcolor", "[fgcolor]/bgcolor", "fgcolor on bgcolor" */
     p = value + strcspn(value, " /");
     if (p > value) {
-        pstrncpy(buf, sizeof buf, value, p - value);
+        pstrncpy(buf, sizeof buf, value, (int)(p - value));
         if (css_get_color(&stp->fg_color, buf)) {
             put_error(e, "Unknown fgcolor '%s'", buf);
             return;
@@ -1656,7 +1656,7 @@ static void do_set_region_style(EditState *s, const char *str)
         put_error(s, "Invalid style '%s'", str);
         return;
     }
-    style = st - qe_styles;
+    style = (QETermStyle)(st - qe_styles);
 
     offset = s->b->mark;
     size = s->offset - offset;
@@ -1821,7 +1821,7 @@ static void do_describe_buffer(EditState *s, int argval)
             col += eb_printf(b1, "   %*d  ", count_width, count[i]);
             if (i > 0 && i < 0x7f) {
                 char cbuf[8];
-                byte_quote(cbuf, sizeof cbuf, i);
+                byte_quote(cbuf, sizeof cbuf, (unsigned char)i);
                 col += eb_printf(b1, "'%s'", cbuf);
             } else {
                 col += eb_printf(b1, "0x%02x", (unsigned)i);
@@ -1937,7 +1937,7 @@ static void do_describe_window(EditState *s, int argval)
                 pos = eb_printf(b1, "\n%*s   ", w, "");
             len = snprintf(buf, sizeof buf, "%d", from);
             if (i > from + 1)
-                len += snprintf(buf + len, sizeof(buf) - len, "..%d", i - 1);
+                len += snprintf(buf + len, sizeof(buf) - (size_t)len, "..%d", i - 1);
             pos += eb_printf(b1, " %s: 0x%*x,", buf, w1, bits);
         }
         eb_printf(b1, " }\n");
@@ -2176,7 +2176,7 @@ static int eb_sort_span(EditBuffer *b, int *pp1, int *pp2, int cur_offset, int f
                     pos = pos1;
                 break;
             }
-            chunk_array[i].c[j] = c;
+            chunk_array[i].c[j] = (unsigned short)c;
         }
         chunk_array[i].start = offset;
         chunk_array[i].offset = pos - offset;
@@ -2199,7 +2199,7 @@ static int eb_sort_span(EditBuffer *b, int *pp1, int *pp2, int cur_offset, int f
     for (ctx.total_cmp = 0; i > 0; i >>= 1) {
         ctx.total_cmp += lines;
     }
-    qe_qsort_r(chunk_array, lines, sizeof(*chunk_array), &ctx, chunk_cmp);
+    qe_qsort_r(chunk_array, (size_t)lines, sizeof(*chunk_array), &ctx, chunk_cmp);
 
     b1 = qe_new_buffer(b->qs, "*sorted*", BF_SYSTEM | (b->flags & BF_STYLES));
     if (!b1)

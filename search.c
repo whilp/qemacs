@@ -161,7 +161,7 @@ static int eb_search(EditBuffer *b, int dir, int flags,
             pos = 0;
             for (offset2 = offset; offset2 < total_size;) {
                 /* CG: Should bufferize a bit ? */
-                c = eb_read_one_byte(b, offset2++);
+                c = (char32_t)eb_read_one_byte(b, offset2++);
                 c2 = buf[pos++];
                 if (c != c2)
                     break;
@@ -199,7 +199,7 @@ static int eb_search(EditBuffer *b, int dir, int flags,
         if (source_len >= countof(source))
             return -1;
         regexp_bytes = lre_compile(&regexp_len, error_message, sizeof(error_message),
-                                   source, source_len, re_flags, NULL);
+                                   source, (size_t)source_len, re_flags, NULL);
         if (regexp_bytes == NULL) {
             //put_error(b->qs->active_window, "Regexp compile error: %s", error_message);
             return -1;
@@ -241,8 +241,8 @@ static int eb_search(EditBuffer *b, int dir, int flags,
                 break;
             }
             if (found > 0) {
-                int start = capture[0] - (uint8_t *)(void *)b;
-                int end = capture[1] - (uint8_t *)(void *)b;
+                int start = (int)(capture[0] - (uint8_t *)(void *)b);
+                int end = (int)(capture[1] - (uint8_t *)(void *)b);
                 if ((dir >= 0 || end <= end_offset)
                 &&  (!(flags & SEARCH_FLAG_WORD) ||
                      (qe_isword(eb_prevc(b, start, &offset3)) &&
@@ -422,7 +422,7 @@ static void isearch_run(ISearchState *is) {
     len = 0;
     dir = is->start_dir;
     search_offset = is->start_offset;
-    max_nibble = hex_nibble = hc = 0;
+    max_nibble = hex_nibble = 0; hc = 0;
 
     if (flags & SEARCH_FLAG_UNIHEX)
         max_nibble = 6;
@@ -449,15 +449,15 @@ static void isearch_run(ISearchState *is) {
             if (max_nibble) {
                 h = qe_digit_value(c);
                 if (h < 16) {
-                    hc = (hc << 4) | h;
+                    hc = (hc << 4) | (char32_t)h;
                     if (++hex_nibble == max_nibble) {
                         is->search_u32[len++] = hc;
-                        hex_nibble = hc = 0;
+                        hex_nibble = 0; hc = 0;
                     }
                 } else {
                     if (c == ' ' && hex_nibble) {
                         is->search_u32[len++] = hc;
-                        hex_nibble = hc = 0;
+                        hex_nibble = 0; hc = 0;
                     }
                 }
             } else {
@@ -467,7 +467,7 @@ static void isearch_run(ISearchState *is) {
     }
     if (hex_nibble >= 2 && len < countof(is->search_u32)) {
         is->search_u32[len++] = hc;
-        hex_nibble = hc = 0;
+        hex_nibble = 0; hc = 0;
     }
 
     is->search_u32_len = len;
@@ -677,13 +677,13 @@ static void isearch_addpos(EditState *s, int dir) {
     } else
     if (is->pos < countof(is->search_u32_steps)) {
         /* add the match position, if any */
-        unsigned long v = (is->dir >= 0) ? FOUND_TAG : FOUND_TAG | FOUND_REV;
+        unsigned int v = (is->dir >= 0) ? FOUND_TAG : FOUND_TAG | FOUND_REV;
         if (is->found_offset < 0 && is->search_u32_len > 0) {
             is->search_flags |= SEARCH_FLAG_WRAPPED;
             if (is->dir < 0)
-                v |= is->s->b->total_size;
+                v |= (unsigned int)is->s->b->total_size;
         } else {
-            v |= is->s->offset;
+            v |= (unsigned int)is->s->offset;
         }
         is->search_u32_steps[is->pos++] = v;
     }
@@ -693,7 +693,7 @@ static void isearch_printing_char(EditState *s, int key) {
     ISearchState *is = s->isearch_state;
     if (is) {
         if (is->pos < countof(is->search_u32_steps))
-            is->search_u32_steps[is->pos++] = key;
+            is->search_u32_steps[is->pos++] = (unsigned int)key;
     }
 }
 
@@ -831,7 +831,7 @@ static void isearch_exit(EditState *s, int key) {
 static void isearch_key(void *opaque, int key) {
     ISearchState *is = opaque;
     QEmacsState *qs = is->s->qs;
-    unsigned int keys[1] = { key };
+    unsigned int keys[1] = { (unsigned int)key };
 
     if (is->quoting) {
         is->quoting = 0;
@@ -925,7 +925,7 @@ static int search_to_u32(char32_t *buf, int size,
             c = *s++;
             if (c == '\0') {
                 if (hex_nibble >= 2) {
-                    buf[len++] = hc;
+                    buf[len++] = (char32_t)hc;
                     hex_nibble = hc = 0;
                 }
                 break;
@@ -934,12 +934,12 @@ static int search_to_u32(char32_t *buf, int size,
             if (h < 16) {
                 hc = (hc << 4) | h;
                 if (++hex_nibble == max_nibble) {
-                    buf[len++] = hc;
+                    buf[len++] = (char32_t)hc;
                     hex_nibble = hc = 0;
                 }
             } else {
                 if (c == ' ' && hex_nibble) {
-                    buf[len++] = hc;
+                    buf[len++] = (char32_t)hc;
                     hex_nibble = hc = 0;
                 }
             }
