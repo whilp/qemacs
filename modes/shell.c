@@ -2971,10 +2971,6 @@ static void shell_move_bol(EditState *e)
 {
     ShellState *s = shell_get_state(e, 1);
 
-    /* exit shell interactive mode on home / ^A at start of shell input */
-    if (!s || (e->offset == s->cur_prompt && !s->grab_keys))
-        e->interactive = 0;
-
     if (s && e->interactive) {
         qe_term_write(s, "\001", 1); /* Control-A */
     } else {
