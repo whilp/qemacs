@@ -77,20 +77,20 @@ static int css_get_length(int *length_ptr, int *unit_ptr, const char *p)
     p1 = p;
     if (*p == '+' || *p == '-')
         p++;
-    while (qe_isdigit(*p))
+    while (qe_isdigit((char32_t)(unsigned char)*p))
         p++;
     if (*p == '.') {
         p++;
-        while (qe_isdigit(*p))
+        while (qe_isdigit((char32_t)(unsigned char)*p))
             p++;
     }
-    len = p - p1;
+    len = (int)(p - p1);
     if (len == 0)
         return -1;
     /* CG: use pstrncpy */
     if (len > (int)sizeof(buf) - 1)
         len = (int)sizeof(buf) - 1;
-    memcpy(buf, p1, len);
+    memcpy(buf, p1, (size_t)len);
     buf[len] = '\0';
     f = strtod(buf, NULL);
     /* CG: should use define or global for consistency with
@@ -192,7 +192,7 @@ static char *css_parse_string(const char **pp)
             /* XXX: hex digits */
         }
         if ((q - buf) < (int)sizeof(buf) - 1)
-            *q++ = c;
+            *q++ = (char)c;
     }
     *q = '\0';
     //    printf("string='%s'\n", buf);
@@ -208,12 +208,12 @@ void css_add_prop_values(CSSProperty ***last_prop,
     CSSProperty *prop;
 
     prop = qe_malloc_hack(CSSProperty,
-                          (nb_values - 1) * sizeof(CSSPropertyValue));
+                          (size_t)(nb_values - 1) * sizeof(CSSPropertyValue));
     if (!prop)
         return;
-    prop->property = property_index;
+    prop->property = (unsigned short)property_index;
     prop->next = NULL;
-    prop->nb_values = nb_values;
+    prop->nb_values = (unsigned short)nb_values;
     blockcpy(&prop->value, val_ptr, nb_values);
 
     **last_prop = prop;
@@ -286,8 +286,8 @@ CSSProperty *css_parse_properties(CSSParseState *b, const char *props_str)
                 break;
             def++;
         }
-        property_index = def - css_properties;
-        type = def->type;
+        property_index = (int)(def - css_properties);
+        type = (int)def->type;
 
         nb_args = 0;
         for (;;) {
@@ -358,7 +358,7 @@ CSSProperty *css_parse_properties(CSSParseState *b, const char *props_str)
             get_str(&p, buf, sizeof(buf), ";");
 
             unit = CSS_UNIT_NONE;
-            if (type & CSS_TYPE_AUTO) {
+            if ((unsigned int)type & CSS_TYPE_AUTO) {
                 if (strequal(buf, "auto")) {
                     val = CSS_AUTO;
                     goto got_val;
@@ -372,7 +372,7 @@ CSSProperty *css_parse_properties(CSSParseState *b, const char *props_str)
             }
             if (type & CSS_TYPE_INTEGER) {
                 const char *p1;
-                val = strtol_c(buf, &p1, 0);
+                val = (int)strtol_c(buf, &p1, 0);
                 if (*p1 == '\0') {
                     unit = CSS_VALUE_INTEGER;
                     goto got_val;
@@ -412,7 +412,7 @@ CSSProperty *css_parse_properties(CSSParseState *b, const char *props_str)
                 QEColor color;
                 /* XXX: color parsing is not always discriminant */
                 if (!css_get_color(&color, buf)) {
-                    val = color;
+                    val = (int)color;
                     unit = CSS_VALUE_COLOR;
                     goto got_val;
                 }
@@ -732,7 +732,7 @@ static void read_string(CSSParseState *b, int *ch_ptr, char *ident, int ident_si
         if (ch == quote)
             break;
         if ((q - ident) < ident_size - 1)
-            *q++ = ch;
+            *q++ = (char)ch;
     }
     *q = '\0';
     ch = bgetc(b);
@@ -747,10 +747,10 @@ static void read_ident(CSSParseState *b, int *ch_ptr, char *ident, int ident_siz
     c = *ch_ptr;
     q = ident;
     for (;;) {
-        if (!(qe_isalnum_(c) || c == '*' || c == '-'))
+        if (!(qe_isalnum_((char32_t)c) || c == '*' || c == '-'))
             break;
         if ((q - ident) < ident_size - 1)
-            *q++ = c;
+            *q++ = (char)c;
         c = bgetc(b);
     }
     *q = '\0';
@@ -762,7 +762,7 @@ static void bskip_spaces(CSSParseState *b, int *ch_ptr)
     int c;
 
     c = *ch_ptr;
-    while (qe_isspace(c))
+    while (qe_isspace((char32_t)c))
         c = bgetc(b);
     *ch_ptr = c;
 }
@@ -771,12 +771,12 @@ void add_attribute(CSSStyleSheetAttributeEntry ***last_attr,
                    CSSIdent attr, int op, const char *value)
 {
     CSSStyleSheetAttributeEntry *ae;
-    int len = strlen(value);
+    int len = (int)strlen(value);
 
     ae = qe_malloc_hack(CSSStyleSheetAttributeEntry, len);
     ae->attr = attr;
-    ae->op = op;
-    memcpy(ae->value, value, len + 1);
+    ae->op = (unsigned char)op;
+    memcpy(ae->value, value, (size_t)(len + 1));
     ae->next = NULL;
     **last_attr = ae;
     *last_attr = &ae->next;
@@ -972,7 +972,7 @@ static void parse_simple_selector(CSSSimpleSelector *ss, // output only
         ss->tag_id = css_new_ident(tag_id);
     }
     ss->attrs = first_attr;
-    ss->pclasses = pclass;
+    ss->pclasses = (unsigned short)pclass;
 
     *ch_ptr = ch;
 }
@@ -1065,7 +1065,7 @@ void css_parse_style_sheet(CSSStyleSheet *s, CSSParseState *b)
                 bskip_spaces(b, &ch);
                 parse_simple_selector(ss, b, &ch);
                 bskip_spaces(b, &ch);
-                ss->tree_op = last_tree_op;
+                ss->tree_op = (unsigned char)last_tree_op;
                 ss->next = last_ss;
                 if (ch == '+') {
                     tree_op = CSS_TREE_OP_PRECEEDED;
@@ -1077,7 +1077,7 @@ void css_parse_style_sheet(CSSStyleSheet *s, CSSParseState *b)
                     ch = bgetc(b);
                     goto add_tree;
                 } else
-                if (qe_isalpha(ch)) {
+                if (qe_isalpha((char32_t)ch)) {
                     tree_op = CSS_TREE_OP_DESCENDANT;
                 add_tree:
                     ss1 = qe_malloc_dup_array(ss, 1);
@@ -1106,7 +1106,7 @@ void css_parse_style_sheet(CSSStyleSheet *s, CSSParseState *b)
         q = value;
         while (ch != '}' && ch != EOF) {
             if ((q - value) < (int)sizeof(value) - 1)
-                *q++ = ch;
+                *q++ = (char)ch;
             ch = bgetc(b);
         }
         *q = '\0';
