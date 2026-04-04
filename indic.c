@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-#include "cutils.h"
+#include "util.h"
 #include "unicode_join.h"
 
 #define VIRAMA  0x94d
@@ -61,8 +61,10 @@ static int devanagari_is_dead_consonant(char32_t i) {
 int devanagari_log2vis(char32_t *str, unsigned int *ctog, int len) {
     char32_t cc, c;
     int i, len1, j, k;
-    /* CG: C99 variable-length arrays may be too large */
-    char32_t *q, buf[len];
+    char32_t *q, *buf = qe_malloc_array(char32_t, len);
+
+    if (!buf)
+        return len;
 
     /* Rule 1: dead consonant rule */
     q = buf;
@@ -139,5 +141,6 @@ int devanagari_log2vis(char32_t *str, unsigned int *ctog, int len) {
             ctog[i] = (unsigned int)k;
         }
     }
+    qe_free(&buf);
     return j;
 }

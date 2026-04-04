@@ -186,9 +186,14 @@ static int unicode_ligature(char32_t *buf_out,
     char32_t l1, l2;
     char32_t *q;
     const unsigned short *lig;
-    /* CG: C99 variable-length arrays may be too large */
-    // XXX: why do we need a local copy?
-    char32_t buf[len];
+    char32_t *buf;
+
+    if (len <= 0)
+        return len;
+
+    buf = qe_malloc_array(char32_t, len);
+    if (!buf)
+        return len;
 
     blockcpy(buf, buf_out, len);
 
@@ -250,6 +255,7 @@ static int unicode_ligature(char32_t *buf_out,
             ;
         }
     }
+    qe_free(&buf);
     return (int)(q - buf_out);
 }
 
@@ -312,10 +318,8 @@ int unicode_to_glyphs(char32_t *dst, unsigned int *char_to_glyph_pos,
                       int reverse)
 {
     int len, i;
-    /* CG: C99 variable-length arrays may be too large */
-    unsigned int ctog[src_size];
-    unsigned int ctog1[src_size];
-    char32_t buf[src_size];
+    unsigned int *ctog, *ctog1;
+    char32_t *buf;
     int unicode_class;
 
     unicode_class = unicode_classify(src, src_size);
@@ -328,46 +332,63 @@ int unicode_to_glyphs(char32_t *dst, unsigned int *char_to_glyph_pos,
                 char_to_glyph_pos[i] = (unsigned int)i;
         }
         return len;
-    } else {
-        /* generic case */
+    }
 
-        /* init current buffer */
-        len = src_size;
-        for (i = 0; i < len; i++)
-            ctog[i] = (unsigned int)i;
-        blockcpy(buf, src, len);
+    /* generic case */
+    if (src_size <= 0)
+        return 0;
 
-        /* apply each filter */
+    ctog = qe_malloc_array(unsigned int, src_size);
+    ctog1 = qe_malloc_array(unsigned int, src_size);
+    buf = qe_malloc_array(char32_t, src_size);
+    if (!ctog || !ctog1 || !buf) {
+        qe_free(&ctog);
+        qe_free(&ctog1);
+        qe_free(&buf);
+        len = min_int(src_size, dst_size);
+        blockcpy(dst, src, len);
+        return len;
+    }
 
-        if (unicode_class & UNICODE_ARABIC) {
-            len = arabic_join(buf, ctog1, len);
-            /* not needed for arabic_join */
-            //compose_char_to_glyph(ctog, src_size, ctog1);
-        }
+    /* init current buffer */
+    len = src_size;
+    for (i = 0; i < len; i++)
+        ctog[i] = (unsigned int)i;
+    blockcpy(buf, src, len);
 
-        if (unicode_class & UNICODE_INDIC) {
-            len = devanagari_log2vis(buf, ctog1, len);
-            compose_char_to_glyph(ctog, src_size, ctog1);
-        }
+    /* apply each filter */
 
-        len = unicode_ligature(buf, ctog1, len);
+    if (unicode_class & UNICODE_ARABIC) {
+        len = arabic_join(buf, ctog1, len);
+        /* not needed for arabic_join */
+        //compose_char_to_glyph(ctog, src_size, ctog1);
+    }
+
+    if (unicode_class & UNICODE_INDIC) {
+        len = devanagari_log2vis(buf, ctog1, len);
         compose_char_to_glyph(ctog, src_size, ctog1);
+    }
 
-        if (reverse) {
-            bidi_reverse_buf(buf, len);
-            for (i = 0; i < src_size; i++) {
-                ctog[i] = (unsigned int)(len - 1) - ctog[i];
-            }
-        }
+    len = unicode_ligature(buf, ctog1, len);
+    compose_char_to_glyph(ctog, src_size, ctog1);
 
-        if (len > dst_size)
-            len = dst_size;
-        blockcpy(dst, buf, len);
-
-        if (char_to_glyph_pos) {
-            blockcpy(char_to_glyph_pos, ctog, src_size);
+    if (reverse) {
+        bidi_reverse_buf(buf, len);
+        for (i = 0; i < src_size; i++) {
+            ctog[i] = (unsigned int)(len - 1) - ctog[i];
         }
     }
+
+    if (len > dst_size)
+        len = dst_size;
+    blockcpy(dst, buf, len);
+
+    if (char_to_glyph_pos) {
+        blockcpy(char_to_glyph_pos, ctog, src_size);
+    }
+    qe_free(&ctog);
+    qe_free(&ctog1);
+    qe_free(&buf);
     return len;
 }
 
