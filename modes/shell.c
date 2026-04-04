@@ -2644,8 +2644,10 @@ static void shell_read_cb(void *opaque)
         b->flags |= save_readonly;
     }
 
-    /* now we do some refresh (should just invalidate?) */
-    qe_display(qs);
+    /* invalidate display: the event loop will call qe_display() once
+     * after all pending I/O is drained, batching rapid PTY output into
+     * a single redraw instead of one per read() call. */
+    url_redisplay();
 }
 
 static void shell_mode_free(EditBuffer *b, void *state)
