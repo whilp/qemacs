@@ -3199,9 +3199,34 @@ static void shell_delete_bytes(EditState *e, int offset, int size)
             end -= size1;
             start = s->cur_prompt;
         }
-        start_char = eb_get_char_offset(e->b, start);
-        cur_char = eb_get_char_offset(e->b, s->cur_offset);
-        end_char = eb_get_char_offset(e->b, end);
+        /* Compute char positions relative to start (which is >= cur_prompt).
+         * cur_offset and end are also within the current input line, so
+         * walking forward from start is O(input_line_length), not
+         * O(total_scrollback) as eb_get_char_offset() would be. */
+        start_char = 0;
+        {
+            int o, next;
+            cur_char = 0;
+            if (s->cur_offset >= start) {
+                for (o = start; o < s->cur_offset; ) {
+                    eb_nextc(e->b, o, &next);
+                    cur_char++;
+                    o = next;
+                }
+            } else {
+                for (o = s->cur_offset; o < start; ) {
+                    eb_nextc(e->b, o, &next);
+                    cur_char--;
+                    o = next;
+                }
+            }
+            end_char = 0;
+            for (o = start; o < end; ) {
+                eb_nextc(e->b, o, &next);
+                end_char++;
+                o = next;
+            }
+        }
         if (start == s->cur_prompt && cur_char > start_char + 2) {
             qe_term_write(s, "\001", 1);  /* C-a */
             cur_char = start_char;
