@@ -68,7 +68,7 @@ static inline int lre_js_is_ident_first(int c)
         return (lre_id_start_table_ascii[c >> 5] >> (c & 31)) & 1;
     } else {
 #ifdef CONFIG_ALL_UNICODE
-        return lre_is_id_start(c);
+        return lre_is_id_start((uint32_t)c);
 #else
         return !lre_is_space(c);
 #endif
@@ -82,7 +82,7 @@ static inline int lre_js_is_ident_next(int c)
     } else {
         /* ZWNJ and ZWJ are accepted in identifiers */
 #ifdef CONFIG_ALL_UNICODE
-        return lre_is_id_continue(c) || c == 0x200C || c == 0x200D;
+        return lre_is_id_continue((uint32_t)c) || c == 0x200C || c == 0x200D;
 #else
         return !lre_is_space(c) || c == 0x200C || c == 0x200D;
 #endif

@@ -378,7 +378,7 @@ void do_compare_files(EditState *s, const char *filename, int bflags)
     const char *tail;
     EditState *e;
 
-    pathlen = get_basename_offset(filename);
+    pathlen = (int)get_basename_offset(filename);
     get_default_path(s->b, s->offset, dir, sizeof(dir));
 
     if (strstart(filename, dir, &tail)) {
@@ -397,8 +397,8 @@ void do_compare_files(EditState *s, const char *filename, int bflags)
     } else {
         pstrcpy(buf, sizeof(buf), filename);
         buf[pathlen - 1] = '\0';  /* overwite the path separator */
-        parent_pathlen = get_basename_offset(buf);
-        pstrcpy(buf + parent_pathlen, sizeof(buf) - parent_pathlen, filename + pathlen);
+        parent_pathlen = (int)get_basename_offset(buf);
+        pstrcpy(buf + parent_pathlen, sizeof(buf) - (size_t)parent_pathlen, filename + pathlen);
     }
 
     // XXX: should check for regular file
@@ -826,7 +826,8 @@ static void forward_block(EditState *s, int dir)
     QEColorizeContext cp[1];
     char32_t balance[MAX_LEVEL];
     int use_colors;
-    int line_num, col_num, style, style0, level;
+    int line_num, col_num, level;
+    QETermStyle style, style0;
     int pos;      /* position of the current character on line */
     int len;      /* number of colorized positions */
     int offset;   /* offset of the current character */
