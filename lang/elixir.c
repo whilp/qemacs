@@ -144,8 +144,7 @@ static void elixir_colorize_line(QEColorizeContext *cp,
             }
         parse_string:
             sep = (char32_t)(unsigned char)elixir_delim2[state & 15];
-            style = (state & IN_ELIXIR_TRIPLE) ?
-                ELIXIR_STYLE_HEREDOC : ELIXIR_STYLE_STRING;
+            style = ELIXIR_STYLE_STRING;  /* HEREDOC == STRING: same QE_STYLE_STRING value */
             while (i < n) {
                 c = str[i++];
                 if (c == '\\') {

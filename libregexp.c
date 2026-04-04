@@ -1444,11 +1444,13 @@ static int re_parse_term(REParseState *s, BOOL is_backward_dir)
                     }
                     return re_parse_error(s, "back reference out of range in regular expression");
                 }
-            emit_back_reference:
-                last_atom_start = s->byte_code.size;
-                last_capture_count = s->capture_count;
-                re_emit_op_u8(s, REOP_back_reference + is_backward_dir, c);
             }
+            /* 'q' out of scope; label moved here so goto emit_back_reference
+             * no longer skips 'q' initialization (-Wjump-misses-init). */
+        emit_back_reference:
+            last_atom_start = s->byte_code.size;
+            last_capture_count = s->capture_count;
+            re_emit_op_u8(s, REOP_back_reference + is_backward_dir, c);
             break;
         default:
             goto parse_class_atom;

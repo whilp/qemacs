@@ -349,7 +349,12 @@ ssize_t qe_write_timeout(int fd, const char *buf, size_t len, int timeout_ms) {
         if (res < 0) {
             if (errno == EINTR)
                 continue;
+            /* POSIX permits EAGAIN == EWOULDBLOCK; check both for portability.
+             * -Wlogical-op false positive on platforms where they're equal (e.g. Linux). */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wlogical-op"
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
+#pragma GCC diagnostic pop
                 if (timeout_ms == 0)
                     return -1;
                 struct pollfd pfd = { .fd = fd, .events = POLLOUT };

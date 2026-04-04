@@ -342,53 +342,60 @@ static void c_colorize_line(QEColorizeContext *cp,
             }
             if (mode_flags & CLANG_REGEX) {
                 /* XXX: should use more context to tell regex from divide */
-                char32_t prev = ' ';
-                for (i1 = start; i1 > indent; ) {
-                    prev = str[--i1];
-                    if (!qe_isblank(prev))
+                /* Inner block limits 'prev' scope so gotos to parse_regex:
+                 * below don't skip its initialization (-Wjump-misses-init). */
+                {
+                    char32_t prev = ' ';
+                    for (i1 = start; i1 > indent; ) {
+                        prev = str[--i1];
+                        if (!qe_isblank(prev))
+                            break;
+                    }
+                    /* ignore end of comment in grep output */
+                    if (start > indent && str[start - 1] == '*' && cp->partial_file)
                         break;
-                }
-                /* ignore end of comment in grep output */
-                if (start > indent && str[start - 1] == '*' && cp->partial_file)
-                    break;
 
-                if (!qe_findchar("])", prev)
-                &&  (qe_findchar(" [({},;=<>!~^&|*/%?:", prev)
-                ||   sbuf[i1] == C_STYLE_KEYWORD
-                ||   (str[i] != ' ' && (str[i] != '=' || str[i + 1] != ' ')
-                &&    !(qe_isalnum(prev) || prev == ')')))) {
-                    /* parse regex */
-                    state |= IN_C_REGEX;
-                    delim = '/';
-                parse_regex:
-                    style = C_STYLE_REGEX;
-                    while (i < n) {
-                        c = str[i++];
-                        if (c == '\\') {
-                            i = colorize_skip_escape(str, i, n);
+                    if (!qe_findchar("])", prev)
+                    &&  (qe_findchar(" [({},;=<>!~^&|*/%?:", prev)
+                    ||   sbuf[i1] == C_STYLE_KEYWORD
+                    ||   (str[i] != ' ' && (str[i] != '=' || str[i + 1] != ' ')
+                    &&    !(qe_isalnum(prev) || prev == ')')))) {
+                        /* parse regex */
+                        state |= IN_C_REGEX;
+                        delim = '/';
+                    } else {
+                        break;  /* treat '/' as division operator */
+                    }
+                }
+                /* 'prev' is now out of scope; gotos from state-resume code land here */
+            parse_regex:
+                style = C_STYLE_REGEX;
+                while (i < n) {
+                    c = str[i++];
+                    if (c == '\\') {
+                        i = colorize_skip_escape(str, i, n);
+                    } else
+                    if (state & IN_C_CHARCLASS) {
+                        if (c == ']') {
+                            state &= ~IN_C_CHARCLASS;
+                        }
+                        /* ECMA 5: ignore '/' inside char classes */
+                    } else {
+                        if (c == '[') {
+                            state |= IN_C_CHARCLASS;
                         } else
-                        if (state & IN_C_CHARCLASS) {
-                            if (c == ']') {
-                                state &= ~IN_C_CHARCLASS;
+                        if (c == delim) {
+                            while (qe_isalnum_(str[i])) {
+                                i++;
                             }
-                            /* ECMA 5: ignore '/' inside char classes */
-                        } else {
-                            if (c == '[') {
-                                state |= IN_C_CHARCLASS;
-                            } else
-                            if (c == delim) {
-                                while (qe_isalnum_(str[i])) {
-                                    i++;
-                                }
-                                state &= ~IN_C_REGEX;
-                                style = style0;
-                                break;
-                            }
+                            state &= ~IN_C_REGEX;
+                            style = style0;
+                            break;
                         }
                     }
-                    SET_STYLE(sbuf, start, i, C_STYLE_REGEX);
-                    continue;
                 }
+                SET_STYLE(sbuf, start, i, C_STYLE_REGEX);
+                continue;
             }
             break;
         case '%':
@@ -1906,51 +1913,58 @@ static void js_colorize_line(QEColorizeContext *cp,
             }
             if (mode_flags & CLANG_REGEX) {
                 /* XXX: should use more context to tell regex from divide */
-                char32_t prev = ' ';
-                for (i1 = start; i1 > indent; ) {
-                    prev = str[--i1];
-                    if (!qe_isblank(prev))
+                /* Inner block limits 'prev' scope so gotos to parse_regex:
+                 * below don't skip its initialization (-Wjump-misses-init). */
+                {
+                    char32_t prev = ' ';
+                    for (i1 = start; i1 > indent; ) {
+                        prev = str[--i1];
+                        if (!qe_isblank(prev))
+                            break;
+                    }
+                    /* ignore end of comment in grep output */
+                    if (start > indent && str[start - 1] == '*' && cp->partial_file)
                         break;
-                }
-                /* ignore end of comment in grep output */
-                if (start > indent && str[start - 1] == '*' && cp->partial_file)
-                    break;
 
-                if (!qe_findchar("])", prev)
-                &&  (qe_findchar(" [({},;=<>!~^&|*/%?:", prev)
-                ||   sbuf[i1] == C_STYLE_KEYWORD
-                ||   (str[i] != ' ' && (str[i] != '=' || str[i + 1] != ' ')
-                &&    !(qe_isalnum(prev) || prev == ')')))) {
-                    /* parse regex */
-                    state |= IN_C_REGEX;
-                    delim = '/';
-                parse_regex:
-                    style = C_STYLE_REGEX;
-                    while (i < n) {
-                        c = str[i++];
-                        if (c == '\\') {
-                            i = colorize_skip_escape(str, i, n);
+                    if (!qe_findchar("])", prev)
+                    &&  (qe_findchar(" [({},;=<>!~^&|*/%?:", prev)
+                    ||   sbuf[i1] == C_STYLE_KEYWORD
+                    ||   (str[i] != ' ' && (str[i] != '=' || str[i + 1] != ' ')
+                    &&    !(qe_isalnum(prev) || prev == ')')))) {
+                        /* parse regex */
+                        state |= IN_C_REGEX;
+                        delim = '/';
+                    } else {
+                        continue;  /* treat '/' as division operator */
+                    }
+                }
+                /* 'prev' is now out of scope; gotos from state-resume code land here */
+            parse_regex:
+                style = C_STYLE_REGEX;
+                while (i < n) {
+                    c = str[i++];
+                    if (c == '\\') {
+                        i = colorize_skip_escape(str, i, n);
+                    } else
+                    if (state & IN_C_CHARCLASS) {
+                        if (c == ']') {
+                            state &= ~IN_C_CHARCLASS;
+                        }
+                        /* ECMA 5: ignore '/' inside char classes */
+                    } else {
+                        if (c == '[') {
+                            state |= IN_C_CHARCLASS;
                         } else
-                        if (state & IN_C_CHARCLASS) {
-                            if (c == ']') {
-                                state &= ~IN_C_CHARCLASS;
+                        if (c == delim) {
+                            while (qe_isalnum_(str[i])) {
+                                i++;
                             }
-                            /* ECMA 5: ignore '/' inside char classes */
-                        } else {
-                            if (c == '[') {
-                                state |= IN_C_CHARCLASS;
-                            } else
-                            if (c == delim) {
-                                while (qe_isalnum_(str[i])) {
-                                    i++;
-                                }
-                                state &= ~IN_C_REGEX;
-                                break;
-                            }
+                            state &= ~IN_C_REGEX;
+                            break;
                         }
                     }
-                    break;
                 }
+                break;
             }
             continue;
         case '#':       /* preprocessor */
