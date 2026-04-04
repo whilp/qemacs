@@ -174,7 +174,7 @@ static int alternate_buffer;
  */
 static ssize_t write_all_timeout(int fd, const char *buf, size_t len,
                                  int timeout_ms) {
-    ssize_t ret = len;
+    ssize_t ret = (ssize_t)len;
     while (len > 0) {
         ssize_t res = write(fd, buf, len);
         if (res < 0) {
@@ -196,7 +196,7 @@ static ssize_t write_all_timeout(int fd, const char *buf, size_t len,
         if (res == 0)
             return ret - (ssize_t)len;
         buf += res;
-        len -= res;
+        len -= (size_t)res;
     }
     return ret;
 }
@@ -206,7 +206,7 @@ static ssize_t write_all(int fd, const char *buf, size_t len) {
 }
 
 static ssize_t read_all(int fd, char *buf, size_t len) {
-    ssize_t ret = len;
+    ssize_t ret = (ssize_t)len;
     while (len > 0) {
         ssize_t res = read(fd, buf, len);
         if (res < 0) {
@@ -219,7 +219,7 @@ static ssize_t read_all(int fd, char *buf, size_t len) {
         if (res == 0)
             return ret - (ssize_t)len;
         buf += res;
-        len -= res;
+        len -= (size_t)res;
     }
     return ret;
 }
@@ -346,7 +346,7 @@ static int server_create_socket(const char *name) {
     if (fd == -1)
         return -1;
 
-    socklen_t socklen = offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path) + 1;
+    socklen_t socklen = (socklen_t)(offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path) + 1);
     mode_t mask = umask(S_IXUSR | S_IRWXG | S_IRWXO);
     int r = bind(fd, (struct sockaddr *)&addr, socklen);
     if (r == -1 && errno == EADDRINUSE) {
@@ -389,7 +389,7 @@ static int session_connect(const char *name) {
     if (fd == -1)
         return -1;
 
-    socklen_t socklen = offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path) + 1;
+    socklen_t socklen = (socklen_t)(offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path) + 1);
     if (connect(fd, (struct sockaddr *)&addr, socklen) == -1) {
         /* Clean up stale socket */
         if (errno == ECONNREFUSED && stat(addr.sun_path, &sb) == 0 && S_ISSOCK(sb.st_mode))
@@ -482,7 +482,7 @@ static Client *server_accept_client(void) {
     memset(&pkt, 0, sizeof(pkt));
     pkt.type = MSG_PID;
     pkt.len = sizeof(pkt.u.l);
-    pkt.u.l = getpid();
+    pkt.u.l = (uint64_t)getpid();
     if (send_packet_nonblock(c->socket, &pkt) < 0) {
         /* Client already dead or buffer full — drop it */
         server.clients = c->next;
@@ -543,21 +543,21 @@ static void server_mainloop(void) {
             ssize_t len = read(server.pty, server_pkt.u.msg, sizeof(server_pkt.u.msg));
             if (len > 0) {
                 /* Check for OSC detach escape sequence from qemacs */
-                char *osc = memmem(server_pkt.u.msg, len,
+                char *osc = memmem(server_pkt.u.msg, (size_t)len,
                                    QE_OSC_DETACH, QE_OSC_DETACH_LEN);
                 if (osc) {
                     /* Remove the OSC sequence from output */
-                    size_t before = osc - server_pkt.u.msg;
-                    size_t after = len - before - QE_OSC_DETACH_LEN;
+                    size_t before = (size_t)(osc - server_pkt.u.msg);
+                    size_t after = (size_t)len - before - QE_OSC_DETACH_LEN;
                     if (after > 0)
                         memmove(osc, osc + QE_OSC_DETACH_LEN, after);
-                    len = before + after;
+                    len = (ssize_t)(before + after);
                     /* Mark all clients for disconnection */
                     for (Client *dc = server.clients; dc; dc = dc->next)
                         dc->state = STATE_DISCONNECTED;
                 }
                 if (len > 0) {
-                    server_pkt.len = len;
+                    server_pkt.len = (uint32_t)len;
                     pty_data = 1;
                 }
             } else if (len == 0) {
@@ -584,7 +584,7 @@ static void server_mainloop(void) {
                                           client_pkt.len, 1000);
                         break;
                     case MSG_ATTACH:
-                        c->flags = client_pkt.u.i;
+                        c->flags = (int)client_pkt.u.i;
                         c->state = STATE_ATTACHED;
                         break;
                     case MSG_RESIZE:
@@ -641,7 +641,7 @@ static void server_mainloop(void) {
                 Packet epkt;
                 memset(&epkt, 0, sizeof(epkt));
                 epkt.type = MSG_EXIT;
-                epkt.u.i = server.exit_status;
+                epkt.u.i = (uint32_t)server.exit_status;
                 epkt.len = sizeof(epkt.u.i);
                 if (send_packet_nonblock(c->socket, &epkt) < 0)
                     c->state = STATE_DISCONNECTED;
@@ -746,7 +746,7 @@ static int client_mainloop(void) {
     /* Send attach packet (bounded — server should be ready) */
     memset(&pkt, 0, sizeof(pkt));
     pkt.type = MSG_ATTACH;
-    pkt.u.i = client.flags;
+    pkt.u.i = (uint32_t)client.flags;
     pkt.len = sizeof(pkt.u.i);
     if (send_packet_timeout(client.server_socket, &pkt, 5000) < 0)
         return -2;
@@ -795,7 +795,7 @@ static int client_mainloop(void) {
                 case MSG_EXIT:
                     send_packet_nonblock(client.server_socket, &rpkt);
                     close(client.server_socket);
-                    return rpkt.u.i;
+                    return (int)rpkt.u.i;
                 default:
                     break;
                 }
@@ -812,7 +812,7 @@ static int client_mainloop(void) {
             if (len == -1 && errno != EAGAIN && errno != EINTR)
                 break;
             if (len > 0) {
-                ipkt.len = len;
+                ipkt.len = (uint32_t)len;
                 if (ipkt.u.msg[0] == key_detach) {
                     Packet dpkt;
                     memset(&dpkt, 0, sizeof(dpkt));
@@ -971,7 +971,7 @@ static int create_session(const char *name, int argc, char **argv) {
         {
             ssize_t len = read_all(client_pipe[0], errormsg, sizeof(errormsg));
             if (len > 0) {
-                write_all(STDERR_FILENO, errormsg, len);
+                write_all(STDERR_FILENO, errormsg, (size_t)len);
                 unlink(server.socket_path);
                 close(client_pipe[0]);
                 return -1;

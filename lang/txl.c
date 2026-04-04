@@ -121,11 +121,11 @@ static void txl_colorize_line(QEColorizeContext *cp,
             /* parse identifiers and keywords */
             if (qe_isalpha_(c)) {
                 klen = 0;
-                keyword[klen++] = qe_tolower(c);
+                keyword[klen++] = (char)qe_tolower(c);
                 for (; i < n; i++) {
                     if (qe_isalnum_(str[i])) {
                         if (klen < countof(keyword) - 1)
-                            keyword[klen++] = qe_tolower(str[i]);
+                            keyword[klen++] = (char)qe_tolower(str[i]);
                     } else {
                         if (qe_findchar("$&!@%#", str[i]))
                             i++;

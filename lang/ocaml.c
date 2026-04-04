@@ -211,10 +211,10 @@ static void ocaml_colorize_line(QEColorizeContext *cp,
         /* parse identifiers and keywords */
         if (qe_isalpha_(c)) {
             len = 0;
-            keyword[len++] = c;
+            keyword[len++] = (char)c;
             for (; qe_isalnum_(str[i]) || str[i] == '\''; i++) {
                 if (len < countof(keyword) - 1)
-                    keyword[len++] = str[i];
+                    keyword[len++] = (char)str[i];
             }
             keyword[len] = '\0';
             if (strfind(syn->types, keyword)) {

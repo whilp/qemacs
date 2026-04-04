@@ -92,7 +92,7 @@ static int sharp_mode_probe(ModeDef *mode, ModeProbeData *pd)
     ||  stristart(pd->filename, ".clang-format", NULL))
         return 70;
 
-    while (qe_isspace(*p))
+    while (qe_isspace((char32_t)(unsigned char)*p))
         p++;
 
     if (*p == '#') {

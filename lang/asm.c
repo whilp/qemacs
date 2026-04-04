@@ -113,10 +113,10 @@ static void asm_colorize_line(QEColorizeContext *cp,
             /* parse identifiers and keywords */
             if (qe_isalpha_(c) || qe_findchar("@.$%?", c)) {
                 len = 0;
-                keyword[len++] = qe_tolower(c);
+                keyword[len++] = (char)qe_tolower(c);
                 for (; qe_isalnum_(str[i]) || qe_findchar("@$%?", str[i]); i++) {
                     if (len < countof(keyword) - 1)
-                        keyword[len++] = qe_tolower(str[i]);
+                        keyword[len++] = (char)qe_tolower(str[i]);
                 }
                 keyword[len] = '\0';
                 if (++wn == 1) {
@@ -124,7 +124,7 @@ static void asm_colorize_line(QEColorizeContext *cp,
                         SET_STYLE(sbuf, start, i, ASM_STYLE_PREPROCESS);
                         i = cp_skip_blanks(str, i, n);
                         start = i;
-                        colstate = str[i++];  /* end of comment character */
+                        colstate = (int)str[i++];  /* end of comment character */
                         /* skip characters upto and including separator */
                     in_comment:
                         while (i < n) {

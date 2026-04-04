@@ -148,7 +148,7 @@ static void build_bufed_list(EditState *s, BufedState *bs)
     bs->sort_mode = bufed_sort_order;
 
     if (bufed_sort_order) {
-        qe_qsort_r(bs->items.items, bs->items.nb_items,
+        qe_qsort_r(bs->items.items, (size_t)bs->items.nb_items,
                    sizeof(StringItem *), bs, bufed_sort_func);
     }
 
@@ -167,7 +167,8 @@ static void build_bufed_list(EditState *s, BufedState *bs)
     for (i = 0; i < bs->items.nb_items; i++) {
         char flags[4];
         char *flagp = flags;
-        int len, style0;
+        int len;
+        QETermStyle style0;
 
         item = bs->items.items[i];
         b1 = qe_check_buffer(qs, (EditBuffer**)(void *)&item->opaque);
@@ -193,7 +194,7 @@ static void build_bufed_list(EditState *s, BufedState *bs)
         b->cur_style = style0;
         eb_printf(b, " %-2s", flags);
         b->cur_style = BUFED_STYLE_BUFNAME;
-        len = strlen(item->str);
+        len = (int)strlen(item->str);
         /* simplistic column fitting, does not work for wide characters */
 #define COLWIDTH  20
         if (len > COLWIDTH) {

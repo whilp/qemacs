@@ -343,7 +343,7 @@ void url_redisplay(void)
 }
 
 ssize_t qe_write_timeout(int fd, const char *buf, size_t len, int timeout_ms) {
-    ssize_t ret = len;
+    ssize_t ret = (ssize_t)len;
     while (len > 0) {
         ssize_t res = write(fd, buf, len);
         if (res < 0) {
@@ -365,7 +365,7 @@ ssize_t qe_write_timeout(int fd, const char *buf, size_t len, int timeout_ms) {
         if (res == 0)
             return ret - (ssize_t)len;
         buf += res;
-        len -= res;
+        len -= (size_t)res;
     }
     return ret;
 }

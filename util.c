@@ -101,7 +101,7 @@ int find_file_next(FindFileState *s, char *filename, int filename_size_max) {
                 p += strcspn(p, ":");
             else
                 p += strlen(p);
-            pstrncpy(s->dirpath, sizeof(s->dirpath), s->bufptr, p - s->bufptr);
+            pstrncpy(s->dirpath, sizeof(s->dirpath), s->bufptr, (int)(p - s->bufptr));
             if (*p == ':')
                 p++;
             s->bufptr = p;
@@ -188,7 +188,7 @@ int is_filepattern(const char *filespec) {
        @note this function only recognises `?` and `*` wildcard characters
      */
     // XXX: should also accept character ranges and {} comprehensions
-    int pos = strcspn(filespec, "*?");
+    int pos = (int)strcspn(filespec, "*?");
     return filespec[pos] != '\0';
 }
 
@@ -213,7 +213,7 @@ static void canonicalize_path1(char *buf, int buf_size, const char *path) {
             if (c == '/')
                 break;
             if ((q - file) < ssizeof(file) - 1)
-                *q++ = c;
+                *q++ = (char)c;
         }
         *q = '\0';
 
@@ -310,12 +310,12 @@ char *make_user_path(char *buf, int buf_size, const char *path) {
      */
     char *homedir = getenv("HOME");
     if (homedir) {
-        int len = strlen(homedir);
+        int len = (int)strlen(homedir);
 
         if (len && homedir[len - 1] == '/')
             len--;
 
-        if (!memcmp(path, homedir, len) && (path[len] == '/' || path[len] == '\0')) {
+        if (!memcmp(path, homedir, (size_t)len) && (path[len] == '/' || path[len] == '\0')) {
             if (buf_size > 1) {
                 *buf = '~';
                 pstrcpy(buf + 1, buf_size - 1, path + len);
@@ -336,7 +336,7 @@ char *reduce_filename(char *dest, int size, const char *filename)
     char *dbase, *ext, *p;
 
     /* Copy path unchanged */
-    pstrncpy(dest, size, filename, base - filename);
+    pstrncpy(dest, size, filename, (int)(base - filename));
 
     /* Strip cvs temp file prefix */
     if (base[0] == '.' && base[1] == '#' && base[2] != '\0')
@@ -354,13 +354,13 @@ char *reduce_filename(char *dest, int size, const char *filename)
         if (*ext != '.')
             break;
         /* keep non numeric extension */
-        if (!qe_isdigit(ext[1]))
+        if (!qe_isdigit((unsigned char)ext[1]))
             break;
         /* keep the last extension */
         if (strchr(dbase, '.') == ext)
             break;
         /* only strip multidigit extensions */
-        if (!qe_isdigit(ext[2]))
+        if (!qe_isdigit((unsigned char)ext[2]))
             break;
         *ext = '\0';
     }
@@ -370,11 +370,11 @@ char *reduce_filename(char *dest, int size, const char *filename)
            Convert all upper case MS/DOS filenames with extension
            to lower case */
         for (p = dbase; *p; p++) {
-            if ((*p & 0x80) || qe_islower(*p))
+            if ((*p & 0x80) || qe_islower((unsigned char)*p))
                 break;
         }
         if (!*p && (p - dbase) <= 12) {
-            qe_strtolower(dbase, dest + size - dbase, dbase);
+            qe_strtolower(dbase, (int)(dest + size - dbase), dbase);
         }
     }
 
@@ -415,14 +415,14 @@ char *file_load(const char *filename, int max_size, int *sizep) {
         errno = ERANGE;
         return NULL;
     }
-    if (!(buf = qe_malloc_array(char, length + 1))) {
+    if (!(buf = qe_malloc_array(char, (size_t)(length + 1)))) {
         fclose(fp);
         errno = ENOMEM;
         return NULL;
     }
 
     fseek(fp, 0, SEEK_SET);
-    length = fread(buf, 1, length, fp);
+    length = (long)fread(buf, 1, (size_t)length, fp);
     buf[length] = '\0';
     fclose(fp);
     if (sizep)
@@ -448,17 +448,17 @@ int match_extension(const char *filename, const char *extlist) {
     base = get_basename(filename);
     while (*base == '.')
         base++;
-    len = strlen(base);
+    len = (int)strlen(base);
     if (len == 0)
         return 0;
 
     for (p = q = extlist;; p++) {
         int c = *p;
         if (c == '|' || c == '\0') {
-            int len1 = p - q;
+            int len1 = (int)(p - q);
             if (len1 != 0 || (q != extlist && c != '\0')) {
                 if (len > len1 && base[len - len1 - 1] == '.'
-                &&  !qe_memicmp(base + (len - len1), q, len1)) {
+                &&  !qe_memicmp(base + (len - len1), q, (size_t)len1)) {
                     return 1;
                 }
             }
@@ -483,23 +483,23 @@ int match_shell_handler(const char *p, const char *list) {
         return 0;
 
     if (p[0] == '#' && p[1] == '!') {
-        for (p += 2; qe_isblank(*p); p++)
+        for (p += 2; qe_isblank((unsigned char)*p); p++)
             continue;
-        for (base = p; *p && !qe_isspace(*p); p++) {
+        for (base = p; *p && !qe_isspace((unsigned char)*p); p++) {
             if (*p == '/')
                 base = p + 1;
         }
-        if (memfind(list, base, p - base))
+        if (memfind(list, base, (int)(p - base)))
             return 1;
         if (p - base == 3 && !memcmp(base, "env", 3)) {
             while (*p && *p != '\n') {
-                for (; qe_isblank(*p); p++)
+                for (; qe_isblank((unsigned char)*p); p++)
                     continue;
                 base = p;
-                for (; *p && !qe_isspace(*p); p++)
+                for (; *p && !qe_isspace((unsigned char)*p); p++)
                     continue;
                 if (*base != '-')
-                    return memfind(list, base, p - base);
+                    return memfind(list, base, (int)(p - base));
             }
         }
     }
@@ -513,7 +513,7 @@ int remove_slash(char *buf) {
      */
     // XXX: should we have windows specific behavior?
     // XXX: should we handle protocol prefixes specifically?
-    int len = strlen(buf);
+    int len = (int)strlen(buf);
     if (len > 1 && buf[len - 1] == '/') {
         buf[--len] = '\0';
     }
@@ -527,7 +527,7 @@ int append_slash(char *buf, int buf_size) {
        @note: truncation cannot be detected reliably
      */
     // XXX: should we have windows specific behavior?
-    int len = strnlen(buf, buf_size);
+    int len = (int)strnlen(buf, (size_t)buf_size);
     if (len > 0 && buf[len - 1] != '/' && len + 1 < buf_size) {
         buf[len++] = '/';
         buf[len] = '\0';
@@ -559,7 +559,7 @@ void splitpath(char *dirname, int dirname_size,
      */
     size_t offset = get_basename_offset(pathname);
     if (dirname)
-        pstrncpy(dirname, dirname_size, pathname, offset);
+        pstrncpy(dirname, dirname_size, pathname, (int)offset);
     if (filename)
         pstrcpy(filename, filename_size, pathname + offset);
 }
@@ -587,7 +587,7 @@ int qe_skip_spaces(const char **pp) {
     unsigned char c;
 
     p = *pp;
-    while (qe_isspace(c = *p))
+    while (qe_isspace(c = (unsigned char)*p))
         p++;
     *pp = p;
     return c;
@@ -630,7 +630,7 @@ int qe_strcollate(const char *s1, const char *s2) {
         res = (c1 < c2) ? -1 : 1;
 
     for (;;) {
-        flags = qe_isdigit(c1) * 2 + qe_isdigit(c2);
+        flags = qe_isdigit((unsigned int)c1) * 2 + qe_isdigit((unsigned int)c2);
         if (flags == 3) {
             last = c1;
             c1 = (unsigned char)*s1++;
@@ -639,7 +639,7 @@ int qe_strcollate(const char *s1, const char *s2) {
             break;
         }
     }
-    if (!qe_isdigit(last) || flags == 0)
+    if (!qe_isdigit((unsigned int)last) || flags == 0)
         return res;
     return (flags == 1) ? -1 : 1;
 }
@@ -676,8 +676,8 @@ void qe_strtolower(char *buf, int size, const char *str) {
     unsigned char c;
 
     if (size > 0) {
-        while ((c = *str++) != '\0' && size > 1) {
-            *buf++ = qe_tolower(c);
+        while ((c = (unsigned char)*str++) != '\0' && size > 1) {
+            *buf++ = (char)qe_tolower(c);
             size--;
         }
         *buf = '\0';
@@ -741,7 +741,7 @@ int strfind(const char *keytable, const char *str) {
        @argument `str` a valid string pointer.
        @return 1 if there is a match, 0 otherwise.
      */
-    return memfind(keytable, str, strlen(str));
+    return memfind(keytable, str, (int)strlen(str));
 }
 
 int strxfind(const char *list, const char *s) {
@@ -774,10 +774,10 @@ int strxfind(const char *list, const char *s) {
         p = (const u8*)s;
         for (;;) {
             do {
-                c1 = qe_toupper(*p++);
+                c1 = (u8)qe_toupper(*p++);
             } while (c1 == '-' || c1 == '_' || c1 == ' ');
             do {
-                c2 = qe_toupper(*q++);
+                c2 = (u8)qe_toupper(*q++);
             } while (c2 == '-' || c2 == '_' || c2 == ' ');
             if (c1 == '\0') {
                 if (c2 == '\0' || c2 == '|')
@@ -823,13 +823,13 @@ const char *strmem(const char *str, const void *mem, int size) {
     }
 
     // XXX: problem if match is a suffix
-    len = strlen(str);
+    len = (int)strlen(str);
     if (size >= len)
         return NULL;
 
     str_max = str + len - size;
     for (p = str; p < str_max; p++) {
-        if (*p == c && !memcmp(p + 1, p1, size))
+        if (*p == c && !memcmp(p + 1, p1, (size_t)size))
             return p;
     }
     return NULL;
@@ -849,20 +849,20 @@ const void *memstr(const void *buf, int size, const char *str) {
     int len;
     const u8 *p, *buf_max;
 
-    c = *str++;
+    c = (u8)*str++;
     if (!c) {
         /* empty string matches start of buffer */
         return buf;
     }
 
     // XXX: problem if match is a suffix
-    len = strlen(str);
+    len = (int)strlen(str);
     if (len >= size)
         return NULL;
 
     buf_max = (const u8*)buf + size - len;
     for (p = buf; p < buf_max; p++) {
-        if (*p == c && !memcmp(p + 1, str, len))
+        if (*p == c && !memcmp(p + 1, str, (size_t)len))
             return p;
     }
     return NULL;
@@ -884,8 +884,8 @@ int qe_memicmp(const void *p1, const void *p2, size_t count) {
 
     for (; count-- > 0; s1++, s2++) {
         if (*s1 != *s2) {
-            u8 c1 = qe_toupper(*s1);
-            u8 c2 = qe_toupper(*s2);
+            u8 c1 = (u8)qe_toupper(*s1);
+            u8 c2 = (u8)qe_toupper(*s2);
             if (c1 != c2)
                 return (c2 < c1) - (c1 < c2);
         }
@@ -906,19 +906,19 @@ const char *qe_stristr(const char *s1, const char *s2) {
     u8 c, c1, c2;
     int len;
 
-    len = strlen(s2);
+    len = (int)strlen(s2);
     if (!len)
         return s1;
 
-    c = *s2++;
+    c = (u8)*s2++;
     len--;
-    c1 = qe_toupper(c);
-    c2 = qe_tolower(c);
+    c1 = (u8)qe_toupper(c);
+    c2 = (u8)qe_tolower(c);
 
-    while ((c = *s1++) != '\0') {
+    while ((c = (u8)*s1++) != '\0') {
         if (c == c1 || c == c2) {
             // XXX: not strictly correct as s2 might be shorter than len
-            if (!qe_memicmp(s1, s2, len))
+            if (!qe_memicmp(s1, s2, (size_t)len))
                 return s1 - 1;
         }
     }
@@ -997,9 +997,9 @@ int strxcmp(const char *str1, const char *str2) {
        of `str1 <=> str2`
      */
     for (;;) {
-        u8 c1 = *str1;
-        u8 c2 = *str2;
-        int d = qe_toupper(c1) - qe_toupper(c2);
+        u8 c1 = (u8)*str1;
+        u8 c2 = (u8)*str2;
+        int d = (int)qe_toupper(c1) - (int)qe_toupper(c2);
         if (d) {
             if (c2 == '-' || c2 == '_' || c2 == ' ') {
                 str2++;
@@ -1054,18 +1054,18 @@ int strmatch_pat(const char *str, const char *pat, int start) {
      */
     u8 c1, c2;
     while (*pat) {
-        c1 = *pat++;
+        c1 = (u8)*pat++;
         if (c1 == '*') {
-            c1 = *pat++;
+            c1 = (u8)*pat++;
             if (c1 == '\0')
                 return 1;
-            while ((c2 = *str++) != '\0') {
+            while ((c2 = (u8)*str++) != '\0') {
                 if (c1 == c2 && strmatch_pat(str, pat, start))
                     return 1;
             }
             return 0;
         } else {
-            c2 = *str++;
+            c2 = (u8)*str++;
             if (c1 != c2)
                 return 0;
         }
@@ -1087,7 +1087,7 @@ int utf8_strimatch_pat(const char *str, const char *pat, int start) {
      */
     char32_t c1, c2;
     while (*pat) {
-        c1 = *pat++;
+        c1 = (unsigned char)*pat++;
         if (c1 & 0x80) {
             pat--;
             do {
@@ -1096,7 +1096,7 @@ int utf8_strimatch_pat(const char *str, const char *pat, int start) {
             c1 = qe_unaccent(c1);
         }
         if (c1 == '*') {
-            c1 = *pat++;
+            c1 = (unsigned char)*pat++;
             if (c1 & 0x80) {
                 pat--;
                 do {
@@ -1106,7 +1106,7 @@ int utf8_strimatch_pat(const char *str, const char *pat, int start) {
             }
             if (c1 == '\0')
                 return 1;
-            while ((c2 = *str++) != '\0') {
+            while ((c2 = (unsigned char)*str++) != '\0') {
                 if (c2 & 0x80) {
                     str--;
                     do {
@@ -1120,7 +1120,7 @@ int utf8_strimatch_pat(const char *str, const char *pat, int start) {
             }
             return 0;
         } else {
-            c2 = *str++;
+            c2 = (unsigned char)*str++;
             if (c2 & 0x80) {
                 str--;
                 do {
@@ -1155,12 +1155,12 @@ int get_str(const char **pp, char *buf, int buf_size, const char *stop) {
     qe_skip_spaces(pp);
     p = *pp;
     for (i = 0;;) {
-        u8 c = *p;
+        u8 c = (u8)*p;
         /* Stop on spaces and eat them */
-        if (qe_isspace(c) || strchr(stop, c))
+        if (qe_isspace(c) || strchr(stop, (int)c))
             break;
         if (i + 1 < buf_size)
-            buf[i++] = c;
+            buf[i++] = (char)c;
         p++;
     }
     if (i < buf_size)
@@ -1222,7 +1222,7 @@ static const char *sreg_skip(const char *p, int iter) {
     /* skip past en enumeration */
     int level = 0;
     while (*p != '\0') {
-        u8 c = *p++;
+        u8 c = (u8)*p++;
         if (c == '(') {
             level++;
         } else
@@ -1250,12 +1250,12 @@ static const char *sreg_match_class(const char *p, const char *re, const char *e
     int not = *re == '^';
     u8 c, c1, c2;
     re += not;
-    c = *p++;
+    c = (u8)*p++;
     while (re < end) {
-        c2 = c1 = *re++;
+        c2 = c1 = (u8)*re++;
         if (*re == '-' && re + 1 < end) {
             re++;
-            c2 = *re++;
+            c2 = (u8)*re++;
         }
         if (c >= c1 && c <= c2)
             return p;
@@ -1416,7 +1416,7 @@ int utf8_prefix_len(const char *str1, const char *str2) {
             str2++;
         }
     }
-    return str1 - start;
+    return (int)(str1 - start);
 }
 
 int ustrstart(const char32_t *str0, const char *val, int *lenp) {
@@ -1442,7 +1442,7 @@ int ustrstart(const char32_t *str0, const char *val, int *lenp) {
             return 0;
     }
     if (lenp)
-        *lenp = str - str0;
+        *lenp = (int)(str - str0);
     return 1;
 }
 
@@ -1454,7 +1454,7 @@ const char32_t *ustrstr(const char32_t *str, const char *val) {
        @return a pointer to the first code point of the match if found,
        `NULL` otherwise.
      */
-    char32_t c = val[0];
+    char32_t c = (unsigned char)val[0];
 
     for (; *str != '\0'; str++) {
         if (*str == c && ustrstart(str, val, NULL))
@@ -1487,7 +1487,7 @@ int ustristart(const char32_t *str0, const char *val, int *lenp) {
             return 0;
     }
     if (lenp)
-        *lenp = str - str0;
+        *lenp = (int)(str - str0);
     return 1;
 }
 
@@ -1819,7 +1819,7 @@ static int strtokey1(const char **pp)
 #endif
     /* Should also support backslash escapes: \000 \x00 \u0000 */
     /* Should also support ^x and syntax and Ctrl- prefix for control keys */
-    key = utf8_decode(&p);
+    key = (int)utf8_decode(&p);
     // XXX: Should assume unknown function key if p != p1 */
     // FIXME: this breaks string macros: "Hello SPC world! RET" @@@
     if (p != p1)
@@ -1882,7 +1882,7 @@ int strtokey(const char **pp)
             *pp = p;
             return KEY_UNKNOWN;
         } else {
-            key = utf8_decode(&p);
+            key = (int)utf8_decode(&p);
             break;
         }
     }
@@ -1900,7 +1900,7 @@ int strtokeys(const char *str, unsigned int *keys,
 
     while (qe_skip_spaces(&p)) {
         key = strtokey(&p);
-        keys[nb_keys++] = key;
+        keys[nb_keys++] = (unsigned int)key;
         compose_keys(keys, &nb_keys);
         if (*p == ',' && p[1] == ' ') {
             p += 2;
@@ -1945,9 +1945,9 @@ int buf_put_key(buf_t *out, int key) {
     } else
         // FIXME: handle @-_  @@@
     if (key >= KEY_CTRL('@') && key <= KEY_CTRL('_')) {
-        buf_printf(out, "C-%c", (int)qe_tolower(key + 'A' - 1));
+        buf_printf(out, "C-%c", (int)qe_tolower((unsigned int)(key + 'A' - 1)));
     } else {
-        buf_putc_utf8(out, key);
+        buf_putc_utf8(out, (unsigned int)key);
     }
     return out->len - start;
 }
@@ -1967,13 +1967,13 @@ int buf_put_keys(buf_t *out, unsigned int *keys, int nb_keys)
     for (i = 0; i < nb_keys; i++) {
         if (i != 0)
             buf_put_byte(out, ' ');
-        buf_put_key(out, keys[i]);
+        buf_put_key(out, (int)keys[i]);
     }
     return out->len - start;
 }
 
 int is_shift_key(int key) {
-    return qe_isupper(key) || KEY_IS_SHIFT(key);
+    return qe_isupper((unsigned int)key) || KEY_IS_SHIFT(key);
 }
 
 /*---- StringArray functions ----*/
@@ -1988,13 +1988,13 @@ StringItem *set_string(StringArray *cs, int index, const char *str, int group)
     if (!cs || index < 0 || index >= cs->nb_items)
         return NULL;
 
-    len = strlen(str);
+    len = (int)strlen(str);
     v = qe_malloc_hack(StringItem, len);
     if (!v)
         return NULL;
     v->selected = 0;
-    v->group = group;
-    memcpy(v->str, str, len + 1);
+    v->group = (char)group;
+    memcpy(v->str, str, (size_t)(len + 1));
     if (cs->items[index])
         qe_free(&cs->items[index]);
     cs->items[index] = v;
@@ -2033,7 +2033,7 @@ int remove_string(StringArray *cs, const char *str) {
 
 void sort_strings(StringArray *cs, int (*sort_func)(const void *p1, const void *p2))
 {
-    qsort(cs->items, cs->nb_items, sizeof(StringItem *), sort_func);
+    qsort(cs->items, (size_t)cs->nb_items, sizeof(StringItem *), sort_func);
 }
 
 int remove_duplicate_strings(StringArray *cs) {
@@ -2079,7 +2079,7 @@ int buf_write(buf_t *bp, const void *src, int size)
         n = bp->size - bp->pos - 1;
         if (n > size)
             n = size;
-        memcpy(bp->buf + bp->len, src, n);
+        memcpy(bp->buf + bp->len, src, (size_t)n);
         bp->len += n;
         bp->buf[bp->len] = '\0';
     }
@@ -2106,7 +2106,7 @@ int buf_printf(buf_t *bp, const char *fmt, ...)
         size = bp->size - bp->pos;
     }
     va_start(ap, fmt);
-    len = vsnprintf(dest, size, fmt, ap);
+    len = vsnprintf(dest, (size_t)size, fmt, ap);
     va_end(ap);
 
     if (bp->pos < bp->size) {
@@ -2130,7 +2130,7 @@ int buf_putc_utf8(buf_t *bp, char32_t c)
     if (c < 0x80) {
         bp->pos++;
         if (bp->pos < bp->size) {
-            bp->buf[bp->len++] = c;
+            bp->buf[bp->len++] = (char)c;
             bp->buf[bp->len] = '\0';
             return 1;
         } else {
@@ -2143,7 +2143,7 @@ int buf_putc_utf8(buf_t *bp, char32_t c)
         len = utf8_encode(buf, c);
         /* avoid appending a partial UTF-8 sequence */
         if (bp->pos + len < bp->size) {
-            memcpy(bp->buf + bp->len, buf, len);
+            memcpy(bp->buf + bp->len, buf, (size_t)len);
             bp->pos += len;
             bp->len += len;
             bp->buf[bp->len] = '\0';
@@ -2164,7 +2164,7 @@ int strsubst(char *buf, int buf_size, const char *from,
 
     p = from;
     while ((q = strstr(p, s1)) != NULL) {
-        buf_write(out, p, q - p);
+        buf_write(out, p, (int)(q - p));
         buf_puts(out, s2);
         p = q + strlen(s1);
     }
@@ -2192,18 +2192,18 @@ int byte_quote(char *dest, int size, unsigned char ch) {
     ||  ((void)(c = '\''), ch == '\'')      // XXX: need flag to make this optional
     ||  ((void)(c = '\"'), ch == '\"')      // XXX: need flag to make this optional
     ||  ((void)(c = '\\'), ch == '\\')) {
-        return snprintf(dest, size, "\\%c", c);
+        return snprintf(dest, (size_t)size, "\\%c", c);
     } else
     if (ch < 32) {
         //if (*p == '\e' && col > 9) {
         //    eb_write(b, b->total_size, "\n         ", 10);
         //    col = 9;
         //}
-        return snprintf(dest, size, "\\^%c", (ch + '@') & 127);      // XXX: need flag to make this optional
+        return snprintf(dest, (size_t)size, "\\^%c", (ch + '@') & 127);      // XXX: need flag to make this optional
     } else
     if (ch < 127) {
         if (size > 1) {
-            dest[0] = ch;
+            dest[0] = (char)ch;
             dest[1] = '\0';
         } else
         if (size > 0) {
@@ -2211,7 +2211,7 @@ int byte_quote(char *dest, int size, unsigned char ch) {
         }
         return 1;
     } else {
-        return snprintf(dest, size, "\\0x%02X", ch);      // XXX: need flag to make this optional
+        return snprintf(dest, (size_t)size, "\\0x%02X", ch);      // XXX: need flag to make this optional
     }
 }
 
@@ -2232,10 +2232,10 @@ int strquote(char *dest, int size, const char *str, int len) {
     if (str) {
         int i;
         if (len < 0)
-            len = strlen(str);
+            len = (int)strlen(str);
         buf_put_byte(out, '"');
         for (i = 0; i < len; i++)
-            buf_quote_byte(out, str[i]);
+            buf_quote_byte(out, (unsigned char)str[i]);
         buf_put_byte(out, '"');
     } else {
         buf_puts(out, "null");
@@ -2354,18 +2354,18 @@ void *qe_decode64(const char *src, size_t len, size_t *sizep)
                 continue;
             switch (shift++ & 3) {
             case 0:
-                buf[j] = val << 2;
+                buf[j] = (u8)(val << 2);
                 break;
             case 1:
-                buf[j++] |= val >> 4;
-                buf[j] = (val << 4) & 0xff;
+                buf[j++] |= (u8)(val >> 4);
+                buf[j] = (u8)((val << 4) & 0xff);
                 break;
             case 2:
-                buf[j++] |= val >> 2;
-                buf[j] = (val << 6) & 0xff;
+                buf[j++] |= (u8)(val >> 2);
+                buf[j] = (u8)((val << 6) & 0xff);
                 break;
             case 3:
-                buf[j++] |= val;
+                buf[j++] |= (u8)val;
                 break;
             }
         }
@@ -2482,7 +2482,7 @@ bstr_t bstr_get_nth(const char *s, int n) {
     for (bs.s = s;; s++) {
         if (*s == '\0' || *s == '|') {
             if (n-- == 0) {
-                bs.len = s - bs.s;
+                bs.len = (int)(s - bs.s);
                 break;
             }
             if (*s) {
@@ -2506,7 +2506,7 @@ bstr_t bstr_token(const char *s, int sep, const char **pp) {
         for (; *s != '\0' && *s != sep; s++)
             continue;
 
-        bs.len = s - bs.s;
+        bs.len = (int)(s - bs.s);
     }
     if (pp) {
         *pp = (s && *s) ? s + 1 : NULL;
@@ -2869,32 +2869,32 @@ int utf8_encode(char *q0, char32_t c) {
     char *q = q0;
 
     if (c < 0x80) {
-        *q++ = c;
+        *q++ = (char)c;
     } else {
         if (c < 0x800) {
-            *q++ = (c >> 6) | 0xc0;
+            *q++ = (char)((c >> 6) | 0xc0);
         } else {
             if (c < 0x10000) {
-                *q++ = (c >> 12) | 0xe0;
+                *q++ = (char)((c >> 12) | 0xe0);
             } else {
                 if (c < 0x00200000) {
-                    *q++ = (c >> 18) | 0xf0;
+                    *q++ = (char)((c >> 18) | 0xf0);
                 } else {
                     if (c < 0x04000000) {
-                        *q++ = (c >> 24) | 0xf8;
+                        *q++ = (char)((c >> 24) | 0xf8);
                     } else {
-                        *q++ = (c >> 30) | 0xfc;
-                        *q++ = ((c >> 24) & 0x3f) | 0x80;
+                        *q++ = (char)((c >> 30) | 0xfc);
+                        *q++ = (char)(((c >> 24) & 0x3f) | 0x80);
                     }
-                    *q++ = ((c >> 18) & 0x3f) | 0x80;
+                    *q++ = (char)(((c >> 18) & 0x3f) | 0x80);
                 }
-                *q++ = ((c >> 12) & 0x3f) | 0x80;
+                *q++ = (char)(((c >> 12) & 0x3f) | 0x80);
             }
-            *q++ = ((c >> 6) & 0x3f) | 0x80;
+            *q++ = (char)(((c >> 6) & 0x3f) | 0x80);
         }
-        *q++ = (c & 0x3f) | 0x80;
+        *q++ = (char)((c & 0x3f) | 0x80);
     }
-    return q - q0;
+    return (int)(q - q0);
 }
 
 int utf8_to_char32(char32_t *dest, int dest_length, const char *str)

@@ -378,7 +378,7 @@ void do_compare_files(EditState *s, const char *filename, int bflags)
     const char *tail;
     EditState *e;
 
-    pathlen = get_basename_offset(filename);
+    pathlen = (int)get_basename_offset(filename);
     get_default_path(s->b, s->offset, dir, sizeof(dir));
 
     if (strstart(filename, dir, &tail)) {
@@ -397,8 +397,8 @@ void do_compare_files(EditState *s, const char *filename, int bflags)
     } else {
         pstrcpy(buf, sizeof(buf), filename);
         buf[pathlen - 1] = '\0';  /* overwite the path separator */
-        parent_pathlen = get_basename_offset(buf);
-        pstrcpy(buf + parent_pathlen, sizeof(buf) - parent_pathlen, filename + pathlen);
+        parent_pathlen = (int)get_basename_offset(buf);
+        pstrcpy(buf + parent_pathlen, sizeof(buf) - (size_t)parent_pathlen, filename + pathlen);
     }
 
     // XXX: should check for regular file
@@ -826,7 +826,8 @@ static void forward_block(EditState *s, int dir)
     QEColorizeContext cp[1];
     char32_t balance[MAX_LEVEL];
     int use_colors;
-    int line_num, col_num, style, style0, level;
+    int line_num, col_num, level;
+    QETermStyle style, style0;
     int pos;      /* position of the current character on line */
     int len;      /* number of colorized positions */
     int offset;   /* offset of the current character */
@@ -1452,7 +1453,7 @@ static int str_get_word7(char *buf, int size, const char *p, const char **pp)
     } else {
         for (; *p != '\0' && *p != ' ' && *p != '/'; p++, len++) {
             if (len + 1 < size) {
-                buf[len] = qe_tolower((u8)*p);
+                buf[len] = (char)qe_tolower((u8)*p);
             }
         }
     }
@@ -1527,7 +1528,7 @@ static int qe_term_get_style_string(char *dest, size_t size, QEStyleDef *stp)
     char buf[16];
     const char *p;
 
-    buf_init(out, dest, size);
+    buf_init(out, dest, (int)size);
 #if 0
     if (stp->attr & QE_TERM_BOLD)
         buf_printf(out, " %s", "bold");
@@ -1576,7 +1577,7 @@ static void do_set_style_color(EditState *e, const char *stylestr, const char *v
     /* accept "fgcolor", "[fgcolor]/bgcolor", "fgcolor on bgcolor" */
     p = value + strcspn(value, " /");
     if (p > value) {
-        pstrncpy(buf, sizeof buf, value, p - value);
+        pstrncpy(buf, sizeof buf, value, (int)(p - value));
         if (css_get_color(&stp->fg_color, buf)) {
             put_error(e, "Unknown fgcolor '%s'", buf);
             return;
@@ -1655,7 +1656,7 @@ static void do_set_region_style(EditState *s, const char *str)
         put_error(s, "Invalid style '%s'", str);
         return;
     }
-    style = st - qe_styles;
+    style = (QETermStyle)(st - qe_styles);
 
     offset = s->b->mark;
     size = s->offset - offset;
@@ -1820,7 +1821,7 @@ static void do_describe_buffer(EditState *s, int argval)
             col += eb_printf(b1, "   %*d  ", count_width, count[i]);
             if (i > 0 && i < 0x7f) {
                 char cbuf[8];
-                byte_quote(cbuf, sizeof cbuf, i);
+                byte_quote(cbuf, sizeof cbuf, (unsigned char)i);
                 col += eb_printf(b1, "'%s'", cbuf);
             } else {
                 col += eb_printf(b1, "0x%02x", (unsigned)i);
@@ -1936,7 +1937,7 @@ static void do_describe_window(EditState *s, int argval)
                 pos = eb_printf(b1, "\n%*s   ", w, "");
             len = snprintf(buf, sizeof buf, "%d", from);
             if (i > from + 1)
-                len += snprintf(buf + len, sizeof(buf) - len, "..%d", i - 1);
+                len += snprintf(buf + len, sizeof(buf) - (size_t)len, "..%d", i - 1);
             pos += eb_printf(b1, " %s: 0x%*x,", buf, w1, bits);
         }
         eb_printf(b1, " }\n");
@@ -2175,7 +2176,7 @@ static int eb_sort_span(EditBuffer *b, int *pp1, int *pp2, int cur_offset, int f
                     pos = pos1;
                 break;
             }
-            chunk_array[i].c[j] = c;
+            chunk_array[i].c[j] = (unsigned short)c;
         }
         chunk_array[i].start = offset;
         chunk_array[i].offset = pos - offset;
@@ -2198,7 +2199,7 @@ static int eb_sort_span(EditBuffer *b, int *pp1, int *pp2, int cur_offset, int f
     for (ctx.total_cmp = 0; i > 0; i >>= 1) {
         ctx.total_cmp += lines;
     }
-    qe_qsort_r(chunk_array, lines, sizeof(*chunk_array), &ctx, chunk_cmp);
+    qe_qsort_r(chunk_array, (size_t)lines, sizeof(*chunk_array), &ctx, chunk_cmp);
 
     b1 = qe_new_buffer(b->qs, "*sorted*", BF_SYSTEM | (b->flags & BF_STYLES));
     if (!b1)
@@ -2296,14 +2297,14 @@ static int tag_print_entry(CompleteState *cp, EditState *s, const char *name) {
 static int tag_get_entry(EditState *s, char *dest, int size, int offset)
 {
     int len = eb_fgets(s->b, dest, size, offset, &offset);
-    int p2 = strcspn(dest, "=[{(,;");
+    int p2 = (int)strcspn(dest, "=[{(,;");
     int p1;
-    while (p2 > 0 && !qe_isalnum_(dest[p2 - 1]))
+    while (p2 > 0 && !qe_isalnum_((u8)dest[p2 - 1]))
         p2--;
     p1 = p2;
-    while (p1 > 0 && (qe_isalnum_(dest[p1 - 1]) || dest[p1 - 1] == '-'))
+    while (p1 > 0 && (qe_isalnum_((u8)dest[p1 - 1]) || dest[p1 - 1] == '-'))
         p1--;
-    memmove(dest, dest + p1, len = p2 - p1);
+    memmove(dest, dest + p1, (size_t)(len = p2 - p1));
     dest[len] = '\0';   /* strip the prototype or trailing newline if any */
     return len;
 }
@@ -2338,10 +2339,10 @@ static void do_find_tag(EditState *s, const char *str) {
 
 static void do_goto_tag(EditState *s) {
     char buf[80];
-    size_t len;
+    int len;
 
     len = qe_get_word(s, buf, sizeof buf, s->offset, NULL);
-    if (len >= sizeof(buf)) {
+    if (len >= (int)sizeof(buf)) {
         put_error(s, "Tag too large");
         return;
     } else
@@ -2493,8 +2494,8 @@ static int charname_print_entry(CompleteState *cp, EditState *s, const char *nam
     char *p = strchr(name, '\t');
     if (p != NULL) {
         char cbuf[MAX_CHAR_BYTES + 1];
-        char32_t code = strtol(p + 1, NULL, 16);
-        s->b->tab_width = max_int(s->b->tab_width, min_int(60, 2 + (p - name)));
+        char32_t code = (char32_t)strtol(p + 1, NULL, 16);
+        s->b->tab_width = max_int(s->b->tab_width, min_int(60, 2 + (int)(p - name)));
         return eb_printf(s->b, "%s  %s", name,
                          utf8_char32_to_string(cbuf, code));
     } else {
@@ -2511,8 +2512,8 @@ static int charname_get_entry(EditState *s, char *dest, int size, int offset) {
     p = strchr(entry, '\t');
     if (p) {
         p += strspn(p, " \t");
-        len = strcspn(p, " \t\n");
-        return snprintf(dest, size, "0x%.*s", len, p);
+        len = (int)strcspn(p, " \t\n");
+        return snprintf(dest, (size_t)size, "0x%.*s", len, p);
     } else {
         if (size > 0)
             *dest = '\0';
@@ -2542,7 +2543,7 @@ static int eb_print_color(EditBuffer *b, const char *name) {
         if (*name != '#') {
             snprintf(alt_name, sizeof alt_name, "#%06x", color & 0xFFFFFF);
         }
-        bg = qe_map_color(color, xterm_colors, QE_TERM_BG_COLORS, &dist);
+        bg = (int)qe_map_color(color, xterm_colors, QE_TERM_BG_COLORS, &dist);
         fg = (color_y(color) >= 12800) ? 16 : 231;
         style = QE_TERM_COMPOSITE | QE_TERM_MAKE_COLOR(fg, bg);
         style2 = QE_TERM_COMPOSITE | QE_TERM_MAKE_COLOR(bg, 16);
@@ -2592,7 +2593,7 @@ static int eb_print_style(EditBuffer *b, const char *name, int style) {
     b->cur_style = QE_STYLE_FUNCTION;
     len = eb_printf(b, "%s\t", name);
     b->tab_width = max_int(b->tab_width, len + 1);
-    b->cur_style = style;
+    b->cur_style = (QETermStyle)style;
     len += eb_puts(b, "[  Sample  ]");
     b->cur_style = QE_STYLE_DEFAULT;
 

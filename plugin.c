@@ -58,10 +58,10 @@ int qe_lua_eval(lua_State *L, const char *code, char *errbuf, int errsize)
         if (errbuf && errsize > 0) {
             const char *msg = lua_tostring(L, -1);
             if (msg) {
-                int len = strlen(msg);
+                int len = (int)strlen(msg);
                 if (len >= errsize)
                     len = errsize - 1;
-                memcpy(errbuf, msg, len);
+                memcpy(errbuf, msg, (size_t)len);
                 errbuf[len] = '\0';
             }
         }
@@ -88,10 +88,10 @@ int qe_lua_load_config(lua_State *L, const char *filename,
         if (errbuf && errsize > 0) {
             const char *msg = lua_tostring(L, -1);
             if (msg) {
-                int len = strlen(msg);
+                int len = (int)strlen(msg);
                 if (len >= errsize)
                     len = errsize - 1;
-                memcpy(errbuf, msg, len);
+                memcpy(errbuf, msg, (size_t)len);
                 errbuf[len] = '\0';
             }
         }
@@ -121,10 +121,10 @@ int qe_lua_eval_expression(lua_State *L, const char *code,
         if (errbuf && errsize > 0) {
             const char *msg = lua_tostring(L, -1);
             if (msg) {
-                int len = strlen(msg);
+                int len = (int)strlen(msg);
                 if (len >= errsize)
                     len = errsize - 1;
-                memcpy(errbuf, msg, len);
+                memcpy(errbuf, msg, (size_t)len);
                 errbuf[len] = '\0';
             }
         }
@@ -136,10 +136,10 @@ int qe_lua_eval_expression(lua_State *L, const char *code,
     if (result && resultsize > 0 && !lua_isnoneornil(L, -1)) {
         const char *s = luaL_tolstring(L, -1, NULL);
         if (s) {
-            int len = strlen(s);
+            int len = (int)strlen(s);
             if (len >= resultsize)
                 len = resultsize - 1;
-            memcpy(result, s, len);
+            memcpy(result, s, (size_t)len);
             result[len] = '\0';
         }
         lua_pop(L, 1); /* pop tolstring result */
@@ -186,7 +186,7 @@ static int l_delete(lua_State *L)
     int n;
 
     if (!s) return 0;
-    n = luaL_checkinteger(L, 1);
+    n = (int)luaL_checkinteger(L, 1);
     if (n > 0 && s->offset + n <= s->b->total_size)
         eb_delete(s->b, s->offset, n);
     return 0;
@@ -207,7 +207,7 @@ static int l_set_point(lua_State *L)
     int offset;
 
     if (!s) return 0;
-    offset = luaL_checkinteger(L, 1);
+    offset = (int)luaL_checkinteger(L, 1);
     if (offset < 0) offset = 0;
     if (offset > s->b->total_size) offset = s->b->total_size;
     s->offset = offset;
@@ -297,8 +297,8 @@ static int l_goto_line(lua_State *L)
     int line, col;
 
     if (!s) return 0;
-    line = luaL_checkinteger(L, 1) - 1;  /* convert to 0-based */
-    col = luaL_optinteger(L, 2, 0);
+    line = (int)luaL_checkinteger(L, 1) - 1;  /* convert to 0-based */
+    col = (int)luaL_optinteger(L, 2, 0);
     s->offset = eb_goto_pos(s->b, line, col);
     return 0;
 }
@@ -309,35 +309,36 @@ static int l_char_at(lua_State *L)
     EditState *s = lua_get_active_state();
     int offset;
     char buf[8];
-    int ch, len;
+    char32_t ch;
+    int len;
 
     if (!s) { lua_pushstring(L, ""); return 1; }
-    offset = luaL_optinteger(L, 1, s->offset);
+    offset = (int)luaL_optinteger(L, 1, s->offset);
     ch = eb_nextc(s->b, offset, &offset);
-    if (ch == EOF) {
+    if (ch == (char32_t)EOF) {
         lua_pushstring(L, "");
     } else {
         /* encode as UTF-8 */
         if (ch < 0x80) {
-            buf[0] = ch;
+            buf[0] = (char)ch;
             len = 1;
         } else if (ch < 0x800) {
-            buf[0] = 0xC0 | (ch >> 6);
-            buf[1] = 0x80 | (ch & 0x3F);
+            buf[0] = (char)(0xC0 | (ch >> 6));
+            buf[1] = (char)(0x80 | (ch & 0x3F));
             len = 2;
         } else if (ch < 0x10000) {
-            buf[0] = 0xE0 | (ch >> 12);
-            buf[1] = 0x80 | ((ch >> 6) & 0x3F);
-            buf[2] = 0x80 | (ch & 0x3F);
+            buf[0] = (char)(0xE0 | (ch >> 12));
+            buf[1] = (char)(0x80 | ((ch >> 6) & 0x3F));
+            buf[2] = (char)(0x80 | (ch & 0x3F));
             len = 3;
         } else {
-            buf[0] = 0xF0 | (ch >> 18);
-            buf[1] = 0x80 | ((ch >> 12) & 0x3F);
-            buf[2] = 0x80 | ((ch >> 6) & 0x3F);
-            buf[3] = 0x80 | (ch & 0x3F);
+            buf[0] = (char)(0xF0 | (ch >> 18));
+            buf[1] = (char)(0x80 | ((ch >> 12) & 0x3F));
+            buf[2] = (char)(0x80 | ((ch >> 6) & 0x3F));
+            buf[3] = (char)(0x80 | (ch & 0x3F));
             len = 4;
         }
-        lua_pushlstring(L, buf, len);
+        lua_pushlstring(L, buf, (size_t)len);
     }
     return 1;
 }
@@ -350,8 +351,8 @@ static int l_region_text(lua_State *L)
     char *buf;
 
     if (!s) { lua_pushstring(L, ""); return 1; }
-    start = luaL_checkinteger(L, 1);
-    stop = luaL_checkinteger(L, 2);
+    start = (int)luaL_checkinteger(L, 1);
+    stop = (int)luaL_checkinteger(L, 2);
     if (start < 0) start = 0;
     if (stop > s->b->total_size) stop = s->b->total_size;
     if (stop <= start) { lua_pushstring(L, ""); return 1; }
@@ -360,7 +361,7 @@ static int l_region_text(lua_State *L)
     if (!buf) { lua_pushstring(L, ""); return 1; }
     eb_read(s->b, start, buf, size);
     buf[size] = '\0';
-    lua_pushlstring(L, buf, size);
+    lua_pushlstring(L, buf, (size_t)size);
     qe_free(&buf);
     return 1;
 }
@@ -454,15 +455,15 @@ static int l_command(lua_State *L)
 
     /* Build the name\0binding\0 storage (CmdDef.name format) */
     storage = lua_cmd_storage[nb_lua_cmds];
-    name_len = strlen(name);
-    binding_len = strlen(binding);
+    name_len = (int)strlen(name);
+    binding_len = (int)strlen(binding);
     if (name_len + 1 + binding_len + 1 > (int)sizeof(lua_cmd_storage[0])) {
         luaL_unref(L, LUA_REGISTRYINDEX, ref);
         return luaL_error(L, "command name + binding too long");
     }
-    memcpy(storage, name, name_len);
+    memcpy(storage, name, (size_t)name_len);
     storage[name_len] = '\0';
-    memcpy(storage + name_len + 1, binding, binding_len);
+    memcpy(storage + name_len + 1, binding, (size_t)binding_len);
     storage[name_len + 1 + binding_len] = '\0';
 
     /* Build CmdDef */
@@ -471,7 +472,10 @@ static int l_command(lua_State *L)
     lua_cmd_specs[nb_lua_cmds][0] = '\0';
     cmd->spec = lua_cmd_specs[nb_lua_cmds];
     cmd->sig = CMD_ESi;
-    cmd->val = ref;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
+    cmd->val = ref;  /* Lua registry ref; fits in 24 bits in practice */
+#pragma GCC diagnostic pop
     cmd->action.ESi = (void (*)(EditState *, int))lua_cmd_dispatch;
 
     qe_register_commands(lua_qs, NULL, cmd, 1);

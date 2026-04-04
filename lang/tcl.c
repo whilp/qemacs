@@ -92,12 +92,12 @@ static int tcl_get_word(char *dest, int size, char32_t c,
     for (j = i;; j++) {
         if (pos + 1 < size) {
             /* c is assumed to be an ASCII character */
-            dest[pos++] = c < 0x80 ? c : 0xFF;
+            dest[pos++] = (char)(c < 0x80 ? c : 0xFF);
         }
         if (j >= n)
             break;
         c = str[j];
-        if (c < 0x80 && strchr(stop, c))
+        if (c < 0x80 && strchr(stop, (int)c))
             break;
     }
     if (pos < size) {

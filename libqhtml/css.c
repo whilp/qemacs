@@ -223,8 +223,8 @@ typedef char32_t (*NextCharFunc)(CSSBox *box, int *offset);
 static char32_t eb_nextc1(CSSBox *box, int *offset_ptr)
 {
     struct EditBuffer *b = box->content_data;
-    int offset, offset1, ch1;
-    char32_t ch;
+    int offset, offset1;
+    char32_t ch, ch1;
     char name[16], *q;
 
     offset = *offset_ptr;
@@ -237,17 +237,18 @@ static char32_t eb_nextc1(CSSBox *box, int *offset_ptr)
             ch1 = eb_nextc(b, offset, &offset);
             if (qe_isspace(ch1) || ch1 == ';')
                 break;
-            *q++ = ch1;
+            *q++ = (char)ch1;
             if (q >= name + sizeof(name) - 1)
                 break;
         }
         *q = '\0';
-        ch1 = find_entity(name);
-        if (ch1 >= 0) {
-            ch = ch1;
-        } else {
+        { int _ent = find_entity(name);
+          if (_ent >= 0) {
+            ch = (char32_t)_ent;
+          } else {
             /* entity not found: roll back */
             offset = offset1;
+          }
         }
     }
     *offset_ptr = offset;
@@ -267,7 +268,7 @@ static char32_t str_nextc(CSSBox *box, int *offset_ptr)
     } else {
         ptr++;
     }
-    *offset_ptr = ptr - str;
+    *offset_ptr = (int)(ptr - str);
     return ch;
 }
 
@@ -343,11 +344,11 @@ CSSIdent css_new_ident(const char *str)
         }
         table_ident_allocated = n;
     }
-    len = strlen(str);
+    len = (int)strlen(str);
     p = qe_malloc_hack(CSSIdentEntry, len);
     if (!p)
         return CSS_ID_NIL;
-    memcpy(p->str, str, len + 1);
+    memcpy(p->str, str, (size_t)len + 1);
     p->id = table_ident_nb;
     table_ident[table_ident_nb++] = p;
     p->hash_next = *pp;
@@ -368,7 +369,7 @@ static void css_init_idents(void)
         r = p;
         while (*r)
             r++;
-        memcpy(buf, p, r - p);
+        memcpy(buf, p, (size_t)(r - p));
         buf[r - p] = '\0';
         css_new_ident(buf);
     }
@@ -733,7 +734,8 @@ static int css_eval(CSSContext *s,
 {
     const CSSPropertyDef *def;
     CSSPropertyStorage *ptr, *parent_ptr;
-    int type, val, i;
+    unsigned int type;
+    int val, i;
     CSSProperty *p;
     int pelement_found;
 
@@ -956,13 +958,13 @@ static int num_to_alpha(char *dest, int num, int upper)
 
     num--;
     while (num >= 26) {
-        *--p = letter + (num % 26);
+        *--p = (char)(letter + (num % 26));
         num /= 26;
         num -= 1;
     }
-    *--p = letter + num;
+    *--p = (char)(letter + num);
 
-    memcpy(dest, p, buf + countof(buf) - p);
+    memcpy(dest, p, (size_t)(buf + countof(buf) - p));
     return 0;
 }
 
@@ -1014,7 +1016,7 @@ static int num_to_roman(char *dest, int n, int upper)
         n /= 10;
         p += 2;
     }
-    memcpy(dest, q, buf + countof(buf) - q);
+    memcpy(dest, q, (size_t)(buf + countof(buf) - q));
     return 0;
 }
 
@@ -1440,7 +1442,7 @@ static int bidir_compute_attributes(CSSContext *ctx, BidirTypeLink *list_tab, in
     p->pos = s->pos;
     p++;
 
-    return p - list_tab;
+    return (int)(p - list_tab);
 }
 
 /* split the boxes so that the embedding is constant inside a
@@ -1477,7 +1479,7 @@ static void css_bidir_split_box(BidirSplitState *s,  CSSBox *box)
                 if (offset > box->u.buffer.start &&
                     l[0].level != l[-1].level) {
                     /* different level : split box */
-                    box->embedding_level = l[-1].level;
+                    box->embedding_level = (unsigned char)l[-1].level;
                     css_box_split(box, offset);
                     /* update next_inline field */
                     box->next->next_inline = box->next_inline;
@@ -1489,7 +1491,7 @@ static void css_bidir_split_box(BidirSplitState *s,  CSSBox *box)
             pos++;
         }
     }
-    box->embedding_level = l[0].level;
+    box->embedding_level = (unsigned char)l[0].level;
  the_end:
     s->l = l;
     s->pos = pos;
@@ -2021,7 +2023,7 @@ static void css_flush_line(InlineLayout *s,
             break;
         }
         /* put real ascent in box */
-        box->ascent = ib->ascent;
+        box->ascent = (unsigned short)ib->ascent;
         /* correct borders */
         if (props->display != CSS_DISPLAY_INLINE) {
             box->y += props->margin.y1 + props->border.y1 + props->padding.y1;
@@ -2132,7 +2134,7 @@ static int css_flush_fragment(InlineLayout *s, CSSBox *box, CSSState *props,
         if (h > box->height)
             box->height = h;
         if (metrics.font_ascent > s->line_boxes[s->line_pos - 1].ascent)
-            s->line_boxes[s->line_pos - 1].ascent = metrics.font_ascent;
+            s->line_boxes[s->line_pos - 1].ascent = (short)metrics.font_ascent;
         ret = 0;
     } else {
         /* end of line reached */
@@ -2154,7 +2156,7 @@ static int css_flush_fragment(InlineLayout *s, CSSBox *box, CSSState *props,
             if (h > box->height)
                 box->height = h;
             if (metrics.font_ascent > s->line_boxes[s->line_pos - 1].ascent)
-                s->line_boxes[s->line_pos - 1].ascent = metrics.font_ascent;
+                s->line_boxes[s->line_pos - 1].ascent = (short)metrics.font_ascent;
             s->index_bow = s->line_pos - 1;
             s->offset_bow = s->word_offsets[s->word_index];
         } else {
@@ -2311,9 +2313,9 @@ static int css_layout_inline_box(InlineLayout *s,
 
                 b->box = box;
                 b->baseline_delta = 0;
-                b->ascent = box->height +
+                b->ascent = (short)(box->height +
                     props->margin.y1 + props->border.y1 + props->padding.y1 +
-                    props->padding.y2 + props->border.y2 + props->margin.y2;
+                    props->padding.y2 + props->border.y2 + props->margin.y2);
             }
             s->line_pos++;
         }
@@ -2352,7 +2354,7 @@ static int css_layout_inline_box(InlineLayout *s,
 
         if (!s->compute_min_max) {
             box->width = 0;
-            box->last_space = s->last_space;
+            box->last_space = (unsigned char)s->last_space;
             /* compute vertical dimensions from the font parameters */
             box->height = font->ascent + font->descent;
 
@@ -2361,8 +2363,8 @@ static int css_layout_inline_box(InlineLayout *s,
                 InlineBox *b = &s->line_boxes[s->line_pos];
 
                 b->box = box;
-                b->baseline_delta = baseline;
-                b->ascent = font->ascent;
+                b->baseline_delta = (short)baseline;
+                b->ascent = (short)font->ascent;
             }
             s->line_pos++;
         }
@@ -3049,7 +3051,7 @@ static int render_table_row(TableLayout *s,
                 int delta = baseline - c->baseline;
                 cell = c->cell;
                 h += delta;
-                cell->padding_top = delta;
+                cell->padding_top = (unsigned short)delta;
                 cell->y += delta;
             }
             if (cell->props->height != CSS_AUTO)
@@ -3074,19 +3076,19 @@ static int render_table_row(TableLayout *s,
             switch (c->vertical_align) {
             case CSS_VERTICAL_ALIGN_BOTTOM:
                 delta = cell_height - c->height;
-                cell->padding_top = delta;
+                cell->padding_top = (unsigned short)delta;
                 cell->y += delta;
                 break;
             case CSS_VERTICAL_ALIGN_MIDDLE:
                 delta = (cell_height - c->height) / 2;
-                cell->padding_top = delta;
+                cell->padding_top = (unsigned short)delta;
                 cell->y += delta;
                 break;
             default:
                 break;
             }
             /* compute bottom padding so that we fill the row height */
-            cell->padding_bottom = cell_height - (h + cell->padding_top);
+            cell->padding_bottom = (unsigned short)(cell_height - (h + cell->padding_top));
         } else {
             c->prev_row_height = s->border_v + cell_height;
         }
@@ -3831,7 +3833,7 @@ int box_get_text(qe__unused__ CSSContext *s,
             *q++ = c;
         }
     }
-    return q - line_buf;
+    return (int)(q - line_buf);
 }
 
 #define BFRAC 16
@@ -3860,9 +3862,9 @@ static void draw_borders(QEditScreen *scr,
             g = (color1 >> 8) & 0xff;
             b = (color1) & 0xff;
 
-            r = min_int(r + 128, 255);
-            g = min_int(g + 128, 255);
-            b = min_int(b + 128, 255);
+            r = (unsigned int)min_int((int)r + 128, 255);
+            g = (unsigned int)min_int((int)g + 128, 255);
+            b = (unsigned int)min_int((int)b + 128, 255);
 
             color2 = (a << 24) | (r << 16) | (g << 8) | b;
             if ((style == CSS_BORDER_STYLE_INSET && dir >= 2) ||
@@ -3996,12 +3998,12 @@ static void box_display_text(CSSContext *s, CSSBox *box, int x0, int y0)
             offsets[len1] = box->u.buffer.end;
             x = x0;
             for (i = 0; i < len; i++) {
-                p = char_to_glyph_pos[i];
+                p = (int)char_to_glyph_pos[i];
                 offset0 = offsets[p];
                 w = glyph_width(scr, font, glyphs[i]);
                 if (offset0 >= s->selection_start &&
                     offset0 < s->selection_end) {
-                    color = s->selection_bgcolor;
+                    color = (CSSColor)s->selection_bgcolor;
                     fill_rectangle(scr, x, y0,
                                    w, font->ascent + font->descent, color);
                 }
@@ -4010,11 +4012,11 @@ static void box_display_text(CSSContext *s, CSSBox *box, int x0, int y0)
 
             x = x0;
             for (i = 0; i < len; i++) {
-                p = char_to_glyph_pos[i];
+                p = (int)char_to_glyph_pos[i];
                 offset0 = offsets[p];
                 if (offset0 >= s->selection_start &&
                     offset0 < s->selection_end)
-                    color = s->selection_fgcolor;
+                    color = (CSSColor)s->selection_fgcolor;
                 else
                     color = props->color;
                 draw_text(scr, font,
@@ -4108,12 +4110,12 @@ static void css_display_block(CSSContext *s,
     /* background + padding */
     /* XXX: hack to exclude HTML tag from these computations */
     if (!s->bg_drawn && box->tag != CSS_ID_html) {
-        int color;
+        CSSColor color;
         /* if no background drawn, we MUST draw one now with either
            the specified color or the default color */
         color = props->bgcolor;
         if (color == COLOR_TRANSPARENT)
-            color = s->default_bgcolor;
+            color = (CSSColor)s->default_bgcolor;
         fill_rectangle(scr, s->bg_rect.x1, s->bg_rect.y1,
                        s->bg_rect.x2 - s->bg_rect.x1,
                        s->bg_rect.y2 - s->bg_rect.y1, color);
@@ -4191,7 +4193,7 @@ void css_display(CSSContext *s, CSSBox *box,
         fill_rectangle(s->screen, s->bg_rect.x1, s->bg_rect.y1,
                        s->bg_rect.x2 - s->bg_rect.x1,
                        s->bg_rect.y2 - s->bg_rect.y1,
-                       s->default_bgcolor);
+                       (QEColor)s->default_bgcolor);
     }
 }
 
@@ -4257,7 +4259,7 @@ static int css_get_cursor_func(void *opaque,
  found1:
     len = unicode_to_glyphs(glyphs, char_to_glyph_pos, MAX_LINE_SIZE,
                             line_buf, len, box->embedding_level & 1);
-    posc = char_to_glyph_pos[posc];
+    posc = (int)char_to_glyph_pos[posc];
 
     font = css_select_font(scr, props);
 
@@ -4526,7 +4528,7 @@ void css_set_text_buffer(CSSBox *box, struct EditBuffer *b,
 {
     box->content_type = CSS_CONTENT_TYPE_BUFFER;
     box->content_data = b;
-    box->content_eol = eol;
+    box->content_eol = (eol != 0);
     box->u.buffer.start = offset1;
     box->u.buffer.end = offset2;
 }
@@ -4538,7 +4540,7 @@ void css_set_text_string(CSSBox *box, const char *string)
     box->content_data = qe_strdup(string);
     //box->content_eol = eol; // ???
     box->u.buffer.start = 0;
-    box->u.buffer.end = strlen(string);
+    box->u.buffer.end = (int)strlen(string);
 }
 
 void css_set_child_box(CSSBox *parent_box, CSSBox *box)

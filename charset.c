@@ -54,7 +54,7 @@ static unsigned short const table_none[256] = { REP256(ESCAPE_CHAR) };
 
 static u8 *encode_raw(qe__unused__ QECharset *charset, u8 *p, char32_t c) {
     if (c <= 0xff) {
-        *p++ = c;
+        *p++ = (u8)c;
         return p;
     } else {
         return NULL;
@@ -122,7 +122,7 @@ static int probe_8859_1(qe__unused__ QECharset *charset, const u8 *buf, int size
 static u8 *encode_8859_1(qe__unused__ QECharset *charset, u8 *p, char32_t c)
 {
     if (c <= 0xff) {
-        *p++ = c;
+        *p++ = (u8)c;
         return p;
     } else {
         return NULL;
@@ -149,7 +149,7 @@ struct QECharset charset_8859_1 = {
 static u8 *encode_vt100(qe__unused__ QECharset *charset, u8 *p, char32_t c)
 {
     if (c <= 0xff) {
-        *p++ = c;
+        *p++ = (u8)c;
         return p;
     } else {
         return NULL;
@@ -176,7 +176,7 @@ struct QECharset charset_vt100 = {
 static u8 *encode_7bit(qe__unused__ QECharset *charset, u8 *p, char32_t c)
 {
     if (c <= 0x7f) {
-        *p++ = c;
+        *p++ = (u8)c;
         return p;
     } else {
         return NULL;
@@ -300,7 +300,7 @@ static void charset_get_pos_utf8(CharsetDecodeState *s, const u8 *buf, int size,
     nl = s->eol_char;
 
     for (;;) {
-        p = memchr(p, nl, p1 - p);
+        p = memchr(p, nl, (size_t)(p1 - p));
         if (!p)
             break;
         p++;
@@ -382,7 +382,7 @@ static int charset_goto_char_utf8(CharsetDecodeState *s,
             break;
         nb_chars++;
     }
-    return buf_ptr - buf;
+    return (int)(buf_ptr - buf);
 }
 
 struct QECharset charset_utf8 = {
@@ -472,8 +472,8 @@ static char32_t decode_ucs2le(CharsetDecodeState *s) {
 static u8 *encode_ucs2le(qe__unused__ QECharset *charset, u8 *p, char32_t c)
 {
     /* XXX: should handle surrogates */
-    p[0] = c;
-    p[1] = c >> 8;
+    p[0] = (u8)c;
+    p[1] = (u8)(c >> 8);
     return p + 2;
 }
 
@@ -490,7 +490,7 @@ static void charset_get_pos_ucs2(CharsetDecodeState *s, const u8 *buf, int size,
     lp = p = (const uint16_t *)(const void *)buf;
     p1 = p + (size >> 1);
     u.n = 0;
-    u.c[s->charset == &charset_ucs2be] = s->eol_char;
+    u.c[s->charset == &charset_ucs2be] = (char)s->eol_char;
     nl = u.n;
     u.c[s->charset == &charset_ucs2be] = '\n';
     lf = u.n;
@@ -511,7 +511,7 @@ static void charset_get_pos_ucs2(CharsetDecodeState *s, const u8 *buf, int size,
             line++;
         }
     }
-    col = p1 - lp;
+    col = (int)(p1 - lp);
     *line_ptr = line;
     *col_ptr = col;
 }
@@ -526,7 +526,7 @@ static int charset_goto_line_ucs2(CharsetDecodeState *s,
     lp = p = (const uint16_t *)(const void *)buf;
     p1 = p + (size >> 1);
     u.n = 0;
-    u.c[s->charset == &charset_ucs2be] = s->eol_char;
+    u.c[s->charset == &charset_ucs2be] = (char)s->eol_char;
     nl = u.n;
     u.c[s->charset == &charset_ucs2be] = '\n';
     lf = u.n;
@@ -549,7 +549,7 @@ static int charset_goto_line_ucs2(CharsetDecodeState *s,
             }
         }
     }
-    return (const u8 *)lp - buf;
+    return (int)((const u8 *)lp - buf);
 }
 
 static int probe_ucs2be(qe__unused__ QECharset *charset, const u8 *buf, int size)
@@ -603,8 +603,8 @@ static char32_t decode_ucs2be(CharsetDecodeState *s) {
 static u8 *encode_ucs2be(qe__unused__ QECharset *charset, u8 *p, char32_t c)
 {
     /* XXX: should handle surrogates */
-    p[0] = c >> 8;
-    p[1] = c;
+    p[0] = (u8)(c >> 8);
+    p[1] = (u8)c;
     return p + 2;
 }
 
@@ -665,7 +665,7 @@ static int charset_goto_char_ucs2(CharsetDecodeState *s,
             break;
         nb_chars++;
     }
-    return (const u8*)buf_ptr - buf;
+    return (int)((const u8*)buf_ptr - buf);
 }
 
 struct QECharset charset_ucs2le = {
@@ -746,10 +746,10 @@ static char32_t decode_ucs4le(CharsetDecodeState *s) {
 
 static u8 *encode_ucs4le(qe__unused__ QECharset *charset, u8 *p, char32_t c)
 {
-    p[0] = c;
-    p[1] = c >> 8;
-    p[2] = c >> 16;
-    p[3] = c >> 24;
+    p[0] = (u8)c;
+    p[1] = (u8)(c >> 8);
+    p[2] = (u8)(c >> 16);
+    p[3] = (u8)(c >> 24);
     return p + 4;
 }
 
@@ -766,7 +766,7 @@ static void charset_get_pos_ucs4(CharsetDecodeState *s, const u8 *buf, int size,
     lp = p = (const uint32_t *)(const void *)buf;
     p1 = p + (size >> 2);
     u.n = 0;
-    u.c[(s->charset == &charset_ucs4be) * 3] = s->eol_char;
+    u.c[(s->charset == &charset_ucs4be) * 3] = (char)s->eol_char;
     nl = u.n;
     u.c[(s->charset == &charset_ucs4be) * 3] = '\n';
     lf = u.n;
@@ -786,7 +786,7 @@ static void charset_get_pos_ucs4(CharsetDecodeState *s, const u8 *buf, int size,
             line++;
         }
     }
-    col = p1 - lp;
+    col = (int)(p1 - lp);
     *line_ptr = line;
     *col_ptr = col;
 }
@@ -801,7 +801,7 @@ static int charset_goto_line_ucs4(CharsetDecodeState *s,
     lp = p = (const uint32_t *)(const void *)buf;
     p1 = p + (size >> 2);
     u.n = 0;
-    u.c[(s->charset == &charset_ucs4be) * 3] = s->eol_char;
+    u.c[(s->charset == &charset_ucs4be) * 3] = (char)s->eol_char;
     nl = u.n;
     u.c[(s->charset == &charset_ucs4be) * 3] = '\n';
     lf = u.n;
@@ -824,7 +824,7 @@ static int charset_goto_line_ucs4(CharsetDecodeState *s,
             }
         }
     }
-    return (const u8 *)lp - buf;
+    return (int)((const u8 *)lp - buf);
 }
 
 static int probe_ucs4be(qe__unused__ QECharset *charset, const u8 *buf, int size)
@@ -877,10 +877,10 @@ static char32_t decode_ucs4be(CharsetDecodeState *s) {
 
 static u8 *encode_ucs4be(qe__unused__ QECharset *charset, u8 *p, char32_t c)
 {
-    p[0] = c >> 24;
-    p[1] = c >> 16;
-    p[2] = c >> 8;
-    p[3] = c;
+    p[0] = (u8)(c >> 24);
+    p[1] = (u8)(c >> 16);
+    p[2] = (u8)(c >> 8);
+    p[3] = (u8)c;
     return p + 4;
 }
 
@@ -939,7 +939,7 @@ static int charset_goto_char_ucs4(CharsetDecodeState *s,
             break;
         nb_chars++;
     }
-    return (const u8*)buf_ptr - buf;
+    return (int)((const u8*)buf_ptr - buf);
 }
 
 struct QECharset charset_ucs4le = {
@@ -997,7 +997,7 @@ void charset_complete(CompleteState *cp, CompleteFunc enumerate) {
             for (q = p = charset->aliases;; q++) {
                 if (*q == '\0' || *q == '|') {
                     if (q > p) {
-                        pstrncpy(name, sizeof(name), p, q - p);
+                        pstrncpy(name, sizeof(name), p, (int)(q - p));
                         enumerate(cp, name, CT_STRX);
                     }
                     if (*q == '\0')
@@ -1457,12 +1457,12 @@ void decode_8bit_init(CharsetDecodeState *s)
 
     table = unconst(unsigned short *)s->table;     /* remove const qualifier */
     for (i = 0; i < charset->min_char; i++)
-        *table++ = i;
+        *table++ = (unsigned short)i;
     n = charset->max_char - charset->min_char + 1;
     for (i = 0; i < n; i++)
         *table++ = charset->private_table[i];
     for (i = charset->max_char + 1; i < 256; i++)
-        *table++ = i;
+        *table++ = (unsigned short)i;
 }
 
 char32_t decode_8bit(CharsetDecodeState *s)
@@ -1490,9 +1490,9 @@ u8 *encode_8bit(QECharset *charset, u8 *q, char32_t c)
         }
         return NULL;
     found:
-        c = charset->min_char + i;
+        c = (char32_t)(charset->min_char + i);
     }
-    *q++ = c;
+    *q++ = (u8)c;
     return q;
 }
 
@@ -1518,7 +1518,7 @@ void charset_get_pos_8bit(CharsetDecodeState *s, const u8 *buf, int size,
     }
 
     for (;;) {
-        p = memchr(p, nl, p1 - p);
+        p = memchr(p, nl, (size_t)(p1 - p));
         if (!p)
             break;
         p++;
@@ -1527,7 +1527,7 @@ void charset_get_pos_8bit(CharsetDecodeState *s, const u8 *buf, int size,
         lp = p;
         line++;
     }
-    col = p1 - lp;
+    col = (int)(p1 - lp);
     *line_ptr = line;
     *col_ptr = col;
 }
@@ -1550,7 +1550,7 @@ int charset_goto_line_8bit(CharsetDecodeState *s,
     }
 
     while (nlines > 0) {
-        p = memchr(p, nl, p1 - p);
+        p = memchr(p, nl, (size_t)(p1 - p));
         if (!p)
             break;
         p++;
@@ -1559,7 +1559,7 @@ int charset_goto_line_8bit(CharsetDecodeState *s,
         lp = p;
         nlines--;
     }
-    return lp - buf;
+    return (int)(lp - buf);
 }
 
 int charset_get_chars_8bit(CharsetDecodeState *s,
@@ -1603,7 +1603,7 @@ int charset_goto_char_8bit(CharsetDecodeState *s,
             break;
         nb_chars++;
     }
-    return buf_ptr - buf;
+    return (int)(buf_ptr - buf);
 }
 
 /********************************************************/

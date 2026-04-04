@@ -126,7 +126,7 @@ static int swift_parse_identifier(char *dest, int size, char32_t c, const char32
         buf_putc_utf8(out, p[i]);
     }
     if (p[i] == '`' && dest[0] == '`')
-        buf_put_byte(out, p[i++]);
+        buf_put_byte(out, (unsigned char)p[i++]);
 
     return i;
 }

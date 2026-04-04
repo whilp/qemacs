@@ -496,19 +496,19 @@ QEPicture *qe_create_picture(int width, int height,
     QEPicture *ip;
     unsigned int bits;
 
-    bits = qe_picture_format_bits(format);
-    if (bits <= 0)
+    bits = (unsigned int)qe_picture_format_bits(format);
+    if ((int)bits <= 0)
         return NULL;
 
     ip = qe_mallocz(QEPicture);
     if (ip) {
         /* align pixmap lines on 64 bit (8 byte) boundaries */
-        unsigned int wb = ((width * bits + 63) / 64) * 8;
+        unsigned int wb = (((unsigned int)width * bits + 63U) / 64U) * 8U;
         ip->width = width;
         ip->height = height;
         ip->format = format;
-        ip->data[0] = qe_malloc_bytes(safe_mul(wb, height));
-        ip->linesize[0] = wb;
+        ip->data[0] = qe_malloc_bytes(safe_mul(wb, (unsigned int)height));
+        ip->linesize[0] = (int)wb;
     }
     return ip;
 }

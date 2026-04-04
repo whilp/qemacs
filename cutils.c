@@ -62,7 +62,7 @@ char *pstrcat(char *buf, int size, const char *s) {
        @note: `strncat` has different semantics and does not check
        for potential overflow of the destination array.
      */
-    int len = strnlen(buf, size);
+    int len = (int)strnlen(buf, (size_t)size);
     if (len < size)
         pstrcpy(buf + len, size - len, s);
     return buf;
@@ -95,7 +95,7 @@ char *pstrncat(char *buf, int size, const char *s, int slen) {
        @return a pointer to the destination array.
        @note truncation cannot be detected reliably.
      */
-    int len = strnlen(buf, size);
+    int len = (int)strnlen(buf, (size_t)size);
     if (len < size)
         pstrncpy(buf + len, size - len, s, slen);
     return buf;
@@ -452,15 +452,15 @@ int __attribute__((format(printf, 2, 3))) dbuf_printf(DynBuf *s, const char *fmt
         return len;
     if (len < (int)sizeof(buf)) {
         /* fast case */
-        return dbuf_put(s, (uint8_t *)buf, len);
+        return dbuf_put(s, (uint8_t *)buf, (size_t)len);
     } else {
-        if (dbuf_realloc(s, s->size + len + 1))
+        if (dbuf_realloc(s, s->size + (size_t)len + 1))
             return -1;
         va_start(ap, fmt);
         vsnprintf((char *)(s->buf + s->size), s->allocated_size - s->size,
                   fmt, ap);
         va_end(ap);
-        s->size += len;
+        s->size += (size_t)len;
     }
     return 0;
 }
@@ -488,34 +488,34 @@ int unicode_to_utf8(uint8_t *buf, unsigned int c) {
     uint8_t *q = buf;
 
     if (c < 0x80) {
-        *q++ = c;
+        *q++ = (uint8_t)c;
     } else {
         if (c < 0x800) {
-            *q++ = (c >> 6) | 0xc0;
+            *q++ = (uint8_t)((c >> 6) | 0xc0);
         } else {
             if (c < 0x10000) {
-                *q++ = (c >> 12) | 0xe0;
+                *q++ = (uint8_t)((c >> 12) | 0xe0);
             } else {
                 if (c < 0x00200000) {
-                    *q++ = (c >> 18) | 0xf0;
+                    *q++ = (uint8_t)((c >> 18) | 0xf0);
                 } else {
                     if (c < 0x04000000) {
-                        *q++ = (c >> 24) | 0xf8;
+                        *q++ = (uint8_t)((c >> 24) | 0xf8);
                     } else if (c < 0x80000000) {
-                        *q++ = (c >> 30) | 0xfc;
-                        *q++ = ((c >> 24) & 0x3f) | 0x80;
+                        *q++ = (uint8_t)((c >> 30) | 0xfc);
+                        *q++ = (uint8_t)(((c >> 24) & 0x3f) | 0x80);
                     } else {
                         return 0;
                     }
-                    *q++ = ((c >> 18) & 0x3f) | 0x80;
+                    *q++ = (uint8_t)(((c >> 18) & 0x3f) | 0x80);
                 }
-                *q++ = ((c >> 12) & 0x3f) | 0x80;
+                *q++ = (uint8_t)(((c >> 12) & 0x3f) | 0x80);
             }
-            *q++ = ((c >> 6) & 0x3f) | 0x80;
+            *q++ = (uint8_t)(((c >> 6) & 0x3f) | 0x80);
         }
-        *q++ = (c & 0x3f) | 0x80;
+        *q++ = (uint8_t)((c & 0x3f) | 0x80);
     }
-    return q - buf;
+    return (int)(q - buf);
 }
 
 int unicode_from_utf8(const uint8_t *p, int max_len, const uint8_t **pp) {

@@ -64,7 +64,7 @@ static int unihex_to_disp(char32_t c) {
     if (c < ' ' || c == 127 || (c >= 128 && c < 160)
     ||  (c >= 0xD800 && c <= 0xDFFF) || c > 0x10FFFF)
         c = '.';
-    return c;
+    return (int)c;
 }
 
 static int unihex_backward_offset(EditState *s, int offset)
@@ -84,7 +84,7 @@ static int unihex_display_line(EditState *s, DisplayState *ds, int offset)
     char32_t c, maxc, b;
     /* CG: array size is incorrect, should be smaller */
     char32_t buf[LINE_MAX_SIZE];
-    char32_t pos[LINE_MAX_SIZE];
+    int pos[LINE_MAX_SIZE];
 
     display_bol(ds);
 
@@ -148,7 +148,7 @@ static int unihex_display_line(EditState *s, DisplayState *ds, int offset)
         offset2 = pos[j + 1];
         if (j < len) {
             b = buf[j];
-            b = unihex_to_disp(b);
+            b = (char32_t)(unsigned int)unihex_to_disp(b);
         } else {
             b = ' ';
             if (!ateof) {

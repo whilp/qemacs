@@ -128,7 +128,7 @@ int devanagari_log2vis(char32_t *str, unsigned int *ctog, int len) {
     for (i = 0; i < len; i++) {
         c = buf[i];
         if (c != 0) {
-            ctog[i] = j;
+            ctog[i] = (unsigned int)j;
             str[j++] = c;
         } else {
             /* zero: associate it to previous char */
@@ -136,7 +136,7 @@ int devanagari_log2vis(char32_t *str, unsigned int *ctog, int len) {
             k = j - 1;
             if (k < 0)
                 k = 0;
-            ctog[i] = k;
+            ctog[i] = (unsigned int)k;
         }
     }
     return j;

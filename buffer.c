@@ -65,7 +65,7 @@ static void update_page(Page *p)
 
     /* if the page is read only, copy it */
     if (p->flags & PG_READ_ONLY) {
-        buf = qe_malloc_dup_bytes(p->data, p->size);
+        buf = qe_malloc_dup_bytes(p->data, (size_t)p->size);
         /* XXX: should return an error */
         if (!buf)
             return;
@@ -112,7 +112,7 @@ int eb_read(EditBuffer *b, int offset, void *buf, int size)
         len = p->size - offset;
         if (len > remain)
             len = remain;
-        memcpy(buf, p->data + offset, len);
+        memcpy(buf, p->data + offset, (size_t)len);
         if ((remain -= len) <= 0)
             break;
         buf = (u8*)buf + len;
@@ -152,7 +152,7 @@ int eb_write(EditBuffer *b, int offset, const void *buf, int size)
             if (len > remain)
                 len = remain;
             update_page(p);
-            memcpy(p->data + page_offset, buf, len);
+            memcpy(p->data + page_offset, buf, (size_t)len);
             buf = (const u8*)buf + len;
             if ((remain -= len) <= 0)
                 break;
@@ -181,9 +181,9 @@ static void eb_insert1(EditBuffer *b, int page_index, const u8 *buf, int size)
             update_page(p);
             /* CG: probably faster with qe_malloc + qe_free */
             // XXX: test for failure
-            qe_realloc_bytes(&p->data, p->size + len);
-            memmove(p->data + len, p->data, p->size);
-            memcpy(p->data, buf + size - len, len);
+            qe_realloc_bytes(&p->data, (size_t)(p->size + len));
+            memmove(p->data + len, p->data, (size_t)p->size);
+            memcpy(p->data, buf + size - len, (size_t)len);
             size -= len;
             p->size += len;
         }
@@ -202,7 +202,7 @@ static void eb_insert1(EditBuffer *b, int page_index, const u8 *buf, int size)
             if (len > MAX_PAGE_SIZE)
                 len = MAX_PAGE_SIZE;
             p->size = len;
-            p->data = qe_malloc_dup_bytes(buf, len);
+            p->data = qe_malloc_dup_bytes(buf, (size_t)len);
             p->flags = 0;
             buf += len;
             size -= len;
@@ -233,7 +233,7 @@ static void eb_insert_lowlevel(EditBuffer *b, int offset,
             len = size;
         /* number of bytes to put in next pages */
         len_out = p->size + len - MAX_PAGE_SIZE;
-        page_index = p - b->page_table;
+        page_index = (int)(p - b->page_table);
         if (len_out > 0) {
 #if 1
             /* First try and shift some of these bytes to the previous pages */
@@ -243,8 +243,8 @@ static void eb_insert_lowlevel(EditBuffer *b, int offset,
                 update_page(p);
                 chunk = min_offset(MAX_PAGE_SIZE - p[-1].size, offset);
                 // XXX: test for failure
-                qe_realloc_bytes(&p[-1].data, p[-1].size + chunk);
-                memcpy(p[-1].data + p[-1].size, p->data, chunk);
+                qe_realloc_bytes(&p[-1].data, (size_t)(p[-1].size + chunk));
+                memcpy(p[-1].data + p[-1].size, p->data, (size_t)chunk);
                 p[-1].size += chunk;
                 p->size -= chunk;
                 if (p->size == 0) {
@@ -258,9 +258,9 @@ static void eb_insert_lowlevel(EditBuffer *b, int offset,
                     offset = p->size;
                     goto retry;
                 }
-                memmove(p->data, p->data + chunk, p->size);
+                memmove(p->data, p->data + chunk, (size_t)p->size);
                 // XXX: test for failure
-                qe_realloc_bytes(&p->data, p->size);
+                qe_realloc_bytes(&p->data, (size_t)p->size);
                 offset -= chunk;
                 if (offset == 0 && p[-1].size < MAX_PAGE_SIZE) {
                     /* restart from previous page */
@@ -282,10 +282,10 @@ static void eb_insert_lowlevel(EditBuffer *b, int offset,
             update_page(p);
             p->size += len - len_out;
             // XXX: test for failure
-            qe_realloc_bytes(&p->data, p->size);
+            qe_realloc_bytes(&p->data, (size_t)p->size);
             memmove(p->data + offset + len,
-                    p->data + offset, p->size - (offset + len));
-            memcpy(p->data + offset, buf, len);
+                    p->data + offset, (size_t)(p->size - (offset + len)));
+            memcpy(p->data + offset, buf, (size_t)len);
             buf += len;
             size -= len;
         }
@@ -512,10 +512,10 @@ int eb_delete(EditBuffer *b, int offset, int size)
         } else {
             update_page(p);
             memmove(p->data + offset, p->data + offset + len,
-                    p->size - offset - len);
+                    (size_t)(p->size - offset - len));
             p->size -= len;
             // XXX: test for failure
-            qe_realloc_bytes(&p->data, p->size);
+            qe_realloc_bytes(&p->data, (size_t)p->size);
             offset += len;
             /* XXX: should merge with adjacent pages if size becomes small? */
             if (offset >= p->size) {
@@ -675,7 +675,7 @@ int eb_set_buffer_name(EditBuffer *b, const char *name1)
     EditBuffer *b1;
 
     pstrcpy(name, sizeof(name) - 10, name1);
-    pos = strlen(name);
+    pos = (int)strlen(name);
     if (pos > 0 && name[pos - 1] == '*') {
         pos--;
         prefix = "-";
@@ -687,7 +687,7 @@ int eb_set_buffer_name(EditBuffer *b, const char *name1)
         if (b == b1)
             return 0;
         n++;
-        snprintf(name + pos, sizeof(name) - pos, "%s%d%s", prefix, n, suffix);
+        snprintf(name + pos, sizeof(name) - (size_t)pos, "%s%d%s", prefix, n, suffix);
     }
     /* This is the only place where b->name is modified */
     eb_cache_remove(b);
@@ -908,7 +908,7 @@ void qe_trace_bytes(QEmacsState *qs, const void *buf, int size, int state)
     /* output at end of trace buffer */
     b->offset = b->total_size;
     if (size < 0)
-        size = strlen(buf);
+        size = (int)strlen(buf);
 
     eb_get_pos(b, &line, &col, b->offset);
     flush = state & EB_TRACE_FLUSH;
@@ -955,7 +955,7 @@ void qe_trace_bytes(QEmacsState *qs, const void *buf, int size, int state)
                 col = 9;
             }
             if (p0 < p) {
-                len = min_offset(p - p0, MAX_TRACE_WIDTH - col);
+                len = min_offset((int)(p - p0), MAX_TRACE_WIDTH - col);
                 eb_printf(b, "%.*s", len, p0);
                 p0 += len;
                 col += len;
@@ -1050,7 +1050,7 @@ int eb_create_style_buffer(EditBuffer *b, int flags)
         if (!b->b_styles)
             return -1;
         b->flags |= flags & BF_STYLES;
-        b->style_shift = (((unsigned)flags & BF_STYLES) / BF_STYLE1) - 1;
+        b->style_shift = (int)(((unsigned)flags & BF_STYLES) / BF_STYLE1) - 1;
         b->style_bytes = 1 << b->style_shift;
         eb_set_style(b, 0, LOGOP_INSERT, 0, b->total_size);
         eb_add_callback(b, eb_style_callback, NULL, 0);
@@ -1104,10 +1104,10 @@ void eb_set_style(EditBuffer *b, QETermStyle style, enum LogOperation op,
             } else
             if (b->style_shift == 1) {
                 for (i = 0; i < len >> 1; i++) {
-                    s.buf2[i] = style;
+                    s.buf2[i] = (uint16_t)style;
                 }
             } else {
-                memset(s.buf, style, len);
+                memset(s.buf, (int)style, (size_t)len);
             }
             if (op == LOGOP_WRITE)
                 eb_write(b->b_styles, offset, s.buf, len);
@@ -1182,7 +1182,7 @@ static void eb_addlog(EditBuffer *b, enum LogOperation op,
         len = lb.size;
         if (lb.op == LOGOP_INSERT)
             len = 0;
-        len += sizeof(LogBuffer) + sizeof(int);
+        len += (int)(sizeof(LogBuffer) + sizeof(int));
         eb_delete(b->log_buffer, 0, len);
         b->log_new_index -= len;
         if (b->log_current > 1)
@@ -1193,15 +1193,15 @@ static void eb_addlog(EditBuffer *b, enum LogOperation op,
     /* If inserting, try and coalesce log record with previous */
     if (op == LOGOP_INSERT && b->last_log == LOGOP_INSERT
     &&  (size_t)b->log_new_index >= sizeof(lb) + sizeof(int)
-    &&  eb_read(b->log_buffer, b->log_new_index - sizeof(int), &size_trailer,
-                sizeof(int)) == sizeof(int)
+    &&  eb_read(b->log_buffer, b->log_new_index - (int)sizeof(int), &size_trailer,
+                (int)sizeof(int)) == (int)sizeof(int)
     &&  size_trailer == 0
-    &&  eb_read(b->log_buffer, b->log_new_index - sizeof(lb) - sizeof(int), &lb,
-                sizeof(lb)) == sizeof(lb)
+    &&  eb_read(b->log_buffer, b->log_new_index - (int)sizeof(lb) - (int)sizeof(int), &lb,
+                (int)sizeof(lb)) == (int)sizeof(lb)
     &&  lb.op == LOGOP_INSERT
     &&  lb.offset + lb.size == offset) {
         lb.size += size;
-        eb_write(b->log_buffer, b->log_new_index - sizeof(lb) - sizeof(int), &lb, sizeof(lb));
+        eb_write(b->log_buffer, b->log_new_index - (int)sizeof(lb) - (int)sizeof(int), &lb, (int)sizeof(lb));
         return;
     }
 
@@ -1215,9 +1215,9 @@ static void eb_addlog(EditBuffer *b, enum LogOperation op,
     lb.op = op;
     lb.offset = offset;
     lb.size = size;
-    lb.was_modified = was_modified;
-    eb_write(b->log_buffer, b->log_new_index, &lb, sizeof(lb));
-    b->log_new_index += sizeof(lb);
+    lb.was_modified = (u8)was_modified;
+    eb_write(b->log_buffer, b->log_new_index, &lb, (int)sizeof(lb));
+    b->log_new_index += (int)sizeof(lb);
 
     /* data */
     switch (op) {
@@ -1232,8 +1232,8 @@ static void eb_addlog(EditBuffer *b, enum LogOperation op,
         break;
     }
     /* trailer */
-    eb_write(b->log_buffer, b->log_new_index, &size_trailer, sizeof(int));
-    b->log_new_index += sizeof(int);
+    eb_write(b->log_buffer, b->log_new_index, &size_trailer, (int)sizeof(int));
+    b->log_new_index += (int)sizeof(int);
 
     b->nb_logs++;
 }
@@ -1279,16 +1279,16 @@ void do_undo(EditState *s)
     }
 
     /* go backward */
-    log_index -= sizeof(int);
-    eb_read(b->log_buffer, log_index, &size_trailer, sizeof(int));
-    log_index -= size_trailer + sizeof(LogBuffer);
+    log_index -= (int)sizeof(int);
+    eb_read(b->log_buffer, log_index, &size_trailer, (int)sizeof(int));
+    log_index -= size_trailer + (int)sizeof(LogBuffer);
 
     /* log_current is 1 + index to have zero as default value */
     b->log_current = log_index + 1;
 
     /* play the log entry */
-    eb_read(b->log_buffer, log_index, &lb, sizeof(LogBuffer));
-    log_index += sizeof(LogBuffer);
+    eb_read(b->log_buffer, log_index, &lb, (int)sizeof(LogBuffer));
+    log_index += (int)sizeof(LogBuffer);
 
     b->last_log = 0;  /* prevent log compression */
 
@@ -1352,23 +1352,23 @@ void do_redo(EditState *s)
 
     /* go forward in undo stack */
     log_index = b->log_current - 1;
-    eb_read(b->log_buffer, log_index, &lb, sizeof(LogBuffer));
-    log_index += sizeof(LogBuffer);
+    eb_read(b->log_buffer, log_index, &lb, (int)sizeof(LogBuffer));
+    log_index += (int)sizeof(LogBuffer);
     if (lb.op != LOGOP_INSERT)
         log_index += lb.size;
-    log_index += sizeof(int);
+    log_index += (int)sizeof(int);
     /* log_current is 1 + index to have zero as default value */
     b->log_current = log_index + 1;
 
     /* go backward from the end and remove undo record */
     log_index = b->log_new_index;
-    log_index -= sizeof(int);
-    eb_read(b->log_buffer, log_index, &size_trailer, sizeof(int));
-    log_index -= size_trailer + sizeof(LogBuffer);
+    log_index -= (int)sizeof(int);
+    eb_read(b->log_buffer, log_index, &size_trailer, (int)sizeof(int));
+    log_index -= size_trailer + (int)sizeof(LogBuffer);
 
     /* play the log entry */
-    eb_read(b->log_buffer, log_index, &lb, sizeof(LogBuffer));
-    log_index += sizeof(LogBuffer);
+    eb_read(b->log_buffer, log_index, &lb, (int)sizeof(LogBuffer));
+    log_index += (int)sizeof(LogBuffer);
 
     switch (lb.op) {
     case LOGOP_WRITE:
@@ -1405,7 +1405,7 @@ void do_redo(EditState *s)
 
     b->modified = lb.was_modified;
 
-    log_index -= sizeof(LogBuffer);
+    log_index -= (int)sizeof(LogBuffer);
     eb_delete(b->log_buffer, log_index, b->log_new_index - log_index);
     b->log_new_index = log_index;
 
@@ -1478,7 +1478,7 @@ char32_t eb_nextc(EditBuffer *b, int offset, int *next_ptr)
             b->charset_state.p = buf;
             /* XXX: incorrect behaviour on ill encoded utf8 sequences */
             ch = b->charset_state.decode_func(&b->charset_state);
-            offset += (b->charset_state.p - buf) - 1;
+            offset += (int)(b->charset_state.p - buf) - 1;
         }
         if (ch == '\r') {
             if (b->eol_type == EOL_DOS) {
@@ -1509,7 +1509,7 @@ QETermStyle eb_get_style(EditBuffer *b, int offset)
         if (b->style_shift == 3) {
             uint64_t style = 0;
             eb_read(b->b_styles, (offset >> b->char_shift) << 3, &style, 8);
-            return style;
+            return (QETermStyle)style;
         } else
         if (b->style_shift == 2) {
             uint32_t style = 0;
@@ -1667,15 +1667,16 @@ char32_t eb_prevc(EditBuffer *b, int offset, int *prev_ptr)
         if (b->charset == &charset_utf8) {
             char_size = 1;
             offset -= 1;
-            ch = eb_read_one_byte(b, offset);
-            if (utf8_is_trailing_byte(ch)) {
+            ch = (char32_t)eb_read_one_byte(b, offset);
+            if (utf8_is_trailing_byte((unsigned char)ch)) {
                 int offset1 = offset;
                 q = buf + sizeof(buf);
                 *--q = '\0';
-                *--q = ch;
-                while (utf8_is_trailing_byte(ch) && offset > 0 && q > buf) {
+                *--q = (u8)ch;
+                while (utf8_is_trailing_byte((unsigned char)ch) && offset > 0 && q > buf) {
                     offset -= 1;
-                    *--q = ch = eb_read_one_byte(b, offset);
+                    ch = (char32_t)eb_read_one_byte(b, offset);
+                    *--q = (u8)ch;
                 }
                 if (ch >= 0xc0) {
                     ch = utf8_decode((const char **)(void *)&q);
@@ -1937,7 +1938,7 @@ int eb_raw_buffer_load1(EditBuffer *b, FILE *f, int offset)
     //put_status(b->qs->active_window, "Loading %s", filename);
     size = inserted = 0;
     for (;;) {
-        len = fread(buf, 1, IOBUF_SIZE, f);
+        len = (int)fread(buf, 1, IOBUF_SIZE, f);
         if (len <= 0) {
             if (ferror(f))
                 return -1;
@@ -1955,7 +1956,7 @@ int eb_raw_buffer_load1(EditBuffer *b, FILE *f, int offset)
 void eb_munmap_buffer(EditBuffer *b)
 {
     if (b->map_address) {
-        munmap(b->map_address, b->map_length);
+        munmap(b->map_address, (size_t)b->map_length);
         b->map_address = NULL;
         b->map_length = 0;
     }
@@ -1972,9 +1973,9 @@ int eb_mmap_buffer(EditBuffer *b, const char *filename)
     fd = open(filename, O_RDONLY);
     if (fd < 0)
         return -1;
-    file_size = lseek(fd, 0, SEEK_END);
+    file_size = (int)lseek(fd, 0, SEEK_END);
     //put_status(b->qs->active_window, "Mapping %s", filename);
-    file_ptr = mmap(NULL, file_size, PROT_READ, MAP_SHARED, fd, 0);
+    file_ptr = mmap(NULL, (size_t)file_size, PROT_READ, MAP_SHARED, fd, 0);
     if ((void*)file_ptr == MAP_FAILED) {
         close(fd);
         return -1;
@@ -2062,7 +2063,7 @@ static int raw_buffer_save(EditBuffer *b, int start, int end,
         if (len > IOBUF_SIZE)
             len = IOBUF_SIZE;
         eb_read(b, start, buf, len);
-        len = write(fd, buf, len);
+        len = (int)write(fd, buf, (size_t)len);
         if (len < 0) {
             close(fd);
             return -1;
@@ -2111,7 +2112,7 @@ int eb_encode_char32(EditBuffer *b, char *buf, char32_t c) {
         *q++ = '?';
     }
     *q = '\0';
-    return q - (u8 *)buf;
+    return (int)(q - (u8 *)buf);
 }
 
 /* Insert unicode character according to buffer encoding */
@@ -2200,7 +2201,7 @@ int eb_insert_char32_buf(EditBuffer *b, int offset, const char32_t *p, int len)
 
 int eb_insert_str(EditBuffer *b, int offset, const char *str)
 {
-    return eb_insert_utf8_buf(b, offset, str, strlen(str));
+    return eb_insert_utf8_buf(b, offset, str, (int)strlen(str));
 }
 
 int eb_match_char32(EditBuffer *b, int offset, char32_t c, int *offsetp)
@@ -2259,7 +2260,7 @@ int eb_putc(EditBuffer *b, char32_t c) {
 }
 
 int eb_puts(EditBuffer *b, const char *s) {
-    return eb_insert_utf8_buf(b, b->offset, s, strlen(s));
+    return eb_insert_utf8_buf(b, b->offset, s, (int)strlen(s));
 }
 
 int eb_vprintf(EditBuffer *b, const char *fmt, va_list ap) {
@@ -2273,14 +2274,14 @@ int eb_vprintf(EditBuffer *b, const char *fmt, va_list ap) {
 #endif
 
     va_copy(ap2, ap);
-    size = sizeof(buf0);
+    size = (int)sizeof(buf0);
     buf = buf0;
-    len = vsnprintf(buf, size, fmt, ap2);
+    len = vsnprintf(buf, (size_t)size, fmt, ap2);
     va_end(ap2);
     if (len >= size) {
         size = len + 1;
-        buf = qe_malloc_bytes(size);
-        vsnprintf(buf, size, fmt, ap);
+        buf = qe_malloc_bytes((size_t)size);
+        vsnprintf(buf, (size_t)size, fmt, ap);
     }
     /* CG: insert buf encoding according to b->charset and b->eol_type.
      * buf may contain \0 characters via the %c modifer.
@@ -2768,7 +2769,7 @@ int eb_save_buffer(EditBuffer *b)
         return ret;
 
     /* set correct file st_mode to old file permissions */
-    chmod(filename, st_mode);
+    chmod(filename, (mode_t)st_mode);
     /* reset log */
     /* CG: should not do this! */
     //eb_free_log_buffer(b);

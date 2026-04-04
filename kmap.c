@@ -93,10 +93,10 @@ static int kmap_input(int *match_buf, int match_buf_size,
             if (c < 0x1e) {
                 if (flag) {
                     /* extra output glyphs */
-                    olen = c;
+                    olen = (int)c;
                 } else {
                     /* delta */
-                    last_outputc += c;
+                    last_outputc = last_outputc + (int)c;
                 }
                 break;
             } else
@@ -191,16 +191,16 @@ int qe_load_input_methods(QEmacsState *qs, const char *filename)
     lseek(fd, 0, SEEK_SET);
 
 #ifdef CONFIG_MMAP
-    input_method_map = mmap(NULL, file_size, PROT_READ, MAP_SHARED, fd, 0);
+    input_method_map = mmap(NULL, (size_t)file_size, PROT_READ, MAP_SHARED, fd, 0);
     if (input_method_map != (void*)MAP_FAILED) {
         file_ptr = input_method_map;
-        input_method_size = file_size;
+        input_method_size = (size_t)file_size;
     }
 #endif
     if (!file_ptr) {
         file_ptr = input_method_ptr = qe_malloc_array(char, file_size);
         if (input_method_ptr == NULL
-        ||  read(fd, input_method_ptr, file_size) != file_size) {
+        ||  read(fd, input_method_ptr, (size_t)file_size) != file_size) {
             goto fail;
         }
     }

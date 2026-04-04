@@ -139,7 +139,7 @@ static void org_colorize_line(QEColorizeContext *cp,
 
             kw = org_todo_keyword(str + i);
             if (kw > -1) {
-                j = i + strlen(OrgTodoKeywords[kw].keyword) + 1;
+                j = i + (int)strlen(OrgTodoKeywords[kw].keyword) + 1;
                 SET_STYLE(sbuf, i, j, OrgTodoKeywords[kw].style);
                 i = j;
             }
@@ -443,8 +443,8 @@ static void do_org_goto(EditState *s, const char *dest)
      */
 
     /* Jump to numbered destination. */
-    for (offset = 0, level = 0; qe_isdigit(*p); ) {
-        nb = strtol_c(p, &p, 10);
+    for (offset = 0, level = 0; qe_isdigit((u8)*p); ) {
+        nb = (int)strtol_c(p, &p, 10);
         if (*p == '.')
             p++;
         level++;

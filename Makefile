@@ -78,8 +78,6 @@ CFLAGS += -Wold-style-definition
 CFLAGS += -Wnull-dereference
 CFLAGS += -Wdouble-promotion
 CFLAGS += -Wimplicit-fallthrough
-# Promote these to errors once existing warnings are fixed:
-CFLAGS += -Wno-error=sign-conversion -Wno-error=conversion
 CFLAGS += -Wsign-conversion -Wconversion
 # Runtime buffer overflow detection for libc functions
 CFLAGS += -D_FORTIFY_SOURCE=2
@@ -235,8 +233,14 @@ $(OBJS_DIR)/modes/stb.o: modes/stb.c modes/stb_image.h Makefile | $(COSMOCC_DIR)
 	$(echo) CC $(ECHO_CFLAGS) -c $<
 	$(cmd)  mkdir -p $(dir $@)
 	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -Wno-error -Wno-double-promotion -Wno-sign-conversion -Wno-conversion -Wno-unused-but-set-variable -MT $@ -MF $(@:.o=.d) -o $@ -c $<
-$(OBJS_DIR)/libunicode.o: libunicode.c libunicode.h libunicode-table.h
-$(OBJS_DIR)/libregexp.o: libregexp.c libregexp.h libregexp-opcode.h
+# libunicode and libregexp are vendored QuickJS code: relax warnings
+$(OBJS_DIR)/libunicode.o: libunicode.c libunicode.h libunicode-table.h Makefile | $(COSMOCC_DIR)/bin/cosmocc
+	$(echo) CC $(ECHO_CFLAGS) -c $<
+	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -Wno-sign-conversion -Wno-conversion -MT $@ -MF $(@:.o=.d) -o $@ -c $<
+
+$(OBJS_DIR)/libregexp.o: libregexp.c libregexp.h libregexp-opcode.h Makefile | $(COSMOCC_DIR)/bin/cosmocc
+	$(echo) CC $(ECHO_CFLAGS) -c $<
+	$(cmd)  $(CC) $(DEFINES) $(CFLAGS) -Wno-sign-conversion -Wno-conversion -MT $@ -MF $(@:.o=.d) -o $@ -c $<
 $(OBJS_DIR)/libqhtml/html_style.o: $(GENDIR)/libqhtml/html_style.c Makefile | $(COSMOCC_DIR)/bin/cosmocc
 	$(echo) CC $(ECHO_CFLAGS) -c $<
 	$(cmd)  mkdir -p $(dir $@)
@@ -255,7 +259,7 @@ $(OBJS_DIR)/libqhtml/xmlparse.o: libqhtml/xmlparse.c libqhtml/css.h libqhtml/htm
 $(OBJS_DIR)/third_party/lua/lua-amalg.o: third_party/lua/lua-amalg.c third_party/lua/lua-amalg.h Makefile | $(COSMOCC_DIR)/bin/cosmocc
 	$(echo) CC -c $<
 	$(cmd)  mkdir -p $(dir $@)
-	$(cmd)  $(CC) $(CFLAGS) -Wno-error -Wno-format-nonliteral -Wno-null-dereference -Wno-unused-value -MT $@ -MF $(@:.o=.d) -o $@ -c $<
+	$(cmd)  $(CC) $(CFLAGS) -Wno-error -Wno-format-nonliteral -Wno-null-dereference -Wno-unused-value -Wno-sign-conversion -Wno-conversion -MT $@ -MF $(@:.o=.d) -o $@ -c $<
 
 $(OBJS_DIR)/%.o: %.c Makefile | $(COSMOCC_DIR)/bin/cosmocc
 	$(echo) CC $(ECHO_CFLAGS) -c $<

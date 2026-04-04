@@ -154,10 +154,10 @@ static void fractint_colorize_line(QEColorizeContext *cp,
         default:
             if (!(state & IN_FRACTINT_BLOCK)) {
                 klen = 0;
-                kbuf[klen++] = qe_tolower(c);
+                kbuf[klen++] = (char)qe_tolower(c);
                 while (i < n && str[i] != '{') {
                     if (str[i] != ' ' && klen < countof(kbuf) - 1)
-                        kbuf[klen++] = qe_tolower(str[i]);
+                        kbuf[klen++] = (char)qe_tolower(str[i]);
                     i++;
                 }
                 if (kbuf[klen - 1] == '=')
@@ -228,10 +228,10 @@ static void fractint_colorize_line(QEColorizeContext *cp,
                  * "[a-zA-Z_\x80-\xff][a-zA-Z_0-9\x80-\xff]*"
                  */
                 klen = 0;
-                kbuf[klen++] = qe_tolower(c);
+                kbuf[klen++] = (char)qe_tolower(c);
                 while (qe_isalnum_(str[i]) || str[i] == '.') {
                     if (klen < countof(kbuf) - 1)
-                        kbuf[klen++] = qe_tolower(str[i]);
+                        kbuf[klen++] = (char)qe_tolower(str[i]);
                     i++;
                 }
                 kbuf[klen] = '\0';
@@ -613,7 +613,7 @@ static int fractal_set_colors(FractalState *ms, const char *p, const char **pp) 
                 if (*p == '<') {
                     if (i == 0)
                         return 0;
-                    n = clamp_int(strtol_c(p + 1, &p, 10), 1, 255 - i);
+                    n = clamp_int((int)strtol_c(p + 1, &p, 10), 1, 255 - i);
                     if (*p != '>')
                         return 0;
                     p++;
@@ -652,10 +652,10 @@ static void fractal_set_parameters(EditState *s, FractalState *ms, const char *p
             break;
         if (strstart(p, "type=", &p)) {
             // XXX: should match type names
-            ms->type = clamp_int(strtol_c(p, &p, 0), 0, countof(fractal_type) - 1);
+            ms->type = clamp_int((int)strtol_c(p, &p, 0), 0, countof(fractal_type) - 1);
         } else
         if (strstart(p, "maxiter=", &p)) {
-            ms->maxiter = strtol_c(p, &p, 0);
+            ms->maxiter = (int)strtol_c(p, &p, 0);
         } else
         if (strstart(p, "colors=", &p)) {
             if (!fractal_set_colors(ms, p, &p)) {
@@ -664,19 +664,19 @@ static void fractal_set_parameters(EditState *s, FractalState *ms, const char *p
             }
         } else
         if (strstart(p, "cb=", &p)) {
-            ms->cb = strtol_c(p, &p, 0);
+            ms->cb = (int)strtol_c(p, &p, 0);
         } else
         if (strstart(p, "nc=", &p)) {
-            ms->nc = strtol_c(p, &p, 0);
+            ms->nc = (int)strtol_c(p, &p, 0);
         } else
         if (strstart(p, "shift=", &p)) {
-            ms->shift = strtol_c(p, &p, 0);
+            ms->shift = (int)strtol_c(p, &p, 0);
         } else
         if (strstart(p, "rot=", &p)) {
-            fractal_set_rotation(ms, strtol_c(p, &p, 0));
+            fractal_set_rotation(ms, (int)strtol_c(p, &p, 0));
         } else
         if (strstart(p, "zoom=", &p)) {
-            fractal_set_zoom(ms, strtol_c(p, &p, 0));
+            fractal_set_zoom(ms, (int)strtol_c(p, &p, 0));
         } else
         if (strstart(p, "bailout=", &p)) {
             ms->bailout = strtold_c(p, &p);
@@ -802,7 +802,7 @@ static void do_fractal_draw(EditState *s, FractalState *ms)
             xr = xc + x * ms->m0 + y * ms->m1;
             yr = yc + x * ms->m2 + y * ms->m3;
             i = (*func)(xr, yr, bailout, maxiter);
-            pb[nx] = (i >= maxiter) ? 0 : cb + i % nc;
+            pb[nx] = (unsigned char)((i >= maxiter) ? 0 : cb + i % nc);
         }
     }
     edit_invalidate(s, 1);
@@ -871,7 +871,7 @@ static void fractal_display(EditState *s) {
 
             bmp_draw(s->screen, ms->disp_bmp,
                      s->xleft + x, s->ytop + y, w, h, 0, 0, 0);
-            fill_window_slack(s, x, y, w, h, col);
+            fill_window_slack(s, x, y, w, h, (int)col);
         } else {
             fill_rectangle(s->screen, s->xleft, s->ytop, s->width, s->height, col);
         }
@@ -917,7 +917,7 @@ static void fractal_display(EditState *s) {
                             ms->ip, 0, 0, w, h * s->screen->dpy.yfactor,
                             0, QERGB(128, 128, 128));
             ms->ip->palette = NULL;
-            fill_window_slack(s, x0, y0, w, h, col);
+            fill_window_slack(s, x0, y0, w, h, (int)col);
         } else {
             fill_rectangle(s->screen, s->xleft, s->ytop, s->width, s->height, col);
         }

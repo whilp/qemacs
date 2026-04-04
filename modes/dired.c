@@ -194,7 +194,7 @@ static const char *dired_get_cur_filename(DiredState *ds, EditState *s,
 {
     DiredItem *dip = dired_get_cur_item(ds, s);
     if (dip) {
-        pstrcpy(buf, buf_size, dip->fullname);
+        pstrcpy(buf, (int)buf_size, dip->fullname);
         return buf;
     }
     return NULL;
@@ -358,7 +358,7 @@ static int dired_sort_func(void *opaque, const void *p1, const void *p2)
 static int format_number(char *buf, int size, int human, off_t number)
 {
     if (human == 0) {
-        return snprintf(buf, size, "%lld", (long long)number);
+        return snprintf(buf, (size_t)size, "%lld", (long long)number);
     }
     if (human > 1) {
         const char *suffix = "BkMGTPEZY";
@@ -366,9 +366,9 @@ static int format_number(char *buf, int size, int human, off_t number)
         /* metric version, powers of 1000 */
         while (suffix[1] && number >= 1000) {
             if (number < 10000) {
-                buf[0] = '0' + (number / 1000);
+                buf[0] = (char)('0' + (number / 1000));
                 buf[1] = '.';
-                buf[2] = '0' + ((number / 100) % 10);
+                buf[2] = (char)('0' + ((number / 100) % 10));
                 buf[3] = suffix[1];
                 buf[4] = '\0';
                 return 4;
@@ -376,16 +376,16 @@ static int format_number(char *buf, int size, int human, off_t number)
             number /= 1000;
             suffix++;
         }
-        return snprintf(buf, size, "%d%c", (int)number, *suffix);
+        return snprintf(buf, (size_t)size, "%d%c", (int)number, *suffix);
     } else {
         const char *suffix = "BKMGTPEZY";
 
         /* geek version, powers of 1024 */
         while (suffix[1] && number >= 1000) {
             if (number < 10200) {
-                buf[0] = '0' + (number / 1020);
+                buf[0] = (char)('0' + (number / 1020));
                 buf[1] = '.';
-                buf[2] = '0' + ((number / 102) % 10);
+                buf[2] = (char)('0' + ((number / 102) % 10));
                 buf[3] = suffix[1];
                 buf[4] = '\0';
                 return 4;
@@ -393,7 +393,7 @@ static int format_number(char *buf, int size, int human, off_t number)
             number >>= 10;
             suffix++;
         }
-        return snprintf(buf, size, "%d%c", (int)number, *suffix);
+        return snprintf(buf, (size_t)size, "%d%c", (int)number, *suffix);
     }
 }
 
@@ -403,9 +403,9 @@ static int format_gid(char *buf, int size, int nflag, gid_t gid)
     struct group *grp;
 
     if (!nflag && (grp = getgrgid(gid)) != NULL && grp->gr_name)
-        return snprintf(buf, size, "%s", grp->gr_name);
+        return snprintf(buf, (size_t)size, "%s", grp->gr_name);
     else
-        return snprintf(buf, size, "%d", (int)gid);
+        return snprintf(buf, (size_t)size, "%d", (int)gid);
 }
 
 static int format_uid(char *buf, int size, int nflag, uid_t uid)
@@ -414,18 +414,18 @@ static int format_uid(char *buf, int size, int nflag, uid_t uid)
     struct passwd *pwp;
 
     if (!nflag && (pwp = getpwuid(uid)) != NULL && pwp->pw_name)
-        return snprintf(buf, size, "%s", pwp->pw_name);
+        return snprintf(buf, (size_t)size, "%s", pwp->pw_name);
     else
-        return snprintf(buf, size, "%d", (int)uid);
+        return snprintf(buf, (size_t)size, "%d", (int)uid);
 }
 
 static int format_size(char *buf, int size, int human,
                        mode_t st_mode, dev_t st_rdev, off_t st_size)
 {
     if (S_ISCHR(st_mode) || S_ISBLK(st_mode)) {
-        int major = st_rdev >> ((sizeof(dev_t) == 2) ? 8 : 24);
-        int minor = st_rdev & ((sizeof(dev_t) == 2) ? 0xff : 0xffffff);
-        return snprintf(buf, size, "%3d, %3d", major, minor);
+        int major = (int)(st_rdev >> ((sizeof(dev_t) == 2) ? 8 : 24));
+        int minor = (int)(st_rdev & ((sizeof(dev_t) == 2) ? 0xff : 0xffffff));
+        return snprintf(buf, (size_t)size, "%3d, %3d", major, minor);
     } else {
         return format_number(buf, size, human, st_size);
     }
@@ -510,7 +510,7 @@ static int format_date(char *dest, int size,
     }
 
     if (!fmonth) {
-        memset(dest, ' ', out->len);
+        memset(dest, ' ', (size_t)out->len);
     }
     return out->pos;
 }
@@ -546,7 +546,7 @@ static int get_trailchar(mode_t mode)
 static char *getentryslink(char *path, int size, const char *filename)
 {
     /* Warning: readlink does not append a null byte! */
-    int len = readlink(filename, path, size - 1);
+    int len = (int)readlink(filename, path, (size_t)(size - 1));
     if (len < 0)
         len = 0;
     path[len] = '\0';
@@ -648,7 +648,7 @@ static void dired_filter_files(DiredState *ds)
         }
         /* XXX: should apply other filters? */
         // XXX: should hide full subtree if grouped?
-        dip->hidden = hidden;
+        dip->hidden = (char)hidden;
         if (hidden) {
             if (S_ISDIR(dip->mode)) {
                 ds->ndirs_hidden++;
@@ -682,7 +682,7 @@ static void dired_compute_columns(DiredState *ds)
     for (i = 0; i < ds->nb_items; i++) {
         DiredItem *dip = ds->items[i];
 
-        len = strlen(dip->name);
+        len = (int)strlen(dip->name);
         if (ds->namelen < len)
             ds->namelen = len;
 
@@ -725,7 +725,7 @@ static int dired_format_details(DiredState *ds, DiredItem *dip,
     char buf[32];
     buf_t bp[1];
 
-    buf_init(bp, dest, size);
+    buf_init(bp, dest, (int)size);
 
 #if 0
     if (details_mask & DIRED_SHOW_BLOCKS) {
@@ -804,7 +804,7 @@ static void dired_update_buffer(DiredState *ds, EditBuffer *b, EditState *s,
     if (flags & DIRED_UPDATE_SORT) {
         flags |= DIRED_UPDATE_REBUILD;
         ds->sort_mode = dired_sort_mode;
-        qe_qsort_r(ds->items, ds->nb_items, sizeof(DiredItem *),
+        qe_qsort_r(ds->items, (size_t)ds->nb_items, sizeof(DiredItem *),
                    ds, dired_sort_func);
     }
 
@@ -944,7 +944,7 @@ static void dired_update_buffer(DiredState *ds, EditBuffer *b, EditState *s,
         if (*fname != '/' || fname[1]) {
             int trailchar = get_trailchar(dip->mode);
             if (trailchar) {
-                eb_putc(b, trailchar);
+                eb_putc(b, (char32_t)trailchar);
             }
         }
         if (S_ISLNK(dip->mode)
@@ -1001,7 +1001,8 @@ static void dired_mark(EditState *s, int mark)
 
     dip = dired_get_cur_item(ds, s);
     if (dip) {
-        ch = dip->mark = mark;
+        dip->mark = (char)mark;
+        ch = (char32_t)(unsigned char)mark;
         do_bol(s);
         flags = s->b->flags & BF_READONLY;
         s->b->flags ^= flags;
@@ -1209,7 +1210,7 @@ static DiredItem *dired_add_item(DiredState *ds, const char *name,
         dip->flags |= DI_ISDIR;
     }
     dip->mode = st.st_mode;
-    dip->nlink = st.st_nlink;
+    dip->nlink = (nlink_t)st.st_nlink;
     dip->uid = st.st_uid;
     dip->gid = st.st_gid;
     dip->rdev = st.st_rdev;
@@ -1218,7 +1219,7 @@ static DiredItem *dired_add_item(DiredState *ds, const char *name,
     dip->hidden = 0;
     dip->mark = ' ';
     dip->tick = ' ';
-    dip->level = level;
+    dip->level = (u8)level;
     if (dip->flags & DI_ISDIR)
         dip->tick = '>';
     memcpy(dip->fullname, fullname, fullname_size);
@@ -1603,7 +1604,7 @@ static char *dired_get_default_path(EditBuffer *b, int offset,
         append_slash(buf, buf_size);
         return buf;
     } else {
-        return getcwd(buf, buf_size) ? buf : NULL;
+        return getcwd(buf, (size_t)buf_size) ? buf : NULL;
     }
 }
 
@@ -1991,19 +1992,19 @@ static void filelist_display_hook(EditState *s)
         target_line = 0;
         if (access(filename, R_OK)) {
             /* try parsing an error message: `:` or `(` a linenumber */
-            i = strcspn(buf, ":(");
+            i = (int)strcspn(buf, ":(");
             if (i < len) {
                 char c = buf[i];
                 buf[i] = '\0';
                 makepath(filename, sizeof(filename), dir, buf);
                 buf[i] = c;
-                target_line = strtol(buf + i + 1, NULL, 10);
+                target_line = (int)strtol(buf + i + 1, NULL, 10);
             }
             i = 0;
             while (access(filename, R_OK)) {
                 /* try skipping initial words */
-                i += strcspn(buf + i, " ");
-                i += strspn(buf + i, " ");
+                i += (int)strcspn(buf + i, " ");
+                i += (int)strspn(buf + i, " ");
                 if (i == len)
                     break;
                 makepath(filename, sizeof(filename), dir, buf + i);

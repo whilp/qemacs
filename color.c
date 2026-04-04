@@ -1109,7 +1109,8 @@ int color_dist(QEColor c1, QEColor c2) {
 /* Convert RGB triplet to a composite color */
 unsigned int qe_map_color(QEColor color, QEColor const *colors, int count, int *dist)
 {
-    int i, cmin, dmin, d;
+    unsigned int cmin;
+    int i, dmin, d;
 
     color &= 0xFFFFFF;  /* mask off the alpha channel */
 
@@ -1126,7 +1127,7 @@ unsigned int qe_map_color(QEColor color, QEColor const *colors, int count, int *
             for (i = 0; i < count; i++) {
                 d = color_dist(color, colors[i]);
                 if (d < dmin) {
-                    cmin = i;
+                    cmin = (unsigned int)i;
                     dmin = d;
                 }
             }
@@ -1161,10 +1162,10 @@ unsigned int qe_map_color(QEColor color, QEColor const *colors, int count, int *
                  */
                 // FIXME: use this method for almost greys (eg: #FEFFFE)
                 int grey = r;
-                cmin = scale_grey[grey];
+                cmin = (unsigned int)scale_grey[grey];
                 dmin = color_dist(color, colors[cmin]);
                 if (dmin > 0 && count >= 4096) {
-                    cmin = 0x700 + grey;
+                    cmin = (unsigned int)(0x700 + grey);
                     dmin = 0;
                 }
             } else {
@@ -1175,7 +1176,7 @@ unsigned int qe_map_color(QEColor color, QEColor const *colors, int count, int *
                 int r1 = scale_cube6[r];
                 int g1 = scale_cube6[g];
                 int b1 = scale_cube6[b];
-                cmin = 16 + r1 * 36 + g1 * 6 + b1;
+                cmin = (unsigned int)(16 + r1 * 36 + g1 * 6 + b1);
                 dmin = color_dist(color, colors[cmin]);
             }
 #endif
@@ -1216,13 +1217,13 @@ unsigned int qe_map_color(QEColor color, QEColor const *colors, int count, int *
                     }
                 }
                 if (d < dmin) {
-                    cmin = i;
+                    cmin = (unsigned int)i;
                     dmin = d;
                 }
                 if (dmin) {
                     for (i = 0; i < nb_custom_colors; i++) {
                         if (custom_colors[i] == color) {
-                            cmin = i + 0x800 + (i & 256) * 6;
+                            cmin = (unsigned int)(i + 0x800 + (i & 256) * 6);
                             dmin = 0;
                             break;
                         }
@@ -1275,7 +1276,7 @@ QEColor qe_unmap_color(int color, int count) {
         }
     }
     /* explicit RGB color with full alpha channel */
-    return color | 0xFF000000;
+    return (QEColor)color | 0xFF000000;
 }
 
 static int add_custom_color(QEColor color) {
@@ -1349,7 +1350,7 @@ int css_define_color(const char *name, const char *value)
     /* Make room: reallocate table in chunks of 8 entries */
     // FIXME: this will reallocate the table even if the color exists
     if (((nb_qe_colors - nb_default_colors) & 7) == 0) {
-        if (!qe_realloc_array(&qe_colors, nb_qe_colors + 8))
+        if (!qe_realloc_array(&qe_colors, (size_t)(nb_qe_colors + 8)))
             return -1;
     }
     /* Check for redefinition of color name */
@@ -1403,20 +1404,20 @@ int css_get_color(QEColor *color_ptr, const char *p)
         /* handle '#' notation */
         p++;
     parse_num:
-        for (len = 0; qe_isxdigit(p[len]); len++)
+        for (len = 0; qe_isxdigit((unsigned char)p[len]); len++)
             continue;
         switch (len) {
         case 3:
             for (i = 0; i < 3; i++) {
-                v = qe_digit_value(*p++);
-                rgba[i] = v | (v << 4);
+                v = qe_digit_value((unsigned char)*p++);
+                rgba[i] = (unsigned char)(v | (v << 4));
             }
             break;
         case 6:
             for (i = 0; i < 3; i++) {
-                v = qe_digit_value(*p++) << 4;
-                v |= qe_digit_value(*p++);
-                rgba[i] = v;
+                v = qe_digit_value((unsigned char)*p++) << 4;
+                v |= qe_digit_value((unsigned char)*p++);
+                rgba[i] = (unsigned char)v;
             }
             break;
         default:
@@ -1424,25 +1425,25 @@ int css_get_color(QEColor *color_ptr, const char *p)
             return -1;
         }
     } else
-    if (*p == 'p' && qe_isdigit(p[1])) {
+    if (*p == 'p' && qe_isdigit((unsigned char)p[1])) {
         QEColor rgb;
-        v = strtol_c(p + 1, &p, 0);
+        v = (int)strtol_c(p + 1, &p, 0);
         rgb = qe_unmap_color(v, 8192);
-        rgba[0] = (rgb >> 16) & 255;
-        rgba[1] = (rgb >> 8) & 255;
-        rgba[2] = (rgb >> 0) & 255;
-        rgba[3] = (rgb >> 24) & 255;
+        rgba[0] = (unsigned char)((rgb >> 16) & 255);
+        rgba[1] = (unsigned char)((rgb >> 8) & 255);
+        rgba[2] = (unsigned char)((rgb >> 0) & 255);
+        rgba[3] = (unsigned char)((rgb >> 24) & 255);
     } else
     if (strstart(p, "rgb:", &p)) {
         /* parse XParseColor syntax */
         for (i = 0; i < 3; i++) {
-            v = strtol_c(q = p, &p, 16);
-            len = p - q;
+            v = (int)strtol_c(q = p, &p, 16);
+            len = (int)(p - q);
             if (len < 2)
                 v |= (v << 4);
             while (len --> 2)
                 v >>= 4;
-            rgba[i] = v | (v << 4);
+            rgba[i] = (unsigned char)(v | (v << 4));
             if (*p == '/')
                 p++;
         }
@@ -1458,12 +1459,12 @@ int css_get_color(QEColor *color_ptr, const char *p)
         for (i = 0; i < n; i++) {
             /* XXX: floats ? */
             qe_skip_spaces(&p);
-            v = strtol_c(p, &p, 0);
+            v = (int)strtol_c(p, &p, 0);
             if (*p == '%') {
                 v = (v * 255) / 100;
                 p++;
             }
-            rgba[i] = v;
+            rgba[i] = (unsigned char)v;
             if (qe_skip_spaces(&p) == ',')
                 p++;
         }
@@ -1520,13 +1521,13 @@ int css_get_enum(const char *str, const char *enum_str) {
     int val, len;
     const char *s, *s0;
 
-    len = strlen(str);
+    len = (int)strlen(str);
     s = enum_str;
     val = 0;
     for (;;) {
         for (s0 = s; *s && *s != ','; s++)
             continue;
-        if ((s - s0) == len && !memcmp(s0, str, len))
+        if ((int)(s - s0) == len && !memcmp(s0, str, (size_t)len))
             return val;
         if (!*s)
             break;

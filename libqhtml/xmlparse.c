@@ -75,9 +75,9 @@ int find_entity(const char *str)
 
     if (str[0] == '#') {
         if (str[1] == 'x')
-            code = strtol(str + 2, NULL, 16);
+            code = (int)strtol(str + 2, NULL, 16);
         else
-            code = strtol(str + 1, NULL, 10);
+            code = (int)strtol(str + 1, NULL, 10);
         if (code <= 0)
             return -1;
         return code;
@@ -129,7 +129,7 @@ static int parse_entity(const char **pp)
             p++;
             if (ch1 == ';')
                 break;
-            *q++ = ch1;
+            *q++ = (char)ch1;
             if (q >= name + sizeof(name) - 1)
                 break;
         }
@@ -192,7 +192,7 @@ static void strbuf_addch1(StringBuffer *b, char32_t ch)
     ptr = b->buf;
     if (b->buf == b->buf1)
         ptr = NULL;
-    if (qe_realloc_bytes(&ptr, size1)) {
+    if (qe_realloc_bytes(&ptr, (size_t)size1)) {
         if (b->buf == b->buf1)
             memcpy(ptr, b->buf1, STRING_BUF_SIZE);
         b->buf = ptr;
@@ -325,14 +325,14 @@ XMLState *xml_begin(CSSStyleSheet *style_sheet, int flags,
 static CSSAttribute *box_new_attr(CSSIdent attr_id, const char *value)
 {
     CSSAttribute *attr;
-    int len = strlen(value);
+    int len = (int)strlen(value);
 
     attr = qe_malloc_hack(CSSAttribute, len);
     if (!attr)
         return NULL;
     attr->attr = attr_id;
     attr->next = NULL;
-    memcpy(attr->value, value, len + 1);
+    memcpy(attr->value, value, (size_t)(len + 1));
     return attr;
 }
 
@@ -370,7 +370,7 @@ static int css_attr_int(CSSBox *box, CSSIdent attr_id, int def_val)
     str = css_attr_str(box, attr_id);
     if (!str)
         return def_val;
-    val = strtol_c(str, &p, 10);
+    val = (int)strtol_c(str, &p, 10);
     /* exclude non numeric inputs (for example percentages) */
     if (*p != '\0')
         return def_val;
@@ -513,7 +513,7 @@ static void html_eval_tag(XMLState *s, CSSBox *box)
     case CSS_ID_body:
         value = css_attr_str(box, CSS_ID_text);
         if (value && !css_get_color(&color, value)) {
-            css_add_prop_int(&last_prop, CSS_color, color);
+            css_add_prop_int(&last_prop, CSS_color, (int)color);
         }
         /* we handle link by adding a new stylesheet entry */
         value = css_attr_str(box, CSS_ID_link);
@@ -533,7 +533,7 @@ static void html_eval_tag(XMLState *s, CSSBox *box)
 
             /* add color property */
             last_prop1 = &e->props;
-            css_add_prop_int(&last_prop1, CSS_color, color);
+            css_add_prop_int(&last_prop1, CSS_color, (int)color);
         }
         break;
     case CSS_ID_font:
@@ -541,7 +541,7 @@ static void html_eval_tag(XMLState *s, CSSBox *box)
         /* size */
         value = css_attr_str(box, CSS_ID_size);
         if (value) {
-            val = strtol(value, NULL, 10);
+            val = (int)strtol(value, NULL, 10);
             if (value[0] == '+' || value[0] == '-') {
                 /* relative size */
                 val += s->base_font;
@@ -560,7 +560,7 @@ static void html_eval_tag(XMLState *s, CSSBox *box)
         /* color */
         value = css_attr_str(box, CSS_ID_color);
         if (value && !css_get_color(&color, value)) {
-            css_add_prop_int(&last_prop, CSS_color, color);
+            css_add_prop_int(&last_prop, CSS_color, (int)color);
         }
         break;
     case CSS_ID_br:
@@ -734,7 +734,7 @@ static void html_eval_tag(XMLState *s, CSSBox *box)
     /* generic attributes */
     value = css_attr_str(box, CSS_ID_bgcolor);
     if (value && !css_get_color(&color, value)) {
-        css_add_prop_int(&last_prop, CSS_background_color, color);
+        css_add_prop_int(&last_prop, CSS_background_color, (int)color);
     }
     value = css_attr_strlower(box, CSS_ID_align);
     if (value) {
@@ -902,7 +902,7 @@ static int parse_tag(XMLState *s, const char *buf)
                 while (*p != '\0' && !strchr(" \t\n\r<>", *p)) {
                     ch = parse_entity(&p);
                     if ((q - value) < (int)sizeof(value) - 1)
-                        *q++ = ch;
+                        *q++ = (char)ch;
                 }
                 *q = '\0';
             } else {
@@ -911,7 +911,7 @@ static int parse_tag(XMLState *s, const char *buf)
                 while (*p != och && *p != '\0' && *p != '<') {
                     ch = parse_entity(&p);
                     if ((q - value) < (int)sizeof(value) - 1)
-                        *q++ = ch;
+                        *q++ = (char)ch;
                 }
                 *q = '\0';
                 if (*p != och) {
@@ -968,11 +968,11 @@ static int parse_tag(XMLState *s, const char *buf)
         css_tag == CSS_ID_programlisting) {
     pretag:
         pstrcpy(s->pretag, sizeof(s->pretag), tag);
-        s->pretaglen = strlen(s->pretag);
+        s->pretaglen = (int)strlen(s->pretag);
         return XML_STATE_PRETAG;
     }
 
-    len = strlen(buf);
+    len = (char)strlen(buf);
     /* end of tag. If html, check also some common mistakes. FORM is
        considered as self closing to avoid any content problems */
     if ((len > 0 && buf[len - 1] == '/') ||
@@ -1072,9 +1072,9 @@ static void flush_text_buffer(XMLState *s, struct EditBuffer *b,
 
 static int xml_tagcmp(const char *s1, const char *s2) {
     while (*s2) {
-        unsigned char uc1 = *s1++;
-        unsigned char uc2 = *s2++;
-        int d = uc2 - qe_tolower(uc1);
+        unsigned char uc1 = (unsigned char)*s1++;
+        unsigned char uc2 = (unsigned char)*s2++;
+        int d = uc2 - (int)qe_tolower(uc1);
         if (d)
             return d;
     }
@@ -1163,7 +1163,7 @@ static int xml_parse_internal(XMLState *s, const char *buf_start, int buf_len,
                     /* evaluate entities */
                     if (ch == '&') {
                         buf--;
-                        ch = parse_entity(&buf);
+                        ch = (char32_t)parse_entity(&buf);
                     }
                     strbuf_addch(&s->str, ch);
                 }
@@ -1235,7 +1235,7 @@ static int xml_parse_internal(XMLState *s, const char *buf_start, int buf_len,
         }
     }
     /* CG: incorrect if parsing from buffer */
-    return buf - buf_start;
+    return (int)(buf - buf_start);
 }
 
 int xml_parse(XMLState *s, char *buf, int buf_len)
@@ -1248,7 +1248,7 @@ int xml_parse(XMLState *s, char *buf, int buf_len)
         len = LOOKAHEAD_SIZE - 1;
         if (len > buf_len)
             len = buf_len;
-        memcpy(s->lookahead_buf + s->lookahead_size, buf, len);
+        memcpy(s->lookahead_buf + s->lookahead_size, buf, (size_t)len);
         len += s->lookahead_size; /* total chars in lookahead buffer */
 
         /* parse only if enough chars for lookahead */
@@ -1260,7 +1260,7 @@ int xml_parse(XMLState *s, char *buf, int buf_len)
             len1 = len - s->lookahead_size;
             if (len1 <= 0) {
                 s->lookahead_size -= len;
-                memmove(s->lookahead_buf, s->lookahead_buf + len, s->lookahead_size);
+                memmove(s->lookahead_buf, s->lookahead_buf + len, (size_t)s->lookahead_size);
             } else {
                 buf_len -= len1;
                 buf += len1;
@@ -1287,7 +1287,7 @@ int xml_parse(XMLState *s, char *buf, int buf_len)
     }
 
     /* put all the remaining chars in the lookahead buffer */
-    memcpy(s->lookahead_buf, buf, buf_len);
+    memcpy(s->lookahead_buf, buf, (size_t)buf_len);
     s->lookahead_size = buf_len;
     return 0;
 }

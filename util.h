@@ -340,7 +340,7 @@ static inline int qe_findchar(const char *str, char32_t c) {
        the string, `0` if `c` is `0` or non-ASCII or was not found in the set.
        @note: only ASCII characters are supported
      */
-    return qe_inrange(c, 1, 127) && strchr(str, c) != NULL;
+    return qe_inrange(c, 1, 127) && strchr(str, (int)c) != NULL;
 }
 
 static inline int qe_indexof(const char *str, char32_t c) {
@@ -354,7 +354,7 @@ static inline int qe_indexof(const char *str, char32_t c) {
        Contrary to `strchr`, `'\0'` is never found in the set.
      */
     if (qe_inrange(c, 1, 127)) {
-        const char *p = strchr(str, c);
+        const char *p = strchr(str, (int)c);
         if (p) return (int)(p - str);
     }
     return -1;
@@ -538,12 +538,12 @@ void qe_free(T **pp);
 #define qe_malloc(t)            ((t *)qe_malloc_bytes(sizeof(t)))
 #define qe_mallocz(t)           ((t *)qe_mallocz_bytes(sizeof(t)))
 /* Overflow-safe array allocators: safe_mul returns 0 on overflow → NULL */
-#define qe_malloc_array(t, n)   ((t *)qe_malloc_bytes(safe_mul((n), sizeof(t))))
-#define qe_mallocz_array(t, n)  ((t *)qe_mallocz_bytes(safe_mul((n), sizeof(t))))
-#define qe_malloc_hack(t, n)    ((t *)qe_malloc_bytes(sizeof(t) + (n)))
-#define qe_mallocz_hack(t, n)   ((t *)qe_mallocz_bytes(sizeof(t) + (n)))
-#define qe_malloc_dup_array(p, n)  (qe_malloc_dup_bytes(p, safe_mul((n), sizeof(*(p)))))
-#define qe_realloc_array(pp, n)  (qe_realloc_bytes(pp, safe_mul((n), sizeof(**(pp)))))
+#define qe_malloc_array(t, n)   ((t *)qe_malloc_bytes(safe_mul((size_t)(n), sizeof(t))))
+#define qe_mallocz_array(t, n)  ((t *)qe_mallocz_bytes(safe_mul((size_t)(n), sizeof(t))))
+#define qe_malloc_hack(t, n)    ((t *)qe_malloc_bytes(sizeof(t) + (size_t)(n)))
+#define qe_mallocz_hack(t, n)   ((t *)qe_mallocz_bytes(sizeof(t) + (size_t)(n)))
+#define qe_malloc_dup_array(p, n)  (qe_malloc_dup_bytes(p, safe_mul((size_t)(n), sizeof(*(p)))))
+#define qe_realloc_array(pp, n)  (qe_realloc_bytes(pp, safe_mul((size_t)(n), sizeof(**(pp)))))
 
 #if 1  // to test clang -Weverything
 #define qe_free(pp)    do { void *_1 = (pp), **_2 = _1; (free)(*_2); *_2 = NULL; } while (0)
@@ -644,7 +644,7 @@ static inline int buf_put_byte(buf_t *bp, unsigned char ch) {
        @return the number of bytes actually written.
      */
     if (bp->pos + 1 < bp->size) {
-        bp->buf[bp->len++] = ch;
+        bp->buf[bp->len++] = (char)ch;
         bp->buf[bp->len] = '\0';
     }
     return bp->pos++;
@@ -659,7 +659,7 @@ static inline int buf_puts(buf_t *bp, const char *str) {
        @argument `str` a valid pointer to a C string
        @return the number of bytes actually written.
      */
-    return buf_write(bp, str, strlen(str));
+    return buf_write(bp, str, (int)strlen(str));
 }
 
 int buf_printf(buf_t *bp, const char *fmt, ...) qe__attr_printf(2,3);
@@ -672,7 +672,7 @@ typedef struct bstr_t {
 } bstr_t;
 
 static inline bstr_t bstr_make(const char *s) {
-    bstr_t bs = { s, s ? strlen(s) : 0 };
+    bstr_t bs = { s, s ? (int)strlen(s) : 0 };
     return bs;
 }
 
@@ -681,7 +681,7 @@ bstr_t bstr_get_nth(const char *s, int n);
 
 static inline int bstr_equal(bstr_t s1, bstr_t s2) {
     /* NULL and empty strings are equivalent */
-    return s1.len == s2.len && !memcmp(s1.s, s2.s, s1.len);
+    return s1.len == s2.len && !memcmp(s1.s, s2.s, (size_t)s1.len);
 }
 
 /*---- our own implementation of qsort_r() ----*/
@@ -846,11 +846,11 @@ static inline int qe_iswalpha(char32_t c) {
     return qe_isalpha(qe_unaccent(c));
 }
 
-static inline char32_t qe_iswlower(char32_t c) {
+static inline int qe_iswlower(char32_t c) {
     return qe_islower(qe_unaccent(c));
 }
 
-static inline char32_t qe_iswupper(char32_t c) {
+static inline int qe_iswupper(char32_t c) {
     return qe_isupper(qe_unaccent(c));
 }
 

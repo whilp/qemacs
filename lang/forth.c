@@ -117,7 +117,7 @@ static int ff_match_number(const char *str, int *pnum)
     int i = 0, base = 10, digit;
     char32_t c;
     int year = -1, month = -1;
-    long long num = 0, stash = 0;
+    int num = 0, stash = 0;
 
     if (str[i] == '-') {
         i++;
@@ -125,7 +125,7 @@ static int ff_match_number(const char *str, int *pnum)
             return 0;
     }
 
-    for (; (c = str[i]) != '\0'; i++) {
+    for (; (c = (char32_t)(unsigned char)str[i]) != '\0'; i++) {
         switch (c) {
         case '\'':
             continue;
@@ -139,7 +139,7 @@ static int ff_match_number(const char *str, int *pnum)
             base = 2;
             continue;
         case '#':
-            base = num;
+            base = (int)num;
             num = 0;
             continue;
         case ':':
@@ -152,7 +152,7 @@ static int ff_match_number(const char *str, int *pnum)
             if (i == 0)
                 break;
             if (year >= 0 && month >= 0) {
-                num = ff_convert_date(year, month, num);
+                num = ff_convert_date(year, month, (int)num);
                 num = 0;
                 year = month = -1;
             }
@@ -163,20 +163,20 @@ static int ff_match_number(const char *str, int *pnum)
             if (i == 0)
                 break;
             if (year < 0)
-                year = num;
+                year = (int)num;
             else
-                month = num;
+                month = (int)num;
             num = 0;
             continue;
         default:
             if (c >= '0' && c <= '9')
-                digit = c - '0';
+                digit = (int)(c - '0');
             else
             if (c >= 'a' && c <= 'z')
-                digit = c - 'a' + 10;
+                digit = (int)(c - 'a') + 10;
             else
             if (c >= 'A' && c <= 'Z')
-                digit = c - 'A' + 10;
+                digit = (int)(c - 'A') + 10;
             else
                 digit = 255;
             if (digit >= base)
@@ -187,13 +187,13 @@ static int ff_match_number(const char *str, int *pnum)
         break;
     }
     if (year >= 0 && month >= 0) {
-        stash = ff_convert_date(year, month, num);
+        stash = ff_convert_date(year, month, (int)num);
         num = 0;
     }
     num += stash;
     if (i > 0 && str[i] == '\0') {
         if (pnum)
-            *pnum = (*str == '-') ? -num : num;
+            *pnum = (int)((*str == '-') ? -num : num);
         return i;
     }
     return 0;
@@ -262,10 +262,10 @@ static void ff_colorize_line(QEColorizeContext *cp,
         }
         /* scan for space and determine word type */
         len = 0;
-        word[len++] = c;
+        word[len++] = (char)c;
         for (; i < n && !qe_isblank(str[i]); i++) {
             if (len < countof(word) - 1)
-                word[len++] = str[i];
+                word[len++] = (char)str[i];
         }
         word[len] = '\0';
         if (strequal("EOF", word) || strequal("EOF`", word)) {
@@ -290,7 +290,7 @@ static void ff_colorize_line(QEColorizeContext *cp,
             }
         }
         numlen = len;
-        if (numlen > 1 && qe_findchar("|&^+-*/%~,", word[numlen - 1]))
+        if (numlen > 1 && qe_findchar("|&^+-*/%~,", (char32_t)(unsigned char)word[numlen - 1]))
             word[--numlen] = '\0';
         if (ff_match_number(word, &num) == numlen) {
             SET_STYLE(sbuf, start, start + numlen, FF_STYLE_NUMBER);

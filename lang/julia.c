@@ -152,7 +152,7 @@ static int julia_get_number(const char32_t *p)
     } else {
         p -= 1;
     }
-    return p - p0;
+    return (int)(p - p0);
 }
 
 static void julia_colorize_line(QEColorizeContext *cp,

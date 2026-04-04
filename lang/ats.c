@@ -183,14 +183,14 @@ static void ats_colorize_line(QEColorizeContext *cp,
             /* parse identifiers and keywords */
             if (qe_isalpha_(c) || c == '$') {
                 len = 0;
-                keyword[len++] = qe_tolower(c);
+                keyword[len++] = (char)qe_tolower(c);
                 for (; qe_isalnum_(str[i]); i++) {
                     if (len < countof(keyword) - 1)
-                        keyword[len++] = qe_tolower(str[i]);
+                        keyword[len++] = (char)qe_tolower(str[i]);
                 }
                 if (str[i] == '!') {
                     if (len < countof(keyword) - 1)
-                        keyword[len++] = str[i];
+                        keyword[len++] = (char)str[i];
                     i++;
                 }
                 keyword[len] = '\0';

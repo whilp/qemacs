@@ -203,7 +203,7 @@ QVarType qe_get_variable(EditState *s, const char *name,
                 *buf = '\0';
             return VAR_UNKNOWN;
         }
-        num = strtol_c(str, &endp, 0);
+        num = (int)strtol_c(str, &endp, 0);
         if (pnum && endp != str && *endp == '\0') {
             *pnum = num;
             return VAR_NUMBER;
@@ -259,7 +259,7 @@ QVarType qe_get_variable(EditState *s, const char *name,
         if (pnum)
             *pnum = num;
         else
-            snprintf(buf, size, "%d", num);
+            snprintf(buf, (size_t)size, "%d", num);
         break;
     default:
         if (size > 0)
@@ -386,7 +386,7 @@ QVarType qe_set_variable(EditState *s, const char *name,
         }
         if (vp->type == VAR_NUMBER && value) {
             const char *p;
-            num = strtol_c(value, &p, 0);
+            num = (int)strtol_c(value, &p, 0);
             if (!*p)
                 value = NULL;
         }

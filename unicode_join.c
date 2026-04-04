@@ -40,7 +40,7 @@ static int uni_get_be16(FILE *f, unsigned short *pv) {
     /* return -1 if end of file */
     int c1, c2;
     if ((c1 = fgetc(f)) != EOF && (c2 = fgetc(f)) != EOF) {
-        *pv = (c1 << 8) | c2;
+        *pv = (unsigned short)((c1 << 8) | c2);
         return 0;
     } else {
         return 1;
@@ -198,7 +198,7 @@ static int unicode_ligature(char32_t *buf_out,
         /* eliminate invisible chars */
         if (l1 >= 0x202a && l1 <= 0x202e) {
             /* LRE, RLE, PDF, RLO, LRO */
-            pos_L_to_V[i] = q - buf_out;
+            pos_L_to_V[i] = (unsigned int)(q - buf_out);
             i++;
             goto found;
         }
@@ -213,8 +213,8 @@ static int unicode_ligature(char32_t *buf_out,
             goto nolig;
         if (l > 0) {
             /* ligature of length 2 found */
-            pos_L_to_V[i] = q - buf_out;
-            pos_L_to_V[i+1] = q - buf_out;
+            pos_L_to_V[i] = (unsigned int)(q - buf_out);
+            pos_L_to_V[i+1] = (unsigned int)(q - buf_out);
             *q++ = (char32_t)l;
             i += 2;
         } else {
@@ -231,7 +231,7 @@ static int unicode_ligature(char32_t *buf_out,
                             goto notfound;
                     }
                     for (j = 0; j < len1; j++)
-                        pos_L_to_V[i + j] = q - buf_out;
+                        pos_L_to_V[i + j] = (unsigned int)(q - buf_out);
                     for (j = 0; j < len2; j++) {
                         *q++ = lig[len1 + j];
                     }
@@ -243,14 +243,14 @@ static int unicode_ligature(char32_t *buf_out,
             }
             /* nothing found */
         nolig:
-            pos_L_to_V[i] = q - buf_out;
+            pos_L_to_V[i] = (unsigned int)(q - buf_out);
             *q++ = l1;
             i++;
         found:
             ;
         }
     }
-    return q - buf_out;
+    return (int)(q - buf_out);
 }
 
 /* fast classification of unicode chars to optimize the algorithms */
@@ -268,10 +268,10 @@ static int unicode_classify(const char32_t *buf, int len) {
             continue;
         mask |= UNICODE_NONASCII;
         if (c < 0xA00) {
-            if ((c & ~0xff) == 0x600)   /* 0600..06FF */
+            if ((c & ~(char32_t)0xff) == 0x600)   /* 0600..06FF */
                 mask |= UNICODE_ARABIC;
             else
-            if ((c & ~0x7f) == 0x900)   /* 0900..097F */
+            if ((c & ~(char32_t)0x7f) == 0x900)   /* 0900..097F */
                 mask |= UNICODE_INDIC;
         }
     }
@@ -325,7 +325,7 @@ int unicode_to_glyphs(char32_t *dst, unsigned int *char_to_glyph_pos,
         blockcpy(dst, src, len);
         if (char_to_glyph_pos) {
             for (i = 0; i < len; i++)
-                char_to_glyph_pos[i] = i;
+                char_to_glyph_pos[i] = (unsigned int)i;
         }
         return len;
     } else {
@@ -334,7 +334,7 @@ int unicode_to_glyphs(char32_t *dst, unsigned int *char_to_glyph_pos,
         /* init current buffer */
         len = src_size;
         for (i = 0; i < len; i++)
-            ctog[i] = i;
+            ctog[i] = (unsigned int)i;
         blockcpy(buf, src, len);
 
         /* apply each filter */
@@ -356,7 +356,7 @@ int unicode_to_glyphs(char32_t *dst, unsigned int *char_to_glyph_pos,
         if (reverse) {
             bidi_reverse_buf(buf, len);
             for (i = 0; i < src_size; i++) {
-                ctog[i] = len - 1 - ctog[i];
+                ctog[i] = (unsigned int)(len - 1) - ctog[i];
             }
         }
 
@@ -1125,8 +1125,8 @@ void bidir_analyze_string(BidirTypeLink *type_rl_list,
             for (i = 0; i < RL_LEN(pp); i++) {
                 if (stack_index < STACK_SIZE) {
                     /* push level & override */
-                    stack_level[stack_index] = level;
-                    stack_override[stack_index] = override;
+                    stack_level[stack_index] = (unsigned char)level;
+                    stack_override[stack_index] = (unsigned char)override;
                     stack_index++;
                     /* compute new level */
                     if (ONE_OF_2(type, BIDIR_TYPE_LRE, BIDIR_TYPE_LRO)) {

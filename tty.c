@@ -116,7 +116,7 @@ typedef struct TTYState {
     u8 last_ch, this_ch;
     int has_meta;
     int nb_params;
-#define CSI_PARAM_OMITTED  0x80000000
+#define CSI_PARAM_OMITTED  (int)0x80000000U
     int params[3];
     int leader;
     int interm;
@@ -288,7 +288,7 @@ static int tty_dpy_init(QEditScreen *s, QEmacsState *qs,
     tty.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP |
                      INLCR | IGNCR | ICRNL | IXON);
     /* output modes - disable post processing */
-    tty.c_oflag &= ~(OPOST);
+    tty.c_oflag &= (tcflag_t)~(OPOST);
     /* local modes - echoing off, canonical off, no extended functions,
      * no signal chars (^Z,^C) */
     tty.c_lflag &= ~(ECHO | ECHONL | ICANON | IEXTEN | ISIG);
@@ -424,7 +424,7 @@ static void tty_dpy_invalidate(QEditScreen *s)
         s->height = 25;
 
     count = s->width * s->height;
-    size = count * sizeof(TTYChar);
+    size = (int)((size_t)count * sizeof(TTYChar));
     /* screen buffer + shadow buffer + extra slot for loop guard */
     // XXX: test for failure
     qe_realloc_array(&ts->screen, count * 2 + 1);
@@ -432,14 +432,14 @@ static void tty_dpy_invalidate(QEditScreen *s)
     ts->screen_size = count;
 
     /* Erase shadow buffer to impossible value */
-    memset(ts->screen + count, 0xFF, size + sizeof(TTYChar));
+    memset(ts->screen + count, 0xFF, (size_t)size + sizeof(TTYChar));
     /* Fill screen buffer with black spaces */
     tc = TTY_CHAR_DEFAULT;
     for (i = 0; i < count; i++) {
         ts->screen[i] = tc;
     }
     /* All rows need refresh */
-    memset(ts->line_updated, 1, s->height);
+    memset(ts->line_updated, 1, (size_t)s->height);
 
     s->clip_x1 = 0;
     s->clip_y1 = 0;
@@ -493,11 +493,11 @@ static int tty_get_clipboard(QEditScreen *s, int ch)
     if (p3 >= p4)
         return -1;
 
-    contents = qe_decode64(p3, p4 - p3, &size);
+    contents = qe_decode64(p3, (size_t)(p4 - p3), &size);
     if (!contents)
         return -1;
     if (qs->trace_buffer)
-        qe_trace_bytes(qs, contents, size, EB_TRACE_CLIPBOARD);
+        qe_trace_bytes(qs, contents, (int)size, EB_TRACE_CLIPBOARD);
     if (size == ts->clipboard_size && !memcmp(ts->clipboard, contents, size)) {
         qe_free(&contents);
         return 0;
@@ -508,7 +508,7 @@ static int tty_get_clipboard(QEditScreen *s, int ch)
         /* copy terminal selection a new yank buffer */
         b = qe_new_yank_buffer(qs, NULL);
         eb_set_charset(b, &charset_utf8, EOL_UNIX);
-        eb_write(b, 0, contents, size);
+        eb_write(b, 0, contents, (int)size);
         return 1;
     }
 }
@@ -537,23 +537,23 @@ static int tty_set_clipboard(QEditScreen *s)
     QEmacsState *qs = s->qs;
     TTYState *ts = s->priv_data;
     EditBuffer *b = qs->yank_buffers[qs->yank_current];
-    size_t size;
+    int size;
     char *contents;
 
     if (!b)
         return 0;
     size = eb_get_region_content_size(b, 0, b->total_size);
-    contents = qe_malloc_bytes(size + 1);
+    contents = qe_malloc_bytes((size_t)size + 1);
     if (!contents)
         return -1;
     eb_get_region_contents(b, 0, b->total_size, contents, size + 1, FALSE);
-    if (size == ts->clipboard_size && !memcmp(ts->clipboard, contents, size)) {
+    if ((size_t)size == ts->clipboard_size && !memcmp(ts->clipboard, contents, (size_t)size)) {
         qe_free(&contents);
         return 0;
     }
     if (tty_clipboard == 1) {
         size_t encoded_size;
-        char *encoded_contents = qe_encode64(contents, size, &encoded_size);
+        char *encoded_contents = qe_encode64(contents, (size_t)size, &encoded_size);
         if (!encoded_contents) {
             qe_free(&contents);
             return -1;
@@ -565,7 +565,7 @@ static int tty_set_clipboard(QEditScreen *s)
     }
     qe_free(&ts->clipboard);
     ts->clipboard = contents;
-    ts->clipboard_size = size;
+    ts->clipboard_size = (size_t)size;
     return 0;
 }
 
@@ -641,23 +641,23 @@ static void tty_read_handler(void *opaque)
     shift = 0;
     ch = buf[0];
     ts->last_ch = ts->this_ch;
-    ts->this_ch = ch;
+    ts->this_ch = (u8)ch;
     /* keep TTY bytes for error messages */
     if (qs->input_len >= qs->input_size) {
         qs->input_size += qs->input_size / 2 + 64;
         if (qs->input_buf == qs->input_buf_def) {
-            qs->input_buf = qe_malloc_bytes(qs->input_size);
-            memcpy(qs->input_buf, qs->input_buf_def, qs->input_len);
+            qs->input_buf = qe_malloc_bytes((size_t)qs->input_size);
+            memcpy(qs->input_buf, qs->input_buf_def, (size_t)qs->input_len);
         } else {
-            qe_realloc_bytes(&qs->input_buf, qs->input_size);
+            qe_realloc_bytes(&qs->input_buf, (size_t)qs->input_size);
         }
     }
-    qs->input_buf[qs->input_len++] = ch;
+    qs->input_buf[qs->input_len++] = (u8)ch;
 
     switch (ts->input_state) {
     case IS_NORM:
         qs->input_len = 1;
-        qs->input_buf[0] = ch;
+        qs->input_buf[0] = (u8)ch;
         /* charset handling */
         if (s->charset == &charset_utf8) {
             if (ts->utf8_index && (ch ^ 0x80) > 0x3f) {
@@ -666,7 +666,7 @@ static void tty_read_handler(void *opaque)
                 /* XXX: maybe should consume prefix byte as binary */
                 ts->utf8_index = 0;
             }
-            ts->buf[ts->utf8_index] = ch;
+            ts->buf[ts->utf8_index] = (unsigned char)ch;
             len = utf8_length[ts->buf[0]];
             if (len > 1) {
                 const char *p = cs8(ts->buf);
@@ -674,7 +674,7 @@ static void tty_read_handler(void *opaque)
                     /* valid utf8 sequence underway, wait for next */
                     return;
                 }
-                ch = utf8_decode(&p);
+                ch = (int)utf8_decode(&p);
             }
         }
         if (ch == '\033') {
@@ -688,7 +688,7 @@ static void tty_read_handler(void *opaque)
                     qe_free(&qs->input_buf);
                     qs->input_buf = qs->input_buf_def;
                     qs->input_size = countof(qs->input_buf_def);
-                    qs->input_buf[0] = ch;
+                    qs->input_buf[0] = (u8)ch;
                     qs->input_len = 1;
                 }
                 break;
@@ -705,7 +705,7 @@ static void tty_read_handler(void *opaque)
                 qe_free(&qs->input_buf);
                 qs->input_buf = qs->input_buf_def;
                 qs->input_size = countof(qs->input_buf_def);
-                qs->input_buf[0] = ch;
+                qs->input_buf[0] = (u8)ch;
                 qs->input_len = 1;
             }
             break;
@@ -1030,7 +1030,7 @@ static void tty_read_handler(void *opaque)
             break;
         ts->input_state = IS_NORM;
         ts->has_meta = 0;
-        n1 = strtol(cs8(qs->input_buf) + 2, NULL, 10);
+        n1 = (int)strtol(cs8(qs->input_buf) + 2, NULL, 10);
         if (qs->trace_buffer) {
             char buf1[32];
             snprintf(buf1, sizeof buf1, "tty-osc-%d", n1);
@@ -1152,16 +1152,16 @@ static void tty_dpy_text_metrics(QEditScreen *s, QEFont *font,
 static char32_t comb_cache_add(TTYState *ts, const char32_t *seq, int len) {
     char32_t *ip;
     for (ip = ts->comb_cache; *ip; ip += *ip & 0xFFFF) {
-        if (*ip == len + 1U && !blockcmp(ip + 1, seq, len)) {
-            return TTY_CHAR_COMB + (ip - ts->comb_cache);
+        if (*ip == (char32_t)len + 1U && !blockcmp(ip + 1, seq, len)) {
+            return TTY_CHAR_COMB + (char32_t)(ip - ts->comb_cache);
         }
     }
     for (ip = ts->comb_cache; *ip; ip += *ip & 0xFFFF) {
-        if (*ip >= 0x10001U + len) {
+        if (*ip >= 0x10001U + (char32_t)len) {
             /* found free slot */
-            if (*ip > 0x10001U + len) {
+            if (*ip > 0x10001U + (char32_t)len) {
                 /* split free block */
-                ip[len + 1] = *ip - (len + 1);
+                ip[len + 1] = *ip - (char32_t)(len + 1);
             }
             break;
         }
@@ -1172,9 +1172,9 @@ static char32_t comb_cache_add(TTYState *ts, const char32_t *seq, int len) {
         }
         ip[len + 1] = 0;
     }
-    *ip = len + 1;
+    *ip = (char32_t)(len + 1);
     blockcpy(ip + 1, seq, len);
-    return TTY_CHAR_COMB + (ip - ts->comb_cache);
+    return TTY_CHAR_COMB + (char32_t)(ip - ts->comb_cache);
 }
 
 static void comb_cache_clean(TTYState *ts, const TTYChar *screen, int len) {
@@ -1195,7 +1195,7 @@ static void comb_cache_clean(TTYState *ts, const TTYChar *screen, int len) {
         char32_t ch = TTY_CHAR_GET_CH(screen[i]);
         if (ch >= TTY_CHAR_COMB && ch < TTY_CHAR_COMB + countof(ts->comb_cache) - 1) {
             /* mark the cache entry as used */
-            ip[ch - TTY_CHAR_COMB] &= ~0x10000;
+            ip[ch - TTY_CHAR_COMB] &= (char32_t)~0x10000U;
         }
     }
     /* scan the cache to coalesce free entries */
@@ -1246,7 +1246,8 @@ static void tty_dpy_draw_text(QEditScreen *s, QEFont *font,
 {
     TTYState *ts = s->priv_data;
     TTYChar *ptr;
-    int fgcolor, w, n;
+    unsigned int fgcolor;
+    int w, n;
     char32_t cc;
     const char32_t *str = str0;
 
@@ -1383,7 +1384,8 @@ static void tty_dpy_flush(QEditScreen *s)
 {
     TTYState *ts = s->priv_data;
     TTYChar *ptr, *ptr1, *ptr2, *ptr3, *ptr4, cc, blankcc;
-    int y, shadow, ch, gotopos;
+    int y, shadow, gotopos;
+    char32_t ch;
     uint32_t bgcolor, fgcolor;
     uint64_t attr;
     unsigned int default_bgcolor;
@@ -1497,7 +1499,7 @@ static void tty_dpy_flush(QEditScreen *s)
                     } else
 #if TTY_STYLE_BITS == 32
                     if (bgcolor >= 256) {
-                        QEColor rgb = qe_unmap_color(bgcolor, ts->tty_bg_colors_count);
+                        QEColor rgb = qe_unmap_color((int)bgcolor, ts->tty_bg_colors_count);
                         TTY_FPRINTF(s->STDOUT, "\033[48;2;%u;%u;%um",
                                     (rgb >> 16) & 255, (rgb >> 8) & 255, (rgb >> 0) & 255);
                     } else
@@ -1512,7 +1514,7 @@ static void tty_dpy_flush(QEditScreen *s)
                     fgcolor = TTY_CHAR_GET_FG(cc);
 #if TTY_STYLE_BITS == 32
                     if (fgcolor >= 256) {
-                        QEColor rgb = qe_unmap_color(fgcolor, ts->tty_fg_colors_count);
+                        QEColor rgb = qe_unmap_color((int)fgcolor, ts->tty_fg_colors_count);
                         TTY_FPRINTF(s->STDOUT, "\033[38;2;%u;%u;%um",
                                     (rgb >> 16) & 255, (rgb >> 8) & 255, (rgb >> 0) & 255);
                     } else
@@ -1559,7 +1561,7 @@ static void tty_dpy_flush(QEditScreen *s)
                     TTY_PUTC('.', s->STDOUT);
                 } else
                 if (ch < 127) {
-                    TTY_PUTC(ch, s->STDOUT);
+                    TTY_PUTC((int)ch, s->STDOUT);
                 } else
                 if (ch < 128 + 32) {
                     /* Line drawing: emit Unicode box drawing directly */
@@ -1567,7 +1569,7 @@ static void tty_dpy_flush(QEditScreen *s)
                     char32_t uc = dec_to_unicode[ch - 128];
                     ldq = s->charset->encode_func(s->charset, ldbuf, uc);
                     if (ldq) {
-                        TTY_FWRITE(ldbuf, 1, ldq - ldbuf, s->STDOUT);
+                        TTY_FWRITE(ldbuf, 1, (size_t)(ldq - ldbuf), s->STDOUT);
                     } else {
                         TTY_PUTC('?', s->STDOUT);
                     }
@@ -1576,7 +1578,7 @@ static void tty_dpy_flush(QEditScreen *s)
                 if (ch >= TTY_CHAR_COMB && ch < TTY_CHAR_COMB + COMB_CACHE_SIZE - 1) {
                     u8 buf[10], *q;
                     char32_t *ip = ts->comb_cache + (ch - TTY_CHAR_COMB);
-                    int ncc = *ip++;
+                    int ncc = (int)*ip++;
 
                     /* this is a sanity test: check that we have a valid combination
                        offset: should actually test against some maximum number of
@@ -1586,7 +1588,7 @@ static void tty_dpy_flush(QEditScreen *s)
                         while (ncc-- > 1) {
                             q = s->charset->encode_func(s->charset, buf, *ip++);
                             if (q) {
-                                TTY_FWRITE(buf, 1, q - buf, s->STDOUT);
+                                TTY_FWRITE(buf, 1, (size_t)(q - buf), s->STDOUT);
                                 // XXX: should check s->unicode_version for
                                 //      terminal support of non ASCII codepoint
                                 //      and force GOTOPOS if unsupported
@@ -1624,11 +1626,11 @@ static void tty_dpy_flush(QEditScreen *s)
                         /* force cursor repositioning if glyph may have variants */
                         gotopos |= qe_wcwidth_variant(ch);
                     }
-                    nc = q - buf;
+                    nc = (int)(q - buf);
                     if (nc == 1) {
                         TTY_PUTC(*buf, s->STDOUT);
                     } else {
-                        TTY_FWRITE(buf, 1, nc, s->STDOUT);
+                        TTY_FWRITE(buf, 1, (size_t)nc, s->STDOUT);
                     }
                 }
             }
@@ -1825,8 +1827,8 @@ static int tty_dpy_draw_picture(QEditScreen *s,
             uint32_t *p2 = p1 + (ip->linesize[0] >> 2);
             ts->line_updated[dst_y + y] = 1;
             for (x = 0; x < dst_w; x++) {
-                int bg = p1[x];
-                int fg = p2[x];
+                int bg = (int)p1[x];
+                int fg = (int)p2[x];
                 bg = TTY_RGB_BG(QERGB_RED(bg), QERGB_GREEN(bg), QERGB_BLUE(bg));
                 fg = TTY_RGB_FG(QERGB_RED(fg), QERGB_GREEN(fg), QERGB_BLUE(fg));
                 if (fg == bg)

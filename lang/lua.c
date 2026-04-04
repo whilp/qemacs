@@ -185,7 +185,7 @@ static void lua_colorize_line(QEColorizeContext *cp,
                 }
                 if (syn->types
                 &&  (strfind(syn->types, kbuf)
-                ||   (qe_isupper(c) && qe_islower(kbuf[1])))) {
+                ||   (qe_isupper(c) && qe_islower((char32_t)(unsigned char)kbuf[1])))) {
                     SET_STYLE(sbuf, start, i, LUA_STYLE_TYPE);
                     continue;
                 }

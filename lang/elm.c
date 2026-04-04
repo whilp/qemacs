@@ -187,7 +187,7 @@ static void elm_colorize_line(QEColorizeContext *cp,
                 for (klen = 0, i--; qe_isalnum_(str[i]) || str[i] == '\''; i++) {
                     haslower |= qe_islower(str[i]);
                     if (klen < countof(kbuf) - 1)
-                        kbuf[klen++] = str[i];
+                        kbuf[klen++] = (char)str[i];
                 }
                 kbuf[klen] = '\0';
 

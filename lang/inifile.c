@@ -123,7 +123,7 @@ static int ini_mode_probe(ModeDef *mode, ModeProbeData *pd)
     while (p < p_end) {
         /* skip comments */
         if (*p == ';' || *p == '#') {
-            p = memchr(p, '\n', p_end - p);
+            p = memchr(p, '\n', (size_t)(p_end - p));
             if (!p)
                 return 1;
         }

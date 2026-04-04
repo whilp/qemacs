@@ -65,7 +65,7 @@ static ArchiveType *find_archive_type(const char *filename,
     reduce_filename(rname, sizeof(rname), get_basename(filename));
     for (atp = archive_types; atp; atp = atp->next) {
         if (atp->magic_size && atp->magic_size <= buf_size
-        &&  !memcmp(atp->magic, buf, atp->magic_size))
+        &&  !memcmp(atp->magic, buf, (size_t)atp->magic_size))
             return atp;
         if (match_extension(rname, atp->extensions))
             return atp;
@@ -113,7 +113,7 @@ static int qe_shell_subst(char *buf, int size, const char *cmd,
                 continue;
             }
         }
-        buf_put_byte(out, *cmd++);
+        buf_put_byte(out, (unsigned char)*cmd++);
     }
     return out->len;
 }
@@ -126,7 +126,7 @@ static int file_read_block(EditBuffer *b, FILE *f1, u8 *buf, int buf_size)
     if (!f)
         f = fopen(b->filename, "rb");
     if (f)
-        nread = fread(buf, 1, buf_size, f);
+        nread = (int)fread(buf, 1, (size_t)buf_size, f);
     if (f && !f1)
         fclose(f);
     return nread;
@@ -256,7 +256,7 @@ static CompressType *find_compress_type(const char *filename,
     reduce_filename(rname, sizeof(rname), get_basename(filename));
     for (ctp = compress_types; ctp; ctp = ctp->next) {
         if (ctp->magic && ctp->magic_size && ctp->magic_size <= buf_size
-        &&  !memcmp(ctp->magic, buf, ctp->magic_size))
+        &&  !memcmp(ctp->magic, buf, (size_t)ctp->magic_size))
             return ctp;
         if (match_extension(rname, ctp->extensions))
             return ctp;

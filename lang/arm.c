@@ -135,10 +135,10 @@ static void arm_asm_colorize_line(QEColorizeContext *cp,
             if (qe_isalpha_(c)) {
             opcode:
                 klen = 0;
-                keyword[klen++] = qe_tolower(c);
+                keyword[klen++] = (char)qe_tolower(c);
                 for (; qe_isalnum_(str[i]) || str[i] == '.'; i++) {
                     if (klen < countof(keyword) - 1)
-                        keyword[klen++] = qe_tolower(str[i]);
+                        keyword[klen++] = (char)qe_tolower(str[i]);
                 }
                 keyword[klen] = '\0';
                 if (str[i] == ':') {
@@ -354,7 +354,7 @@ static int intel_hex_mode_probe(ModeDef *syn, ModeProbeData *pd)
 
     if (match_extension(pd->filename, syn->extensions) && *p == ':') {
         for (i = 1; i < 11; i++) {
-            if (!qe_isxdigit(p[i]))
+            if (!qe_isxdigit((u8)p[i]))
                 return 1;
         }
         return 70;
