@@ -2297,14 +2297,14 @@ static int tag_print_entry(CompleteState *cp, EditState *s, const char *name) {
 static int tag_get_entry(EditState *s, char *dest, int size, int offset)
 {
     int len = eb_fgets(s->b, dest, size, offset, &offset);
-    int p2 = strcspn(dest, "=[{(,;");
+    int p2 = (int)strcspn(dest, "=[{(,;");
     int p1;
-    while (p2 > 0 && !qe_isalnum_(dest[p2 - 1]))
+    while (p2 > 0 && !qe_isalnum_((u8)dest[p2 - 1]))
         p2--;
     p1 = p2;
-    while (p1 > 0 && (qe_isalnum_(dest[p1 - 1]) || dest[p1 - 1] == '-'))
+    while (p1 > 0 && (qe_isalnum_((u8)dest[p1 - 1]) || dest[p1 - 1] == '-'))
         p1--;
-    memmove(dest, dest + p1, len = p2 - p1);
+    memmove(dest, dest + p1, (size_t)(len = p2 - p1));
     dest[len] = '\0';   /* strip the prototype or trailing newline if any */
     return len;
 }
@@ -2339,10 +2339,10 @@ static void do_find_tag(EditState *s, const char *str) {
 
 static void do_goto_tag(EditState *s) {
     char buf[80];
-    size_t len;
+    int len;
 
     len = qe_get_word(s, buf, sizeof buf, s->offset, NULL);
-    if (len >= sizeof(buf)) {
+    if (len >= (int)sizeof(buf)) {
         put_error(s, "Tag too large");
         return;
     } else
