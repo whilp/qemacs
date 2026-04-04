@@ -196,7 +196,7 @@ void qe_register_mode(QEmacsState *qs, ModeDef *m, int flags)
         /* lower case convert for C mode, Perl... */
         qe_strtolower(name, sizeof(name) - 10, mode_name);
         pstrcat(name, sizeof(name), "-mode");
-        name_len = strlen(name);
+        name_len = (int)strlen(name);
         name[name_len + 1] = '\0'; /* empty default bindings string */
 
         /* Achtung: embedded null bytes */
@@ -205,8 +205,8 @@ void qe_register_mode(QEmacsState *qs, ModeDef *m, int flags)
                             mode_name, 0, mode_name);
         def = qe_mallocz(CmdDef);
         /* allocate space for name and spec with embedded null bytes */
-        def->name = qe_malloc_dup_bytes(name, name_len + 2);
-        def->spec = qe_malloc_dup_bytes(spec, spec_len + 1);
+        def->name = qe_malloc_dup_bytes(name, (size_t)(name_len + 2));
+        def->spec = qe_malloc_dup_bytes(spec, (size_t)(spec_len + 1));
         def->sig = CMD_ESs;
         def->val = 0;
         def->action.ESs = do_set_mode;
@@ -306,7 +306,7 @@ int command_get_entry(EditState *s, char *dest, int size, int offset)
 {
     int len;
     eb_fgets(s->b, dest, size, offset, &offset);
-    len = strcspn(dest, " \t\n(");
+    len = (int)strcspn(dest, " \t\n(");
     dest[len] = '\0';   /* strip the TAB or trailing newline if any */
     return len;
 }
@@ -339,7 +339,7 @@ static int qe_register_binding(KeyDef **lp, const CmdDef *d, const unsigned int 
         return -1;
 
     /* add key */
-    p = qe_malloc_hack(KeyDef, (nb_keys - 1) * sizeof(p->keys[0]));
+    p = qe_malloc_hack(KeyDef, (size_t)(nb_keys - 1) * sizeof(p->keys[0]));
     if (!p)
         return -1;
     p->cmd = d;
@@ -718,14 +718,14 @@ static void color_complete(CompleteState *cp, CompleteFunc enumerate) {
     int i, len;
 
     if (*name == '#') {
-        for (len = 0; qe_isxdigit(name[1 + len]); len++)
+        for (len = 0; qe_isxdigit((unsigned char)name[1 + len]); len++)
             continue;
         if (len > 2 && len <= 6) {
-            QEColor rgb = strtol_c(name + 1, NULL, 16);
+            QEColor rgb = (QEColor)strtol_c(name + 1, NULL, 16);
             int shift = (6 - len) * 4;
             rgb <<= shift;
             for (i = 0; i < (0x1 << shift); i++) {
-                snprintf(buf, sizeof buf, "#%06x", rgb + i);
+                snprintf(buf, sizeof buf, "#%06x", rgb + (unsigned int)i);
                 enumerate(cp, buf, CT_GLOB);
             }
         } else {
@@ -743,7 +743,7 @@ static void color_complete(CompleteState *cp, CompleteFunc enumerate) {
             def++;
             count--;
         }
-        if (name[0] == 'p' && !qe_isalpha(name[1])) {
+        if (name[0] == 'p' && !qe_isalpha((unsigned char)name[1])) {
             for (i = 0; i < 8192; i++) {
                 snprintf(buf, sizeof buf, "p%d", i);
                 enumerate(cp, buf, CT_GLOB);
@@ -1721,9 +1721,9 @@ void text_mouse_goto(EditState *s, int x, int y, QEEvent *ev)
             /* always include the character under the mouse pointer,
              * extend to the end of the word it is a word character
              */
-            if (qe_isword(eb_peekc(s->b, start)))
+            if (qe_isword((unsigned int)eb_peekc(s->b, start)))
                 start = eb_word_left(s->b, 0, start);
-            if (qe_isword(eb_peekc(s->b, stop)))
+            if (qe_isword((unsigned int)eb_peekc(s->b, stop)))
                 stop = eb_word_right(s->b, 0, stop);
             else
                 stop = eb_next(s->b, stop);
@@ -1804,7 +1804,7 @@ void do_char(EditState *s, int key, int argval) {
         const char *p;
         if (key < 255 && (p = strchr(pairs, key)) != NULL) {
             while (repeat --> 0) {
-                int index = (p - pairs) & ~1;
+                int index = (int)(p - pairs) & ~1;
                 const char *p1 = &pairs[index + (s->b->mark > s->offset)];
                 const char *p2 = &pairs[index + (s->b->mark < s->offset)];
                 eb_insert(s->b, s->b->mark, p1, 1);
@@ -1828,7 +1828,7 @@ void do_combine_accent(EditState *s, int accent_arg) {
     int offset0, len;
     char32_t g[2];
     char buf[MAX_CHAR_BYTES];
-    char32_t c, accent = accent_arg;
+    char32_t c, accent = (char32_t)accent_arg;
 
     if (s->b->flags & BF_READONLY)
         return;
@@ -1851,7 +1851,7 @@ void do_combine_accent(EditState *s, int accent_arg) {
         offset0 += eb_replace(s->b, offset0, s->offset - offset0, buf, len);
         s->offset = offset0;
     } else {
-        do_char(s, accent, 1);
+        do_char(s, (int)accent, 1);
     }
 }
 #endif
@@ -1891,9 +1891,9 @@ void text_write_char(EditState *s, int key)
     s->region_style = 0;
 
     cur_ch = eb_nextc(s->b, s->offset, &endpos);
-    len = eb_encode_char32(s->b, buf, key);
+    len = eb_encode_char32(s->b, buf, (char32_t)key);
     insert = (!s->overwrite || cur_ch == '\n' ||
-              key == '\t' ||  key == '\n' || qe_isaccent(key));
+              key == '\t' ||  key == '\n' || qe_isaccent((unsigned int)key));
 
     if (insert) {
         const InputMethod *m;
@@ -1912,7 +1912,7 @@ void text_write_char(EditState *s, int key)
         /* insert char */
         s->offset += eb_insert(s->b, s->offset, buf, len);
 
-        s->compose_buf[s->compose_len++] = key;
+        s->compose_buf[s->compose_len++] = (char32_t)key;
         m = s->input_method;
         for (;;) {
             if (!m) {
@@ -1936,11 +1936,11 @@ void text_write_char(EditState *s, int key)
                 eb_delete_range(s->b, s->compose_start_offset, offset);
                 s->compose_len -= match_len;
                 umemmove(s->compose_buf, s->compose_buf + match_len,
-                         s->compose_len);
+                         (size_t)s->compose_len);
                 /* then insert match */
                 for (i = 0; i < ret; i++) {
                     key = match_buf[i];
-                    len = eb_encode_char32(s->b, buf, key);
+                    len = eb_encode_char32(s->b, buf, (char32_t)key);
                     eb_insert(s->b, s->compose_start_offset, buf, len);
                     s->compose_start_offset += len;
                     /* should only bump s->offset if at insert point */
@@ -1954,7 +1954,7 @@ void text_write_char(EditState *s, int key)
     } else {
         int w, w1, offset2;
 
-        w = qe_wcwidth(key);
+        w = qe_wcwidth((char32_t)key);
         if (cur_ch == '\t') {
             int tw = s->b->tab_width > 0 ? s->b->tab_width : 8;
             int col = text_screen_width(s->b, eb_goto_bol(s->b, s->offset), s->offset, tw);
@@ -2623,7 +2623,7 @@ static int reload_buffer(EditState *s, EditBuffer *b)
 QEModeData *qe_create_buffer_mode_data(EditBuffer *b, ModeDef *m)
 {
     QEModeData *md = NULL;
-    int size = m->buffer_instance_size - sizeof(QEModeData);
+    int size = m->buffer_instance_size - (int)sizeof(QEModeData);
 
     if (size >= 0) {
         md = qe_mallocz_hack(QEModeData, size);
@@ -2659,7 +2659,7 @@ void *qe_get_buffer_mode_data(EditBuffer *b, ModeDef *m, EditState *e)
 QEModeData *qe_create_window_mode_data(EditState *s, ModeDef *m)
 {
     QEModeData *md = NULL;
-    int size = m->window_instance_size - sizeof(QEModeData);
+    int size = m->window_instance_size - (int)sizeof(QEModeData);
 
     if (!s->mode_data && size >= 0) {
         md = qe_mallocz_hack(QEModeData, size);
@@ -3073,7 +3073,7 @@ void do_goto(EditState *s, const char *str, int unit)
      * CG: XXX: resulting offset may fall inside a character.
      */
     rel = (*str == '+' || *str == '-');
-    pos = strtol_c(str, &p, 0);
+    pos = (int)strtol_c(str, &p, 0);
 
     /* skip space required to separate hex offset from b or c suffix */
     if (*p == ' ')
@@ -3126,7 +3126,7 @@ void do_goto(EditState *s, const char *str, int unit)
         return;
     case '%':
         /* CG: should not require long long for this */
-        pos = pos * (long long)s->b->total_size / 100;
+        pos = (int)((long long)pos * s->b->total_size / 100);
         if (rel)
             pos += s->offset;
         eb_get_pos(s->b, &line, &col, clamp_offset(pos, 0, s->b->total_size));
@@ -3142,7 +3142,7 @@ void do_goto(EditState *s, const char *str, int unit)
     getcol:
         col = 0;
         if (*p == ':' || *p == '.') {
-            col = strtol_c(p + 1, &p, 0);
+            col = (int)strtol_c(p + 1, &p, 0);
             col -= (col > 0);  // user column numbers are 1-based
         }
         if (*p)
@@ -3234,7 +3234,7 @@ void do_what_cursor_position(EditState *s)
             int sep = '[';
             buf_put_byte(out, ' ');
             for (off = s->offset; off < offset1; off++) {
-                cc = eb_read_one_byte(s->b, off);
+                cc = (char32_t)eb_read_one_byte(s->b, off);
                 buf_printf(out, "%c%02X", sep, cc);
                 sep = ' ';
             }
@@ -3509,7 +3509,7 @@ void display_window_borders(EditState *e)
                         int len;
 
                         for (len = 0; len < 256 && e->caption[len]; len++) {
-                            buf[len] = e->caption[len];
+                            buf[len] = (unsigned char)e->caption[len];
                         }
                         get_style(e, &styledef, QE_STYLE_WINDOW_BORDER);
                         font = select_font(qs->screen,
@@ -3559,10 +3559,10 @@ void fill_window_slack(EditState *s, int x, int y, int w, int h, int color)
     h1 = max_int(0, y);
     h2 = max_int(0, h0 - (y + h));
 
-    if (w1) fill_rectangle(s->screen, x0, y0, w1, h0, color);
-    if (w2) fill_rectangle(s->screen, x0 + w0 - w2, y0, w2, h0, color);
-    if (h1) fill_rectangle(s->screen, x0 + w1, y0, w0 - w1 - w2, h1, color);
-    if (h2) fill_rectangle(s->screen, x0 + w1, y0 + h0 - h2, w0 - w1 - w2, h2, color);
+    if (w1) fill_rectangle(s->screen, x0, y0, w1, h0, (QEColor)color);
+    if (w2) fill_rectangle(s->screen, x0 + w0 - w2, y0, w2, h0, (QEColor)color);
+    if (h1) fill_rectangle(s->screen, x0 + w1, y0, w0 - w1 - w2, h1, (QEColor)color);
+    if (h2) fill_rectangle(s->screen, x0 + w1, y0 + h0 - h2, w0 - w1 - w2, h2, (QEColor)color);
 }
 
 #if 1
@@ -3646,8 +3646,8 @@ int find_style_index(const char *name)
         if (strequal(stp->name, name))
             return i;
     }
-    if (qe_isdigit(*name)) {
-        i = strtol(name, NULL, 0);
+    if (qe_isdigit((unsigned char)*name)) {
+        i = (int)strtol(name, NULL, 0);
         if (i < QE_STYLE_NB)
             return i;
     }
@@ -3747,7 +3747,7 @@ void do_set_style(EditState *e, const char *stylestr,
         return;
     case CSS_PROP_FONT_FAMILY:
         v = css_get_font_family(value);
-        stp->font_style = (stp->font_style & ~QE_FONT_FAMILY_MASK) | v;
+        stp->font_style = (short)((stp->font_style & ~QE_FONT_FAMILY_MASK) | v);
         break;
     case CSS_PROP_FONT_STYLE:
         /* XXX: cannot handle inherit correctly */
@@ -3758,7 +3758,7 @@ void do_set_style(EditState *e, const char *stylestr,
         if (strequal(value, "normal")) {
             v &= ~QE_FONT_STYLE_ITALIC;
         }
-        stp->font_style = v;
+        stp->font_style = (short)v;
         break;
     case CSS_PROP_FONT_WEIGHT:
         /* XXX: cannot handle inherit correctly */
@@ -3769,13 +3769,13 @@ void do_set_style(EditState *e, const char *stylestr,
         if (strequal(value, "normal")) {
             v &= ~QE_FONT_STYLE_BOLD;
         }
-        stp->font_style = v;
+        stp->font_style = (short)v;
         break;
     case CSS_PROP_FONT_SIZE:
         if (strequal(value, "inherit")) {
             stp->font_size = 0;
         } else {
-            stp->font_size = strtol(value, NULL, 0);
+            stp->font_size = (short)strtol(value, NULL, 0);
         }
         break;
     case CSS_PROP_TEXT_DECORATION:
@@ -3836,7 +3836,7 @@ void do_set_window_style(EditState *s, const char *stylestr)
         put_error(s, "Unknown style '%s'", stylestr);
         return;
     }
-    s->default_style = style_index;
+    s->default_style = (QETermStyle)style_index;
 }
 
 void do_set_system_font(EditState *s, const char *qe_font_name,
@@ -4069,7 +4069,7 @@ static void flush_line(DisplayState *ds,
                 if (qe_realloc_array(&e->line_shadow, n)) {
                     /* put an impossible value so that we redraw */
                     memset(&e->line_shadow[e->shadow_nb_lines], 0xff,
-                           (n - e->shadow_nb_lines) * sizeof(QELineShadow));
+                           (size_t)(n - e->shadow_nb_lines) * sizeof(QELineShadow));
                     e->shadow_nb_lines = n;
                 }
             }
@@ -4077,8 +4077,8 @@ static void flush_line(DisplayState *ds,
                 QELineShadow *ls;
                 uint64_t crc;
 
-                crc = compute_crc(fragments, sizeof(*fragments) * nb_fragments, 0);
-                crc = compute_crc(ds->line_chars, sizeof(*ds->line_chars) * ds->line_index, crc);
+                crc = compute_crc(fragments, sizeof(*fragments) * (size_t)nb_fragments, 0);
+                crc = compute_crc(ds->line_chars, sizeof(*ds->line_chars) * (size_t)ds->line_index, crc);
                 /* Include the EOL style in the CRC so that BCE background
                  * color changes (from \e[K with a colored background) cause
                  * the line to be redrawn.
@@ -4088,9 +4088,9 @@ static void flush_line(DisplayState *ds,
                 if (ls->y != ds->y || ls->x != ds->x_line
                 ||  ls->height != line_height || ls->crc != crc) {
                     /* update values for the line cache */
-                    ls->y = ds->y;
+                    ls->y = (short)ds->y;
                     ls->x = ds->x_line;
-                    ls->height = line_height;
+                    ls->height = (short)line_height;
                     ls->crc = crc;
                 } else {
                     no_display = 1;
@@ -4332,7 +4332,7 @@ static void flush_fragment(DisplayState *ds)
     }
     for (i = 0; i < ds->fragment_index; i++) {
         int offset1, offset2;
-        j = ds->line_index + char_to_glyph_pos[i];
+        j = ds->line_index + (int)char_to_glyph_pos[i];
         offset1 = ds->fragment_offsets[i][0];
         offset2 = ds->fragment_offsets[i][1];
         ds->line_hex_mode[j] = ds->fragment_hex_mode[i];
@@ -4359,7 +4359,7 @@ static void flush_fragment(DisplayState *ds)
         w = ds->tab_width - x1;
         /* display a single space */
         ds->line_chars[j] = ' ';
-        ds->line_char_widths[j] = w;
+        ds->line_char_widths[j] = (short)w;
     } else {
         /* XXX: use text metrics for full fragment */
         w = 0;
@@ -4371,7 +4371,7 @@ static void flush_fragment(DisplayState *ds)
                 ascent = metrics.font_ascent;
             if (metrics.font_descent > descent)
                 descent = metrics.font_descent;
-            ds->line_char_widths[j] = metrics.width;
+            ds->line_char_widths[j] = (short)metrics.width;
             w += ds->line_char_widths[j];
             j++;
         }
@@ -4380,13 +4380,13 @@ static void flush_fragment(DisplayState *ds)
 
     /* add the fragment */
     frag = &ds->fragments[ds->nb_fragments++];
-    frag->width = w;
-    frag->line_index = ds->line_index;
-    frag->len = nb_glyphs;
-    frag->embedding_level = ds->last_embedding_level;
+    frag->width = (short)w;
+    frag->line_index = (short)ds->line_index;
+    frag->len = (short)nb_glyphs;
+    frag->embedding_level = (unsigned short)ds->last_embedding_level;
     frag->style = style;
-    frag->ascent = ascent;
-    frag->descent = descent;
+    frag->ascent = (short)ascent;
+    frag->descent = (short)descent;
 #if QE_TERM_STYLE_BITS == 16
     frag->dummy = 0;  /* initialize padding for checksum consistency */
 #endif
@@ -4420,8 +4420,8 @@ static void flush_fragment(DisplayState *ds)
             }
             len1 -= len;
             w1 -= ds->x;
-            frag->len = len;
-            frag->width -= w1;
+            frag->len = (short)len;
+            frag->width -= (short)w1;
             //printf("after: x=%d w1=%d\n", ds->x, w1);
             n = ds->nb_fragments;
             if (len == 0)
@@ -4439,9 +4439,9 @@ static void flush_fragment(DisplayState *ds)
             if (len1 > 0) {
                 blockmove(ds->fragments, frag, 1);
                 frag = ds->fragments;
-                frag->width = w1;
+                frag->width = (short)w1;
                 frag->line_index = 0;
-                frag->len = len1;
+                frag->len = (short)len1;
                 ds->nb_fragments = 1;
                 ds->x += w1;
             }
@@ -4466,7 +4466,7 @@ static void flush_fragment(DisplayState *ds)
             ds->nb_fragments -= ds->word_index;
 
             for (i = 0; i < ds->nb_fragments; i++) {
-                ds->fragments[i].line_index -= index;
+                ds->fragments[i].line_index -= (short)index;
                 ds->x += ds->fragments[i].width;
             }
             keep_line_chars(ds, ds->line_index - index);
@@ -4497,7 +4497,7 @@ int display_char_bidir(DisplayState *ds, int offset1, int offset2,
             if (e->show_selection)
                 style |= QE_STYLE_SEL;
             else
-                style = e->region_style;
+                style = (QETermStyle)e->region_style;
         }
     }
     /* special patch for selection in hex mode */
@@ -4529,7 +4529,7 @@ int display_char_bidir(DisplayState *ds, int offset1, int offset2,
                 ds->fragment_chars[ds->fragment_index] = ' ';
                 ds->fragment_offsets[ds->fragment_index][0] = off1;
                 ds->fragment_offsets[ds->fragment_index][1] = off2;
-                ds->fragment_hex_mode[ds->fragment_index] = cur_hex;
+                ds->fragment_hex_mode[ds->fragment_index] = (unsigned char)cur_hex;
                 ds->fragment_index++;
             } else {
                 flush_fragment(ds);
@@ -4542,7 +4542,7 @@ int display_char_bidir(DisplayState *ds, int offset1, int offset2,
         ds->fragment_chars[ds->fragment_index] = ' ';
         ds->fragment_offsets[ds->fragment_index][0] = offset1;
         ds->fragment_offsets[ds->fragment_index][1] = offset2;
-        ds->fragment_hex_mode[ds->fragment_index] = ds->cur_hex_mode;
+        ds->fragment_hex_mode[ds->fragment_index] = (unsigned char)ds->cur_hex_mode;
         ds->fragment_index++;
         offset1 = offset2 = -1;
     }
@@ -4550,7 +4550,7 @@ int display_char_bidir(DisplayState *ds, int offset1, int offset2,
     ds->fragment_chars[ds->fragment_index] = ch;
     ds->fragment_offsets[ds->fragment_index][0] = offset1;
     ds->fragment_offsets[ds->fragment_index][1] = offset2;
-    ds->fragment_hex_mode[ds->fragment_index] = ds->cur_hex_mode;
+    ds->fragment_hex_mode[ds->fragment_index] = (unsigned char)ds->cur_hex_mode;
     ds->fragment_index++;
 
     ds->last_space = space;
@@ -4578,9 +4578,9 @@ void display_printhex(DisplayState *ds, int offset1, int offset2,
             v += '0';
         /* XXX: simplistic */
         if (e->hex_nibble == i) {
-            display_char(ds, offset1, offset2, v);
+            display_char(ds, offset1, offset2, (char32_t)v);
         } else {
-            display_char(ds, offset1, offset1, v);
+            display_char(ds, offset1, offset1, (char32_t)v);
         }
     }
     ds->cur_hex_mode = 0;
@@ -4599,10 +4599,10 @@ void display_printf(DisplayState *ds, int offset1, int offset2,
     p = buf;
     if (*p) {
         /* XXX: UTF-8 unsupported, not needed at this point */
-        display_char(ds, offset1, offset2, *p++);
+        display_char(ds, offset1, offset2, (unsigned char)*p++);
         while (*p) {
             /* XXX: Should make these display character mouse selectable */
-            display_char(ds, -1, -1, *p++);
+            display_char(ds, -1, -1, (unsigned char)*p++);
         }
     }
 }
@@ -4710,7 +4710,7 @@ static int bidir_compute_attributes(BidirTypeLink *list_tab, int max_size,
     p->pos = offset1;
     p++;
 
-    return p - list_tab;
+    return (int)(p - list_tab);
 }
 #endif
 
@@ -4889,7 +4889,7 @@ static int syntax_get_colorized_line(QEColorizeContext *cp,
                 cp->offset = eb_next(b, cp->offset);
             }
             cp_colorize_line(cp, cp->buf, bom, len, cp->sbuf, s->colorize_mode);
-            s->colorize_states[line] = cp->colorize_state;
+            s->colorize_states[line] = (unsigned short)cp->colorize_state;
         }
     }
 
@@ -6391,9 +6391,9 @@ void do_define_kbd_macro(EditState *s, const char *name, const char *keys,
         def->spec = buf;
     } else {
         def = qe_mallocz(CmdDef);
-        name_len = strlen(name);
+        name_len = (int)strlen(name);
         /* allocate space for name and extra NUL for no bindings */
-        def->name = memcpy(qe_mallocz_bytes(name_len + 2), name, name_len);
+        def->name = memcpy(qe_mallocz_bytes((size_t)(name_len + 2)), name, (size_t)name_len);
         def->spec = buf;
         def->sig = CMD_ESs;
         def->val = 0;

@@ -40,7 +40,7 @@ typedef int (CSSAbortFunc)(void *);
 #define CSS_MEDIA_ALL     0xffff
 
 typedef uint32_t QEColor;
-#define QEARGB(a,r,g,b)    (((unsigned int)(a) << 24) | ((r) << 16) | ((g) << 8) | (b))
+#define QEARGB(a,r,g,b)    (((unsigned int)(a) << 24) | ((unsigned int)(r) << 16) | ((unsigned int)(g) << 8) | (unsigned int)(b))
 #define QERGB(r,g,b)       QEARGB(0xff, r, g, b)
 #define QERGB25(r,g,b)     QEARGB(1, r, g, b)
 #define COLOR_TRANSPARENT  0

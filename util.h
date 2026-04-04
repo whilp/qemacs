@@ -538,12 +538,12 @@ void qe_free(T **pp);
 #define qe_malloc(t)            ((t *)qe_malloc_bytes(sizeof(t)))
 #define qe_mallocz(t)           ((t *)qe_mallocz_bytes(sizeof(t)))
 /* Overflow-safe array allocators: safe_mul returns 0 on overflow → NULL */
-#define qe_malloc_array(t, n)   ((t *)qe_malloc_bytes(safe_mul((n), sizeof(t))))
-#define qe_mallocz_array(t, n)  ((t *)qe_mallocz_bytes(safe_mul((n), sizeof(t))))
-#define qe_malloc_hack(t, n)    ((t *)qe_malloc_bytes(sizeof(t) + (n)))
-#define qe_mallocz_hack(t, n)   ((t *)qe_mallocz_bytes(sizeof(t) + (n)))
-#define qe_malloc_dup_array(p, n)  (qe_malloc_dup_bytes(p, safe_mul((n), sizeof(*(p)))))
-#define qe_realloc_array(pp, n)  (qe_realloc_bytes(pp, safe_mul((n), sizeof(**(pp)))))
+#define qe_malloc_array(t, n)   ((t *)qe_malloc_bytes(safe_mul((size_t)(n), sizeof(t))))
+#define qe_mallocz_array(t, n)  ((t *)qe_mallocz_bytes(safe_mul((size_t)(n), sizeof(t))))
+#define qe_malloc_hack(t, n)    ((t *)qe_malloc_bytes(sizeof(t) + (size_t)(n)))
+#define qe_mallocz_hack(t, n)   ((t *)qe_mallocz_bytes(sizeof(t) + (size_t)(n)))
+#define qe_malloc_dup_array(p, n)  (qe_malloc_dup_bytes(p, safe_mul((size_t)(n), sizeof(*(p)))))
+#define qe_realloc_array(pp, n)  (qe_realloc_bytes(pp, safe_mul((size_t)(n), sizeof(**(pp)))))
 
 #if 1  // to test clang -Weverything
 #define qe_free(pp)    do { void *_1 = (pp), **_2 = _1; (free)(*_2); *_2 = NULL; } while (0)

@@ -175,9 +175,9 @@ static inline int strequal(const char *s1, const char *s2) {
  * p1 and p2 should have the same type
  * the macro checks that the types pointed to by p1 and p2 have the same size
  */
-#define blockcmp(p1, p2, n)   memcmp(p1, p2, (n) * sizeof *(p1) / (sizeof *(p1) == sizeof *(p2)))
-#define blockcpy(p1, p2, n)   memcpy(p1, p2, (n) * sizeof *(p1) / (sizeof *(p1) == sizeof *(p2)))
-#define blockmove(p1, p2, n) memmove(p1, p2, (n) * sizeof *(p1) / (sizeof *(p1) == sizeof *(p2)))
+#define blockcmp(p1, p2, n)   memcmp(p1, p2, (size_t)(n) * sizeof *(p1) / (sizeof *(p1) == sizeof *(p2)))
+#define blockcpy(p1, p2, n)   memcpy(p1, p2, (size_t)(n) * sizeof *(p1) / (sizeof *(p1) == sizeof *(p2)))
+#define blockmove(p1, p2, n) memmove(p1, p2, (size_t)(n) * sizeof *(p1) / (sizeof *(p1) == sizeof *(p2)))
 
 size_t get_basename_offset(const char *filename);
 
