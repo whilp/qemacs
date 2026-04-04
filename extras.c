@@ -787,12 +787,17 @@ static void do_indent_region(EditState *s, int start, int end, int argval)
         if (col_num == 0)
             line2--;
     }
-    /* Iterate over all lines inside block */
-    for (line = line1; line <= line2; line++) {
-        int offset = eb_goto_pos(s->b, line, 0);
-        int off1;
-        if (eb_nextc(s->b, offset, &off1) != '\n')
-            (s->mode->indent_func)(s, offset);
+    /* Iterate over all lines inside block.
+     * Walk forward with eb_next_line instead of calling eb_goto_pos per line:
+     * O(region_size) total instead of O(lines × total_buffer_pages). */
+    {
+        int cur_offset = eb_goto_pos(s->b, line1, 0);
+        for (line = line1; line <= line2; line++) {
+            int off1;
+            if (eb_nextc(s->b, cur_offset, &off1) != '\n')
+                (s->mode->indent_func)(s, cur_offset);
+            cur_offset = eb_next_line(s->b, cur_offset);
+        }
     }
 }
 

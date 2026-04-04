@@ -5142,7 +5142,7 @@ int text_display_line(EditState *s, DisplayState *ds, int offset)
     if (s->curline_style || s->region_style) {
         /* CG: Should combine styles instead of replacing */
         if (s->region_style && !s->curline_style) {
-            int line, start_offset, end_offset;
+            int start_offset, end_offset;
             int i, start_char, end_char;
 
             if (s->b->mark < s->offset) {
@@ -5153,12 +5153,26 @@ int text_display_line(EditState *s, DisplayState *ds, int offset)
                 end_offset = min_offset(offset0, s->b->mark);
             }
             if (start_offset < end_offset) {
-                /* Compute character positions */
-                eb_get_pos(s->b, &line, &start_char, start_offset);
-                if (end_offset >= offset0)
+                /* Walk forward from line start to compute char positions.
+                 * Both start_offset and end_offset lie within [offset, offset0],
+                 * so this is O(line_width) not O(total_buffer_pages). */
+                int o = offset, next;
+                start_char = 0;
+                while (o < start_offset) {
+                    eb_nextc(s->b, o, &next);
+                    start_char++;
+                    o = next;
+                }
+                if (end_offset >= offset0) {
                     end_char = colored_nb_chars;
-                else
-                    eb_get_pos(s->b, &line, &end_char, end_offset);
+                } else {
+                    end_char = start_char;
+                    while (o < end_offset) {
+                        eb_nextc(s->b, o, &next);
+                        end_char++;
+                        o = next;
+                    }
+                }
 
                 for (i = start_char; i < end_char; i++) {
                     cp->sbuf[i] = (QETermStyle)s->region_style;
@@ -6536,10 +6550,21 @@ static void do_activate_multi_cursor(EditState *s) {
         eb_get_pos(s->b, &start_line, &start_col, start);
         eb_get_pos(s->b, &end_line, &end_col, end);
         qe_free_multi_cursor(s);
-        for (line = start_line; line < end_line; line++) {
-            // TODO: should we pad line if too short?
-            int pos = eb_goto_pos(s->b, line, start_col);
-            qe_add_multi_cursor_position(s, pos);
+        /* Walk forward line-by-line instead of calling eb_goto_pos per line:
+         * O(region_size) total instead of O(lines × total_buffer_pages). */
+        {
+            int cur_offset = eb_goto_pos(s->b, start_line, 0);
+            for (line = start_line; line < end_line; line++) {
+                // TODO: should we pad line if too short?
+                int pos = cur_offset, col, next;
+                for (col = 0; col < start_col; col++) {
+                    if (eb_nextc(s->b, pos, &next) == '\n')
+                        break;
+                    pos = next;
+                }
+                qe_add_multi_cursor_position(s, pos);
+                cur_offset = eb_next_line(s->b, cur_offset);
+            }
         }
         // TODO: need some way of rendering multi-line cursor
         s->region_style = 0;
