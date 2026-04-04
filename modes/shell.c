@@ -2971,10 +2971,6 @@ static void shell_move_bol(EditState *e)
 {
     ShellState *s = shell_get_state(e, 1);
 
-    /* exit shell interactive mode on home / ^A at start of shell input */
-    if (!s || (e->offset == s->cur_prompt && !s->grab_keys))
-        e->interactive = 0;
-
     if (s && e->interactive) {
         qe_term_write(s, "\001", 1); /* Control-A */
     } else {
@@ -3874,11 +3870,25 @@ void shell_colorize_line(QEColorizeContext *cp,
     }
 }
 
+static void shell_quoted_insert(EditState *e, int argval)
+{
+    ShellState *s = shell_get_state(e, 1);
+
+    if (s && (e->interactive || s->grab_keys)) {
+        qe_term_write(s, "\021", 1); /* Control-Q */
+    } else {
+        do_quoted_insert(e, argval);
+    }
+}
+
 /* shell mode specific commands */
 static const CmdDef shell_commands[] = {
     CMD0( "shell-toggle-input", "C-o",
           "Toggle between shell input and buffer navigation",
           do_shell_toggle_input)
+    CMD2( "shell-quoted-insert", "C-q",
+          "Pass C-q through to PTY in interactive mode, otherwise quoted-insert",
+          shell_quoted_insert, ESi, "p")
     /* XXX: should have shell-execute-line on M-RET */
     CMD2( "shell-enter", "RET, LF",
           "Shell buffer RET key",
