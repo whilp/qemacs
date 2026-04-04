@@ -204,9 +204,9 @@ static void html_display(EditState *s)
         css_merge_style_sheet(hs->css_ctx->style_sheet, hs->default_style_sheet);
 
         /* default colors */
-        hs->css_ctx->selection_bgcolor = qe_styles[QE_STYLE_SELECTION].bg_color;
-        hs->css_ctx->selection_fgcolor = qe_styles[QE_STYLE_SELECTION].fg_color;
-        hs->css_ctx->default_bgcolor = qe_styles[QE_STYLE_CSS_DEFAULT].bg_color;
+        hs->css_ctx->selection_bgcolor = (int)qe_styles[QE_STYLE_SELECTION].bg_color;
+        hs->css_ctx->selection_fgcolor = (int)qe_styles[QE_STYLE_SELECTION].fg_color;
+        hs->css_ctx->default_bgcolor = (int)qe_styles[QE_STYLE_CSS_DEFAULT].bg_color;
 
         timer_start();
         hs->top_box = xml_parse_buffer(s->b, s->b->name, 0, s->b->total_size,

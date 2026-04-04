@@ -88,11 +88,11 @@ static int crystal_get_name(char *buf, int size, const char32_t *str) {
 
     for (len = 0, j = i; qe_isalnum_(str[j]); j++) {
         if (len < size - 1)
-            buf[len++] = str[j];
+            buf[len++] = (char)str[j];
     }
     if (str[j] == '?' || str[j] == '!') {
         if (len < size - 1)
-            buf[len++] = str[j];
+            buf[len++] = (char)str[j];
         j++;
     }
     if (len < size) {
@@ -119,9 +119,9 @@ static void crystal_colorize_line(QEColorizeContext *cp,
             i = indent;
         }
         if (qe_isalpha_(str[i])) {
-            int sig = str[i++] % 61;
+            int sig = (int)str[i++] % 61;
             for (; qe_isalnum_(str[i]); i++) {
-                sig = ((sig << 6) + str[i]) % 61;
+                sig = (int)(((sig << 6) + (int)str[i]) % 61);
             }
             i = cp_skip_blanks(str, i, n);
             if (i == n && (state & IN_CRYSTAL_HD_SIG) == (sig & IN_CRYSTAL_HD_SIG))
@@ -351,17 +351,17 @@ static void crystal_colorize_line(QEColorizeContext *cp,
                 if ((str[j] == '\'' || str[j] == '\"')
                 &&  qe_isalpha_(str[j + 1])) {
                     sep = str[j++];
-                    sig = str[j++] % 61;
+                    sig = (int)str[j++] % 61;
                     for (; qe_isalnum_(str[j]); j++) {
-                        sig = ((sig << 6) + str[j]) % 61;
+                        sig = (int)(((sig << 6) + (int)str[j]) % 61);
                     }
                     if (str[j++] != sep)
                         break;
                 } else
                 if (qe_isalpha_(str[j])) {
-                    sig = str[j++] % 61;
+                    sig = (int)str[j++] % 61;
                     for (; qe_isalnum_(str[j]); j++) {
-                        sig = ((sig << 6) + str[j]) % 61;
+                        sig = (int)(((sig << 6) + (int)str[j]) % 61);
                     }
                 }
                 if (sig) {

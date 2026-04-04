@@ -265,12 +265,12 @@ static void mkd_colorize_line(QEColorizeContext *cp,
         /* extract info-string */
         for (len = 0; i < n && !qe_isblank(str[i]); i++) {
             if (len < countof(lang_name) - 1)
-                lang_name[len++] = str[i];
+                lang_name[len++] = (char)str[i];
         }
         lang_name[len] = '\0';
         if (len) {
             /* XXX: unrecognised info-string should select text-mode */
-            lang = mkd_add_lang(cp->s->qs, lang_name, str[j]);
+            lang = mkd_add_lang(cp->s->qs, lang_name, (char)str[j]);
         } else
         if (lang == 0) {
             // get default lang is from mode;
@@ -433,7 +433,7 @@ static void mkd_colorize_line(QEColorizeContext *cp,
                 break;
             /* match an email address */
             for (flags = 0, j = i + 1; j < n;) {
-                int d = str[j++];
+                char32_t d = str[j++];
                 if (d == '@')
                     flags++;
                 if (d == '>') {
@@ -445,7 +445,7 @@ static void mkd_colorize_line(QEColorizeContext *cp,
             }
             break;
         case '\\':  /* escape */
-            if (strchr("\\`*_{}[]()#+-.!", str[i + 1])) {
+            if (strchr("\\`*_{}[]()#+-.!", (int)str[i + 1])) {
                 chunk = 2;
                 break;
             }
@@ -617,8 +617,8 @@ static void do_mkd_goto(EditState *s, const char *dest)
      */
 
     /* Jump to numbered destination. */
-    for (offset = 0, level = 0; qe_isdigit(*p); ) {
-        nb = strtol_c(p, &p, 10);
+    for (offset = 0, level = 0; qe_isdigit((u8)*p); ) {
+        nb = (int)strtol_c(p, &p, 10);
         if (*p == '.')
             p++;
         level++;

@@ -112,7 +112,7 @@ static int hex_display_line(EditState *s, DisplayState *ds, int offset)
                 offset1 = offset2 = -1;
             }
         }
-        display_char(ds, offset1, offset2, bin_to_disp(b));
+        display_char(ds, offset1, offset2, (char32_t)bin_to_disp(b));
     }
     display_eol(ds, -1, -1);
 
@@ -263,16 +263,16 @@ void hex_write_char(EditState *s, int key)
             hsize = s->unihex_mode;
         else
             hsize = 2;
-        h = qe_digit_value(key);
+        h = (int)qe_digit_value((char32_t)key);
         if (h >= 16)
             return;
         if ((!s->overwrite || offset >= s->b->total_size) && s->hex_nibble == 0) {
-            ch = h << ((hsize - 1) * 4);
+            ch = (char32_t)(h << ((hsize - 1) * 4));
             if (s->unihex_mode || s->b->charset->char_size > 1) {
                 len = eb_encode_char32(s->b, buf, ch);
             } else {
                 len = 1;
-                buf[0] = ch;
+                buf[0] = (char)ch;
             }
             eb_insert(s->b, offset, buf, len);
         } else {
@@ -286,13 +286,13 @@ void hex_write_char(EditState *s, int key)
             }
 
             shift = (hsize - s->hex_nibble - 1) * 4;
-            ch = (cur_ch & ~(0xf << shift)) | (h << shift);
+            ch = (char32_t)((cur_ch & ~((unsigned int)0xf << shift)) | ((unsigned int)h << shift));
 
             if (s->unihex_mode) {
                 len = eb_encode_char32(s->b, buf, ch);
             } else {
                 len = 1;
-                buf[0] = ch;
+                buf[0] = (char)ch;
             }
 #if 1
             // XXX: offset and mark may be udated differently

@@ -2494,8 +2494,8 @@ static int charname_print_entry(CompleteState *cp, EditState *s, const char *nam
     char *p = strchr(name, '\t');
     if (p != NULL) {
         char cbuf[MAX_CHAR_BYTES + 1];
-        char32_t code = strtol(p + 1, NULL, 16);
-        s->b->tab_width = max_int(s->b->tab_width, min_int(60, 2 + (p - name)));
+        char32_t code = (char32_t)strtol(p + 1, NULL, 16);
+        s->b->tab_width = max_int(s->b->tab_width, min_int(60, 2 + (int)(p - name)));
         return eb_printf(s->b, "%s  %s", name,
                          utf8_char32_to_string(cbuf, code));
     } else {
@@ -2512,8 +2512,8 @@ static int charname_get_entry(EditState *s, char *dest, int size, int offset) {
     p = strchr(entry, '\t');
     if (p) {
         p += strspn(p, " \t");
-        len = strcspn(p, " \t\n");
-        return snprintf(dest, size, "0x%.*s", len, p);
+        len = (int)strcspn(p, " \t\n");
+        return snprintf(dest, (size_t)size, "0x%.*s", len, p);
     } else {
         if (size > 0)
             *dest = '\0';
@@ -2543,7 +2543,7 @@ static int eb_print_color(EditBuffer *b, const char *name) {
         if (*name != '#') {
             snprintf(alt_name, sizeof alt_name, "#%06x", color & 0xFFFFFF);
         }
-        bg = qe_map_color(color, xterm_colors, QE_TERM_BG_COLORS, &dist);
+        bg = (int)qe_map_color(color, xterm_colors, QE_TERM_BG_COLORS, &dist);
         fg = (color_y(color) >= 12800) ? 16 : 231;
         style = QE_TERM_COMPOSITE | QE_TERM_MAKE_COLOR(fg, bg);
         style2 = QE_TERM_COMPOSITE | QE_TERM_MAKE_COLOR(bg, 16);
@@ -2593,7 +2593,7 @@ static int eb_print_style(EditBuffer *b, const char *name, int style) {
     b->cur_style = QE_STYLE_FUNCTION;
     len = eb_printf(b, "%s\t", name);
     b->tab_width = max_int(b->tab_width, len + 1);
-    b->cur_style = style;
+    b->cur_style = (QETermStyle)style;
     len += eb_puts(b, "[  Sample  ]");
     b->cur_style = QE_STYLE_DEFAULT;
 

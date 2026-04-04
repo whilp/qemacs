@@ -127,7 +127,7 @@ static int test_parse_sgr_mouse(const unsigned char *buf, int len, int start,
         pos++;
     }
     if (pos >= len) return 0;
-    terminator = buf[pos];
+    terminator = (char)buf[pos];
     if (terminator != 'M' && terminator != 'm') return 0;
     pos++;
 
@@ -164,7 +164,7 @@ static void test_read_handler(void *opaque)
     unsigned char buf[64];
     int n, i;
 
-    n = read(ts->input_fd, buf, sizeof(buf));
+    n = (int)read(ts->input_fd, buf, sizeof(buf));
     if (n <= 0) {
         /* EOF or error on input — request exit */
         url_exit();
@@ -325,19 +325,19 @@ static void test_dump_screen(QEditScreen *s)
             if (ch < 32 || ch == 127) ch = '.';
             /* Output UTF-8 */
             if (ch < 0x80) {
-                fputc(ch, f);
+                fputc((int)ch, f);
             } else if (ch < 0x800) {
-                fputc(0xC0 | (ch >> 6), f);
-                fputc(0x80 | (ch & 0x3F), f);
+                fputc((int)(0xC0 | (ch >> 6)), f);
+                fputc((int)(0x80 | (ch & 0x3F)), f);
             } else if (ch < 0x10000) {
-                fputc(0xE0 | (ch >> 12), f);
-                fputc(0x80 | ((ch >> 6) & 0x3F), f);
-                fputc(0x80 | (ch & 0x3F), f);
+                fputc((int)(0xE0 | (ch >> 12)), f);
+                fputc((int)(0x80 | ((ch >> 6) & 0x3F)), f);
+                fputc((int)(0x80 | (ch & 0x3F)), f);
             } else {
-                fputc(0xF0 | (ch >> 18), f);
-                fputc(0x80 | ((ch >> 12) & 0x3F), f);
-                fputc(0x80 | ((ch >> 6) & 0x3F), f);
-                fputc(0x80 | (ch & 0x3F), f);
+                fputc((int)(0xF0 | (ch >> 18)), f);
+                fputc((int)(0x80 | ((ch >> 12) & 0x3F)), f);
+                fputc((int)(0x80 | ((ch >> 6) & 0x3F)), f);
+                fputc((int)(0x80 | (ch & 0x3F)), f);
             }
         }
         fputc('|', f);
@@ -386,14 +386,14 @@ static void test_dpy_fill_rectangle(QEditScreen *s,
     if (y2 > s->clip_y2) y2 = s->clip_y2;
 
     /* Map QEColor to a simple color index (0-15 range) */
-    int bgcolor = qe_map_color(color, xterm_colors, 16, NULL);
+    int bgcolor = (int)qe_map_color(color, xterm_colors, 16, NULL);
 
     for (y = y1; y < y2; y++) {
         for (x = x1; x < x2; x++) {
             TestCell *cell = &ts->screen[y * s->width + x];
             cell->ch = ' ';
             cell->fg = 7;
-            cell->bg = bgcolor;
+            cell->bg = (uint16_t)bgcolor;
             cell->attrs = 0;
         }
     }
@@ -460,7 +460,7 @@ static void test_dpy_draw_text(QEditScreen *s, QEFont *font,
                                QEColor color)
 {
     TestDisplayState *ts = s->priv_data;
-    int fgcolor;
+    unsigned int fgcolor;
     uint16_t attrs = 0;
 
     if (y < s->clip_y1 || y >= s->clip_y2 || x >= s->clip_x2)
@@ -483,7 +483,7 @@ static void test_dpy_draw_text(QEditScreen *s, QEFont *font,
 
         TestCell *cell = &ts->screen[y * s->width + x];
         cell->ch = ch;
-        cell->fg = fgcolor;
+        cell->fg = (uint16_t)fgcolor;
         /* Preserve existing bg color (set by fill_rectangle) */
         cell->attrs = attrs;
         x += w;
@@ -492,7 +492,7 @@ static void test_dpy_draw_text(QEditScreen *s, QEFont *font,
         if (w == 2 && x < s->clip_x2) {
             cell = &ts->screen[y * s->width + x];
             cell->ch = ' ';
-            cell->fg = fgcolor;
+            cell->fg = (uint16_t)fgcolor;
             cell->attrs = attrs;
             /* x already incremented by w */
         }

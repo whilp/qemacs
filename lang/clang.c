@@ -128,13 +128,13 @@ int get_c_identifier(char *dest, int size, char32_t c,
     for (;; i++) {
         if (c < 128) {
             if (pos + 1 < size) {
-                dest[pos++] = c;
+                dest[pos++] = (char)c;
             }
         } else {
             char buf[6];
             int len = utf8_encode(buf, c);
             if (pos + len < size) {
-                memcpy(dest + pos, buf, len);
+                memcpy(dest + pos, buf, (size_t)len);
                 pos += len;
             } else {
                 size = pos + 1;
@@ -211,7 +211,8 @@ static void c_colorize_line(QEColorizeContext *cp,
                             QETermStyle *sbuf, ModeDef *syn)
 {
     int i = 0, start, i1, i2, indent, level;
-    int style, style0, style1, type_decl, tag;
+    QETermStyle style, style0, style1;
+    int type_decl, tag;
     char32_t c, delim;
     char kbuf[64];
     int mode_flags = syn->colorize_flags;
@@ -827,7 +828,8 @@ static int c_line_has_label(EditState *s, const char32_t *buf, int len,
                             const QETermStyle *sbuf)
 {
     char kbuf[64];
-    int i, style;
+    int i;
+    QETermStyle style;
 
     i = cp_skip_blanks(buf, 0, len);
 
@@ -865,7 +867,8 @@ void c_indent_line(EditState *s, int offset0)
 {
     QEColorizeContext cp[1];
     int offset, offset1, offsetl, pos, line_num, col_num;
-    int i, eoi_found, len, pos1, lpos, style, line_num1, state;
+    int i, eoi_found, len, pos1, lpos, line_num1, state;
+    QETermStyle style;
     int off, found_comma, has_else;
     char32_t c;
     //int found_semi = 0;
@@ -938,7 +941,7 @@ void c_indent_line(EditState *s, int offset0)
                 if (stack_ptr == 0) {
                     q = kbuf;
                     while (q < kbuf + countof(kbuf) - 1 && off0 <= off1) {
-                        *q++ = cp->buf[off0++];
+                        *q++ = (char)cp->buf[off0++];
                     }
                     *q = '\0';
 
@@ -1266,7 +1269,7 @@ static void c_forward_conditional(EditState *s, int dir)
         sharp = 0;
         for (p = cp->buf; *p; p++) {
             char32_t c = *p;
-            int style = cp->sbuf[p - cp->buf];
+            QETermStyle style = cp->sbuf[p - cp->buf];
             if (qe_isblank(c))
                 continue;
             if (c == '#' && style == C_STYLE_PREPROCESS)
@@ -1342,7 +1345,7 @@ static void do_c_list_conditionals(EditState *s)
         sharp = 0;
         for (p = cp->buf; *p; p++) {
             char32_t c = *p;
-            int style = cp->sbuf[p - cp->buf];
+            QETermStyle style = cp->sbuf[p - cp->buf];
             if (qe_isblank(c))
                 continue;
             if (c == '#' && style == C_STYLE_PREPROCESS)
@@ -1652,7 +1655,7 @@ static int objc_mode_probe(ModeDef *mode, ModeProbeData *mp)
          */
         const char *q;
         for (q = p;; q++) {
-            if ((*q == '@' && qe_isalpha(q[1]))
+            if ((*q == '@' && qe_isalpha((u8)(unsigned char)q[1]))
             ||  (*q == '#' && strstart(p, "#import", NULL))) {
                 return 85;
             }
@@ -1785,13 +1788,13 @@ static int get_js_identifier(char *dest, int size, char32_t c,
     for (;; i++) {
         if (c < 128) {
             if (pos + 1 < size) {
-                dest[pos++] = c;
+                dest[pos++] = (char)c;
             }
         } else {
             char buf[6];
             int len = utf8_encode(buf, c);
             if (pos + len < size) {
-                memcpy(dest + pos, buf, len);
+                memcpy(dest + pos, buf, (size_t)len);
                 pos += len;
             } else {
                 size = pos + 1;
@@ -1813,7 +1816,8 @@ static void js_colorize_line(QEColorizeContext *cp,
                              QETermStyle *sbuf, ModeDef *syn)
 {
     int i = 0, start, i1, indent;
-    int style, tag, level;
+    QETermStyle style;
+    int tag, level;
     char32_t c, delim;
     char kbuf[64];
     int mode_flags = syn->colorize_flags;
@@ -3319,9 +3323,9 @@ static int pawn_mode_probe(ModeDef *mode, ModeProbeData *p)
             "forward" NUL "new" NUL "main()" NUL
             NUL;
         const char *pref;
-        const char *cp = cs8(p->buf);
+        const char *cp = cs8((const u8 *)p->buf);
 
-        while (qe_isspace(*cp))
+        while (qe_isspace((u8)(unsigned char)*cp))
             cp++;
         for (pref = pawn_checks; *pref; pref += strlen(pref) + 1) {
             if (strstart(cp, pref, NULL))
@@ -3648,7 +3652,8 @@ static void salmon_colorize_line(QEColorizeContext *cp,
                                  QETermStyle *sbuf, ModeDef *syn)
 {
     int i = 0, start, i1;
-    int style, tag, level;
+    QETermStyle style;
+    int tag, level;
     char32_t c, delim;
     char kbuf[64];
     int mode_flags = syn->colorize_flags;
@@ -3971,7 +3976,7 @@ static int cp_match_keywords(const char32_t *str, int n, int start, const char *
     int i = start;
     size_t j = 0;
     for (;;) {
-        unsigned char cc = s[j++];
+        unsigned char cc = (unsigned char)s[j++];
         if (cc == '|' || cc == '\0') {
             if (i == n || !qe_isalnum_(str[i])) {
                 *end = i;
@@ -3991,7 +3996,7 @@ static int cp_match_keywords(const char32_t *str, int n, int start, const char *
                     continue;
             }
             for (;;) {
-                cc = s[j++];
+                cc = (unsigned char)s[j++];
                 if (cc == '\0')
                     return 0;
                 if (cc == '|')
@@ -4007,7 +4012,8 @@ static void ppl_colorize_line(QEColorizeContext *cp,
                               QETermStyle *sbuf, ModeDef *syn)
 {
     int i = 0, start, i1;
-    int indent = 0, style, level, type_decl;
+    int indent = 0, level, type_decl;
+    QETermStyle style;
     char32_t c, delim, last;
     char kbuf[64];
     int state = cp->colorize_state;
@@ -4412,7 +4418,8 @@ static void c3_colorize_line(QEColorizeContext *cp,
                              QETermStyle *sbuf, ModeDef *syn)
 {
     int i = 0, start, i1, i2, indent;
-    int style, level, tag;
+    QETermStyle style;
+    int level, tag;
     char32_t c, delim;
     char kbuf[64];
     int state = cp->colorize_state;

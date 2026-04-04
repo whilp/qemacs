@@ -184,7 +184,7 @@ static int mkd_render_display_line(EditState *s, DisplayState *ds, int offset)
     case MKD_LINE_HEADING: {
         int content_off;
         int level = mkd_render_heading_level(buf, &content_off);
-        int style = heading_styles[(level - 1) % 6];
+        QETermStyle style = (QETermStyle)heading_styles[(level - 1) % 6];
 
         /* Heading decorator + space */
         ds->style = style;

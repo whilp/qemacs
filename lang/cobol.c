@@ -193,13 +193,13 @@ static void cobol_colorize_line(QEColorizeContext *cp,
             if (qe_isalnum_(c)) {
                 /* parse identifiers and keywords */
                 len = 0;
-                keyword[len++] = qe_tolower(c);
+                keyword[len++] = (char)qe_tolower(c);
                 for (; i < n; i++) {
                     char32_t c1 = str[i];
                     if (!qe_isalnum_(c1) && !qe_findchar("-$", c1))
                         break;
                     if (len < countof(keyword) - 1)
-                        keyword[len++] = qe_tolower(c1);
+                        keyword[len++] = (char)qe_tolower(c1);
                 }
                 keyword[len] = '\0';
                 if (strfind(syn->keywords, keyword)) {

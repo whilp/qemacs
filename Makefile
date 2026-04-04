@@ -78,8 +78,6 @@ CFLAGS += -Wold-style-definition
 CFLAGS += -Wnull-dereference
 CFLAGS += -Wdouble-promotion
 CFLAGS += -Wimplicit-fallthrough
-# Promote these to errors once existing warnings are fixed:
-CFLAGS += -Wno-error=sign-conversion -Wno-error=conversion
 CFLAGS += -Wsign-conversion -Wconversion
 # Runtime buffer overflow detection for libc functions
 CFLAGS += -D_FORTIFY_SOURCE=2

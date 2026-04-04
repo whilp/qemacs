@@ -87,7 +87,7 @@ static void decode_euc_jp_init(CharsetDecodeState *s)
     int i;
 
     for (i = 0; i < 256; i++)
-        table[i] = i;
+        table[i] = (unsigned short)i;
     table[0x8e] = ESCAPE_CHAR;
     table[0x8f] = ESCAPE_CHAR;
     for (i = 0xa1; i <= 0xfe; i++)
@@ -137,11 +137,11 @@ static char32_t decode_euc_jp_func(CharsetDecodeState *s) {
 
 static unsigned char *encode_euc_jp(qe__unused__ QECharset *s, u8 *q, char32_t c) {
     if (c <= 0x7f) {
-        *q++ = c;
+        *q++ = (u8)c;
     } else
     if (c >= 0xff61 && c <= 0xff9f) {
         *q++ = 0x8e;
-        *q++ = c - 0xff61 + 0xa1;
+        *q++ = (u8)(c - 0xff61 + 0xa1);
     } else {
         /* XXX: do it */
         return NULL;
@@ -174,13 +174,13 @@ static void decode_sjis_init(CharsetDecodeState *s)
     int i;
 
     for (i = 0; i < 256; i++)
-        table[i] = i;
+        table[i] = (unsigned short)i;
     table['\\'] = 0x00a5;
     table[0x80] = '\\';
     for (i = 0x81; i <= 0x9f; i++)
         table[i] = ESCAPE_CHAR;
     for (i = 0xa1; i <= 0xdf; i++)
-        table[i] = i - 0xa1 + 0xff61;
+        table[i] = (unsigned short)(i - 0xa1 + 0xff61);
     for (i = 0xe0; i <= 0xef; i++)
         table[i] = ESCAPE_CHAR;
     for (i = 0xf0; i <= 0xfc; i++)
@@ -205,7 +205,7 @@ static char32_t decode_sjis_func(CharsetDecodeState *s) {
             row = c < 0xa0 ? 0x70 : 0xb0;
             adjust = (c1 < 0x9f);
             col = adjust ? (c1 >= 0x80 ? 32 : 31) : 0x7e;
-            c2 = jis0208_decode(((c - row) << 1) - adjust, c1 - col);
+            c2 = jis0208_decode((int)(((c - row) << 1) - adjust), (int)(c1 - col));
             if (c2) {
                 c = c2;
                 p++;
@@ -218,7 +218,7 @@ static char32_t decode_sjis_func(CharsetDecodeState *s) {
 
 static unsigned char *encode_sjis(qe__unused__ QECharset *s, u8 *q, char32_t c) {
     if (c <= 0x7f) {
-        *q++ = c;
+        *q++ = (u8)c;
     } else {
         /* XXX: do it */
         return NULL;
