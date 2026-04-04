@@ -79,6 +79,9 @@ CFLAGS += -Wnull-dereference
 CFLAGS += -Wdouble-promotion
 CFLAGS += -Wimplicit-fallthrough
 CFLAGS += -Wsign-conversion -Wconversion
+CFLAGS += -Wundef -Wvla -Wpointer-arith -Wcast-qual
+CFLAGS += -Wbad-function-cast -Wnested-externs -Winit-self
+CFLAGS += -Wduplicated-cond -Wrestrict
 # Runtime buffer overflow detection for libc functions
 CFLAGS += -D_FORTIFY_SOURCE=2
 CFLAGS += -I.
@@ -259,7 +262,7 @@ $(OBJS_DIR)/libqhtml/xmlparse.o: libqhtml/xmlparse.c libqhtml/css.h libqhtml/htm
 $(OBJS_DIR)/third_party/lua/lua-amalg.o: third_party/lua/lua-amalg.c third_party/lua/lua-amalg.h Makefile | $(COSMOCC_DIR)/bin/cosmocc
 	$(echo) CC -c $<
 	$(cmd)  mkdir -p $(dir $@)
-	$(cmd)  $(CC) $(CFLAGS) -Wno-error -Wno-format-nonliteral -Wno-null-dereference -Wno-unused-value -Wno-sign-conversion -Wno-conversion -MT $@ -MF $(@:.o=.d) -o $@ -c $<
+	$(cmd)  $(CC) $(CFLAGS) -Wno-error -Wno-format-nonliteral -Wno-null-dereference -Wno-unused-value -Wno-sign-conversion -Wno-conversion -Wno-bad-function-cast -Wno-cast-qual -MT $@ -MF $(@:.o=.d) -o $@ -c $<
 
 $(OBJS_DIR)/%.o: %.c Makefile | $(COSMOCC_DIR)/bin/cosmocc
 	$(echo) CC $(ECHO_CFLAGS) -c $<

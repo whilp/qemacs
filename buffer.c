@@ -1272,7 +1272,7 @@ void do_undo(EditState *s)
         put_status(s, "Undo!");
     }
     if (!qs->first_transient_key
-    &&  (qs->last_key == 'u' || qs->last_key == 'u')) {
+    &&  qs->last_key == 'u') {
         put_status(s, "Repeat with 'u', 'r'");
         qe_register_transient_binding(qs, "undo", "u");
         qe_register_transient_binding(qs, "redo", "r");
