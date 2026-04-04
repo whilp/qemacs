@@ -2575,79 +2575,94 @@ static void shell_read_cb(void *opaque)
     EditBuffer *b;
     unsigned char buf[16 * 1024];
     int len, i, save_readonly;
+    int got_data = 0;
 
     if (!s || s->base.mode != &shell_mode)
         return;
 
-    len = (int)read(s->pty_fd, buf, sizeof(buf));
-    if (len <= 0) {
-        if (len == 0 || (errno != EAGAIN && errno != EINTR)) {
-            /* EOF or fatal error (e.g. EIO when slave pty closed):
-             * remove the read handler to avoid a tight select() spin
-             * while waiting for the child to be reaped by waitpid. */
-            set_read_handler(s->pty_fd, NULL, NULL);
-        }
-        return;
-    }
-
     b = s->b;
     qs = s->base.qs;
-    if (qs->trace_buffer)
-        qe_trace_bytes(qs, buf, len, EB_TRACE_SHELL);
 
     /* Suspend BF_READONLY flag to allow shell output to readonly buffer */
     save_readonly = b->flags & BF_READONLY;
     b->flags &= ~BF_READONLY;
     b->last_log = 0;
 
-    if (s->shell_flags & SF_COLOR) {
-        /* optional terminal emulation (shell, ssh, make, latex, man modes) */
-        for (i = 0; i < len; i++) {
-            qe_term_emulate(s, buf[i]);
-        }
-        if (s->last_char == '\000' || s->last_char == '\001'
-        ||  s->last_char == '\003'
-        ||  s->last_char == '\r' || s->last_char == '\n') {
-            /* if the last char sent to the process was the enter key, C-C
-             * to kill the process, C-A to go to beginning of line, or if
-             * nothing was sent to the process yet, assume the process is
-             * prompting for input and save the current input position as
-             * the start of input.
-             */
-            s->cur_prompt = s->cur_offset;
-            if (qs->active_window
-            &&  qs->active_window->b == b
-            &&  qs->active_window->interactive) {
-                /* Set mark to potential tentative position (useful?) */
-                b->mark = s->cur_prompt;
+    /* Drain all available PTY data before requesting a redraw.
+     * The fd is O_NONBLOCK so read() returns EAGAIN when the kernel
+     * buffer is empty.  Processing everything in one callback means
+     * a single url_redisplay() per burst instead of one per 16 KB chunk.
+     */
+    for (;;) {
+        len = (int)read(s->pty_fd, buf, sizeof(buf));
+        if (len <= 0) {
+            if (len == 0 || (errno != EAGAIN && errno != EINTR)) {
+                /* EOF or fatal error (e.g. EIO when slave pty closed):
+                 * remove the read handler to avoid a tight select() spin
+                 * while waiting for the child to be reaped by waitpid. */
+                set_read_handler(s->pty_fd, NULL, NULL);
             }
+            break;
         }
-        shell_get_curpath(b, s->cur_offset, s->curpath, sizeof(s->curpath));
-    } else {
-        int pos = b->total_size;
-        int threshold = 3 << 20;    /* 3MB for large pictures */
-        eb_write(b, b->total_size, buf, len);
-        if (pos < threshold && pos + len >= threshold) {
-            EditState *e;
-            for (e = qs->first_window; e != NULL; e = e->next_window) {
-                if (e->b == b) {
-                    if (s->shell_flags & SF_AUTO_CODING)
-                        do_set_auto_coding(e, 0);
-                    if (s->shell_flags & SF_AUTO_MODE)
-                        qe_set_next_mode(e, 0, 0);
+        got_data = 1;
+
+        if (qs->trace_buffer)
+            qe_trace_bytes(qs, buf, len, EB_TRACE_SHELL);
+
+        if (s->shell_flags & SF_COLOR) {
+            /* optional terminal emulation (shell, ssh, make, latex, man modes) */
+            for (i = 0; i < len; i++) {
+                qe_term_emulate(s, buf[i]);
+            }
+        } else {
+            int pos = b->total_size;
+            int threshold = 3 << 20;    /* 3MB for large pictures */
+            eb_write(b, b->total_size, buf, len);
+            if (pos < threshold && pos + len >= threshold) {
+                EditState *e;
+                for (e = qs->first_window; e != NULL; e = e->next_window) {
+                    if (e->b == b) {
+                        if (s->shell_flags & SF_AUTO_CODING)
+                            do_set_auto_coding(e, 0);
+                        if (s->shell_flags & SF_AUTO_MODE)
+                            qe_set_next_mode(e, 0, 0);
+                    }
                 }
             }
         }
     }
+
+    if (got_data) {
+        if (s->shell_flags & SF_COLOR) {
+            if (s->last_char == '\000' || s->last_char == '\001'
+            ||  s->last_char == '\003'
+            ||  s->last_char == '\r' || s->last_char == '\n') {
+                /* if the last char sent to the process was the enter key, C-C
+                 * to kill the process, C-A to go to beginning of line, or if
+                 * nothing was sent to the process yet, assume the process is
+                 * prompting for input and save the current input position as
+                 * the start of input.
+                 */
+                s->cur_prompt = s->cur_offset;
+                if (qs->active_window
+                &&  qs->active_window->b == b
+                &&  qs->active_window->interactive) {
+                    /* Set mark to potential tentative position (useful?) */
+                    b->mark = s->cur_prompt;
+                }
+            }
+            shell_get_curpath(b, s->cur_offset, s->curpath, sizeof(s->curpath));
+        }
+        /* invalidate display: the event loop will call qe_display() once
+         * after all pending I/O is drained, batching rapid PTY output into
+         * a single redraw instead of one per read() call. */
+        url_redisplay();
+    }
+
     if (save_readonly) {
         b->modified = 0;
         b->flags |= save_readonly;
     }
-
-    /* invalidate display: the event loop will call qe_display() once
-     * after all pending I/O is drained, batching rapid PTY output into
-     * a single redraw instead of one per read() call. */
-    url_redisplay();
 }
 
 static void shell_mode_free(EditBuffer *b, void *state)
