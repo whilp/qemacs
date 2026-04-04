@@ -88,9 +88,14 @@ BENCH_SRCS = ../buffer.c ../cutils.c ../charset.c ../libunicode.c ../util.c \
 $(OUTDIR)/bench_buffer: bench_buffer.c $(BENCH_SRCS) ../qe.h ../cutils.h | $(OUTDIR)
 	$(CC) $(TEST_CFLAGS) -Wno-format-truncation -o $@ bench_buffer.c $(BENCH_SRCS)
 
-bench: $(OUTDIR)/bench_buffer
+$(OUTDIR)/bench_shell_buffer: bench_shell_buffer.c $(BENCH_SRCS) ../qe.h ../cutils.h | $(OUTDIR)
+	$(CC) $(TEST_CFLAGS) -Wno-format-truncation -o $@ bench_shell_buffer.c $(BENCH_SRCS)
+
+bench: $(OUTDIR)/bench_buffer $(OUTDIR)/bench_shell_buffer
 	@echo "--- Running bench_buffer ---"
 	./$(OUTDIR)/bench_buffer
+	@echo "--- Running bench_shell_buffer ---"
+	./$(OUTDIR)/bench_shell_buffer
 
 clean:
 	rm -rf $(OUTDIR) .embed
