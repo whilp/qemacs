@@ -233,10 +233,8 @@ static void erlang_colorize_line(QEColorizeContext *cp,
             if (check_fcall(str, i)) {
                 style = ERLANG_STYLE_FUNCTION;
             } else
-            if (qe_islower((u8)keyword[0])) {
-                style = ERLANG_STYLE_ATOM;
-            } else {
-                style = ERLANG_STYLE_IDENTIFIER;
+            {
+                style = ERLANG_STYLE_IDENTIFIER;  /* ATOM == IDENTIFIER: same QE_STYLE_DEFAULT value */
             }
             SET_STYLE(sbuf, start, i, style);
             continue;

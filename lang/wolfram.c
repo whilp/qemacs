@@ -164,11 +164,14 @@ static void wolfram_colorize_line(QEColorizeContext *cp,
             }
             break;
         default:
-            /* parse numbers */
+            /* parse numbers: NNN, .NNN, NNN^^... (based), NNN.NNN, etc. */
             base = 10;
-            if (c == '.' && qe_isdigit(str[i]))
-                goto in_number;
-            if (qe_isdigit(c)) {
+            if (c == '.' && qe_isdigit(str[i])) {
+                /* floating-point starting with '.': scan fractional digits directly.
+                 * Refactored from 'goto in_number' to avoid -Wjump-misses-init. */
+                while (qe_digit_value(str[i]) < base)
+                    i++;
+            } else if (qe_isdigit(c)) {
                 int value = 0;
                 while (qe_isdigit(str[i])) {
                     value = value * 10 + (int)(str[i++] - '0');
@@ -181,25 +184,29 @@ static void wolfram_colorize_line(QEColorizeContext *cp,
                 }
                 if (str[i] == '.') {
                     i++;
-                in_number:
                     while (qe_digit_value(str[i]) < base)
                         i++;
                 }
-                if (str[i] == '`') {
-                    i++;
-                    if (str[i] == '`')
-                        i++;
-                    while (qe_isdigit(str[i]))
-                        i++;
-                }
-                if (str[i] == '*' && str[i + 1] == '^' && qe_isdigit(str[i + 2])) {
-                    i += 3;
-                    while (qe_isdigit(str[i]))
-                        i++;
-                }
-                style = WOLFRAM_STYLE_NUMBER;
-                break;
+            } else {
+                /* not a number — fall through to identifier/keyword parsing */
+                goto parse_identifier;
             }
+            /* common number suffix: precision mark (`), scientific (*^N) */
+            if (str[i] == '`') {
+                i++;
+                if (str[i] == '`')
+                    i++;
+                while (qe_isdigit(str[i]))
+                    i++;
+            }
+            if (str[i] == '*' && str[i + 1] == '^' && qe_isdigit(str[i + 2])) {
+                i += 3;
+                while (qe_isdigit(str[i]))
+                    i++;
+            }
+            style = WOLFRAM_STYLE_NUMBER;
+            break;
+        parse_identifier:
             /* parse identifiers and keywords */
             if (c == '$' || c == '#' || qe_isalpha_(c)) {
                 i += wolfram_get_identifier(kbuf, countof(kbuf), c, str, i, n);

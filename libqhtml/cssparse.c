@@ -97,8 +97,11 @@ static int css_get_length(int *length_ptr, int *unit_ptr, const char *p)
      * CSS_UNIT_xxx values */
     unit = css_get_enum(p, "px,%,ex,em,mm,in,cm,pt,pc");
     if (unit < 0) {
-        /* only 0 is valid without unit */
+        /* only 0 is valid without unit: exact zero check is intentional here */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
         if (f != 0.0 || *p != '\0')
+#pragma GCC diagnostic pop
             return -1;
         num = 0;
         unit = CSS_UNIT_NONE;
