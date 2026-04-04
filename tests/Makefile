@@ -50,6 +50,9 @@ BUFFER_SRCS = ../buffer.c ../cutils.c ../charset.c ../libunicode.c ../util.c \
 $(OUTDIR)/test_buffer: test_buffer.c $(BUFFER_SRCS) testlib.h ../qe.h ../cutils.h | $(OUTDIR)
 	$(CC) $(TEST_CFLAGS) -Wno-format-truncation -o $@ test_buffer.c $(BUFFER_SRCS)
 
+$(OUTDIR)/test_shell_buffer: test_shell_buffer.c $(BUFFER_SRCS) testlib.h ../qe.h ../cutils.h | $(OUTDIR)
+	$(CC) $(TEST_CFLAGS) -Wno-format-truncation -o $@ test_shell_buffer.c $(BUFFER_SRCS)
+
 $(OUTDIR)/test_session: test_session.c ../session.c ../session.h testlib.h | $(OUTDIR)
 	$(CC) $(TEST_CFLAGS) -o $@ test_session.c
 
@@ -85,9 +88,14 @@ BENCH_SRCS = ../buffer.c ../cutils.c ../charset.c ../libunicode.c ../util.c \
 $(OUTDIR)/bench_buffer: bench_buffer.c $(BENCH_SRCS) ../qe.h ../cutils.h | $(OUTDIR)
 	$(CC) $(TEST_CFLAGS) -Wno-format-truncation -o $@ bench_buffer.c $(BENCH_SRCS)
 
-bench: $(OUTDIR)/bench_buffer
+$(OUTDIR)/bench_shell_buffer: bench_shell_buffer.c $(BENCH_SRCS) ../qe.h ../cutils.h | $(OUTDIR)
+	$(CC) $(TEST_CFLAGS) -Wno-format-truncation -o $@ bench_shell_buffer.c $(BENCH_SRCS)
+
+bench: $(OUTDIR)/bench_buffer $(OUTDIR)/bench_shell_buffer
 	@echo "--- Running bench_buffer ---"
 	./$(OUTDIR)/bench_buffer
+	@echo "--- Running bench_shell_buffer ---"
+	./$(OUTDIR)/bench_shell_buffer
 
 clean:
 	rm -rf $(OUTDIR) .embed
