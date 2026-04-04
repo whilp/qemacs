@@ -120,11 +120,38 @@ static inline const char *cs8(const u8 *p) {
 #define strstart(str, val, ptr)    qe_strstart(str, val, ptr)
 #define strend(str, val, ptr)      qe_strend(str, val, ptr)
 
-/* make sure neither strncpy not strtok are used */
+/* Ban dangerous C functions — use safe alternatives instead */
 #undef strncpy
-#define strncpy(d,s)      do_not_use_strncpy!!(d,s)
+#define strncpy(d,s)        do_not_use_strncpy__use_pstrncpy!!(d,s)
 #undef strtok
-#define strtok(str,sep)   do_not_use_strtok!!(str,sep)
+#define strtok(str,sep)     do_not_use_strtok!!(str,sep)
+#undef strcpy
+#define strcpy(d,s)         do_not_use_strcpy__use_pstrcpy!!(d,s)
+#undef strcat
+#define strcat(d,s)         do_not_use_strcat__use_pstrcat!!(d,s)
+#undef strncat
+#define strncat(d,s,n)      do_not_use_strncat__use_pstrncat!!(d,s,n)
+#undef sprintf
+#define sprintf(...)        do_not_use_sprintf__use_snprintf!!(__VA_ARGS__)
+#undef gets
+#define gets(s)             do_not_use_gets!!(s)
+
+/* Checked size multiplication — returns 0 on overflow (causes allocation failure) */
+static inline size_t safe_mul(size_t a, size_t b) {
+    if (a != 0 && b > SIZE_MAX / a) return 0;
+    return a * b;
+}
+
+/* Safe integer parsing — returns default_val on NULL, empty, invalid, or overflow */
+static inline int qe_atoi(const char *s, int default_val) {
+    char *end;
+    long v;
+    if (!s || !*s) return default_val;
+    v = strtol(s, &end, 10);
+    if (end == s || *end != '\0') return default_val;
+    if (v < INT_MIN || v > INT_MAX) return default_val;
+    return (int)v;
+}
 
 char *pstrcpy(char *buf, int buf_size, const char *str);
 char *pstrcat(char *buf, int buf_size, const char *s);

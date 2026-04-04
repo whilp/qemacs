@@ -518,6 +518,49 @@ TEST(osc_get_payload, too_short) {
     ASSERT_EQ(len, 0);
 }
 
+/* ---- safe_mul (integer overflow protection) ---- */
+
+TEST(safe_mul, basic) {
+    ASSERT_EQ(safe_mul(4, 8), 32u);
+    ASSERT_EQ(safe_mul(0, 100), 0u);
+    ASSERT_EQ(safe_mul(100, 0), 0u);
+    ASSERT_EQ(safe_mul(1, 1), 1u);
+}
+
+TEST(safe_mul, overflow_returns_zero) {
+    /* SIZE_MAX * 2 must overflow */
+    ASSERT_EQ(safe_mul(SIZE_MAX, 2), 0u);
+    ASSERT_EQ(safe_mul(2, SIZE_MAX), 0u);
+    /* Large values that overflow when multiplied */
+    ASSERT_EQ(safe_mul(SIZE_MAX / 2 + 1, 2), 0u);
+    ASSERT_EQ(safe_mul(SIZE_MAX, SIZE_MAX), 0u);
+}
+
+TEST(safe_mul, edge_cases) {
+    ASSERT_EQ(safe_mul(SIZE_MAX, 1), SIZE_MAX);
+    ASSERT_EQ(safe_mul(1, SIZE_MAX), SIZE_MAX);
+    ASSERT_EQ(safe_mul(0, 0), 0u);
+}
+
+/* ---- qe_atoi (safe integer parsing) ---- */
+
+TEST(qe_atoi, basic) {
+    ASSERT_EQ(qe_atoi("42", 0), 42);
+    ASSERT_EQ(qe_atoi("-7", 0), -7);
+    ASSERT_EQ(qe_atoi("0", -1), 0);
+}
+
+TEST(qe_atoi, null_and_empty) {
+    ASSERT_EQ(qe_atoi(NULL, 99), 99);
+    ASSERT_EQ(qe_atoi("", 99), 99);
+}
+
+TEST(qe_atoi, invalid_input) {
+    ASSERT_EQ(qe_atoi("abc", -1), -1);
+    ASSERT_EQ(qe_atoi("12abc", -1), -1);
+    ASSERT_EQ(qe_atoi("  42", -1), 42);  /* strtol accepts leading whitespace */
+}
+
 int main(void) {
     return testlib_run_all();
 }

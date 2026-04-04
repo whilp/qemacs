@@ -502,12 +502,12 @@ QEPicture *qe_create_picture(int width, int height,
 
     ip = qe_mallocz(QEPicture);
     if (ip) {
-        /* align pixmap lines on 64 bit boundaries */
-        unsigned int wb = width * bits + 63 / 64 * 8;
+        /* align pixmap lines on 64 bit (8 byte) boundaries */
+        unsigned int wb = ((width * bits + 63) / 64) * 8;
         ip->width = width;
         ip->height = height;
         ip->format = format;
-        ip->data[0] = qe_malloc_array(unsigned char, wb * height);
+        ip->data[0] = qe_malloc_bytes(safe_mul(wb, height));
         ip->linesize[0] = wb;
     }
     return ip;

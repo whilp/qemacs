@@ -1346,9 +1346,9 @@ enum DisplayType {
 };
 
 void display_init(DisplayState *s, EditState *e, enum DisplayType do_disp,
-                  int (*cursor_func)(DisplayState *,
-                                     int offset1, int offset2, int line_num,
-                                     int x, int y, int w, int h, int hex_mode),
+                  int (*cursor_cb)(DisplayState *,
+                                   int offset1, int offset2, int line_num,
+                                   int x, int y, int w, int h, int hex_mode),
                   void *cursor_opaque);
 void display_close(DisplayState *s);
 void display_bol(DisplayState *s);

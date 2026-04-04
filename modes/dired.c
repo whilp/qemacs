@@ -558,7 +558,7 @@ static char *getentryslink(char *path, int size, const char *filename)
 
 static char *compute_attr(char *atts, mode_t mode)
 {
-    strcpy(atts, "----------");
+    pstrcpy(atts, 11, "----------");
 
     /* File type */
     if (!S_ISREG(mode)) {
@@ -1307,12 +1307,12 @@ static void dired_build_list(DiredState *ds, const char *path)
 
     if (is_directory(ds->path)) {
         pstrcpy(dirname, sizeof dirname, ds->path);
-        strcpy(ds->pattern, "*");
+        pstrcpy(ds->pattern, sizeof(ds->pattern), "*");
     } else {
         get_dirname(dirname, sizeof dirname, ds->path);
         pstrcpy(ds->pattern, sizeof(ds->pattern), get_basename(ds->path));
         if (!is_filepattern(ds->pattern))
-            strcpy(ds->pattern, "*");
+            pstrcpy(ds->pattern, sizeof(ds->pattern), "*");
     }
 
     if (ds->header_lines == 1) {
