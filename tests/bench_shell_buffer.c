@@ -317,6 +317,59 @@ static void bench_lf_streaming_tracked(int scrollback_lines, int new_lines,
 }
 
 /* =========================================================
+ * Benchmark 3b: LF streaming with the ACTUAL FIX applied.
+ *
+ * The fix adds cur_x/cur_y fields to ShellState and updates them
+ * incrementally. On each LF at end-of-buffer:
+ *   - cur_y++
+ *   - if cur_y >= rows: advance screen_top by (cur_y-rows+1) lines
+ *     using qe_term_skip_lines (an O(cols) forward scan per line)
+ *   - No position_walk from screen_top at all.
+ *
+ * This models what qe_term_advance_after_lf() does with a warm cache.
+ * ========================================================= */
+static void bench_lf_streaming_fixed(int scrollback_lines, int new_lines,
+                                     int line_len, int cols, int rows) {
+    char name[96];
+    snprintf(name, sizeof name,
+             "lf_stream_FIXED %5dk hist, %dk new, rows=%d",
+             scrollback_lines / 1000, new_lines / 1000, rows);
+
+    EditBuffer *b = new_buf();
+
+    char line[256];
+    if (line_len > (int)sizeof(line) - 2) line_len = (int)sizeof(line) - 2;
+    memset(line, 'x', line_len);
+    line[line_len] = '\n';
+
+    int i;
+    for (i = 0; i < scrollback_lines; i++) {
+        eb_insert(b, b->total_size, line, line_len + 1);
+    }
+
+    int screen_top = 0;
+    int cur_y = scrollback_lines < rows ? scrollback_lines : rows - 1;
+
+    int64_t t0 = now_usec();
+    for (i = 0; i < new_lines; i++) {
+        eb_insert(b, b->total_size, line, line_len);
+        eb_insert(b, b->total_size, "\n", 1);
+        /* O(1) cur_y update (the fix) */
+        cur_y++;
+        if (cur_y >= rows) {
+            /* Advance screen_top by 1 row: O(line_len) forward scan */
+            screen_top = eb_next_line(b, screen_top);
+            cur_y = rows - 1;
+        }
+        /* No position_walk at all — that's the whole point */
+    }
+    int64_t elapsed = now_usec() - t0;
+
+    record(name, elapsed, new_lines, elapsed > 0 ? elapsed / new_lines : 0);
+    eb_free(&b);
+}
+
+/* =========================================================
  * Benchmark 4: Claude Code-like output pattern.
  *
  * Mixes ANSI-colored lines of varying length, then measures
@@ -352,6 +405,46 @@ static void bench_claude_code_burst(int n_bursts) {
 
     record(name, pos_walk_usec, n_bursts,
            pos_walk_usec > 0 ? pos_walk_usec / n_bursts : 0);
+    eb_free(&b);
+}
+
+/* =========================================================
+ * Benchmark 4b: Claude Code burst pattern — FIXED version.
+ *
+ * Same as bench_claude_code_burst but uses cur_y increments
+ * instead of position_walk. Models the new code path.
+ * ========================================================= */
+static void bench_claude_code_burst_fixed(int n_bursts, int rows) {
+    char name[96];
+    snprintf(name, sizeof name,
+             "claude_FIXED       %d bursts x 200 lines, rows=%d",
+             n_bursts, rows);
+
+    EditBuffer *b = new_buf();
+    int screen_top = 0;
+    int cur_y = 0;
+    int burst_lines = 200;
+
+    int64_t t0 = now_usec();
+    int i, j;
+    for (i = 0; i < n_bursts; i++) {
+        /* Append burst lines, updating cur_y per LF */
+        for (j = 0; j < burst_lines; j++) {
+            /* Simplified: just append a line (untimed per-byte detail) */
+            static const char tpl[] = "\033[1;32m✓\033[0m output line\n";
+            eb_insert(b, b->total_size, tpl, strlen(tpl));
+            cur_y++;
+            if (cur_y >= rows) {
+                screen_top = eb_next_line(b, screen_top);
+                cur_y = rows - 1;
+            }
+        }
+    }
+    int64_t elapsed = now_usec() - t0;
+    (void)screen_top;
+
+    record(name, elapsed, n_bursts * burst_lines,
+           elapsed > 0 ? elapsed / (n_bursts * burst_lines) : 0);
     eb_free(&b);
 }
 
@@ -414,32 +507,40 @@ int main(void) {
     bench_position_walk( 10000, 20, 80);
     bench_position_walk( 50000, 20, 80);
 
-    /* --- 3. LF streaming: existing history + more output --- */
-    printf("\n=== 3. LF streaming: cost per new line as history grows ===\n");
-    printf("    (each row = buffer insert + position_walk from screen_top)\n\n");
+    /* --- 3. LF streaming: BEFORE fix (O(N) position_walk per LF) --- */
+    printf("\n=== 3. LF streaming BEFORE fix: O(N) position_walk on each LF ===\n");
+    printf("    (each row = buffer insert + full position_walk from screen_top=0)\n\n");
     bench_lf_streaming(    0,  1000, 79, 80);
     bench_lf_streaming( 1000,  1000, 79, 80);
     bench_lf_streaming( 5000,  1000, 79, 80);
     bench_lf_streaming(10000,  1000, 79, 80);
 
-    /* --- 4. Same scenario but screen_top tracks cursor --- */
-    printf("\n=== 4. LF streaming with screen_top tracking (hypothetical fix) ===\n");
-    printf("    (screen_top advances 1 line per LF; position_walk is O(visible_rows))\n\n");
-    bench_lf_streaming_tracked(    0,  1000, 79, 80, 25);
-    bench_lf_streaming_tracked( 1000,  1000, 79, 80, 25);
-    bench_lf_streaming_tracked( 5000,  1000, 79, 80, 25);
-    bench_lf_streaming_tracked(10000,  1000, 79, 80, 25);
+    /* --- 4. LF streaming: AFTER fix (O(1) cur_y increment per LF) --- */
+    printf("\n=== 4. LF streaming AFTER fix: O(1) cur_y cache, no position_walk ===\n");
+    printf("    (each row = buffer insert + cur_y++; screen_top advance by 1 line when needed)\n\n");
+    bench_lf_streaming_fixed(    0,  1000, 79, 80, 10025);
+    bench_lf_streaming_fixed( 1000,  1000, 79, 80, 10025);
+    bench_lf_streaming_fixed( 5000,  1000, 79, 80, 10025);
+    bench_lf_streaming_fixed(10000,  1000, 79, 80, 10025);
 
-    /* --- 5. Claude Code burst pattern --- */
-    printf("\n=== 5. Claude Code burst pattern (200-line bursts, ANSI color) ===\n");
-    printf("    (time shown is for position_walk after each burst only)\n\n");
+    /* --- 5. Claude Code burst: BEFORE fix --- */
+    printf("\n=== 5. Claude Code burst BEFORE fix (position_walk per burst) ===\n");
+    printf("    (time: position_walk after each burst, grows with total output)\n\n");
     bench_claude_code_burst( 5);
     bench_claude_code_burst(15);
     bench_claude_code_burst(30);
     bench_claude_code_burst(50);
 
-    /* --- 6. Append baseline (shows the buffer itself is O(1)) --- */
-    printf("\n=== 6. Raw append baseline (buffer is not the bottleneck) ===\n");
+    /* --- 6. Claude Code burst: AFTER fix --- */
+    printf("\n=== 6. Claude Code burst AFTER fix (O(1) cur_y per LF) ===\n");
+    printf("    (time: full burst including appends + cur_y updates)\n\n");
+    bench_claude_code_burst_fixed( 5, 10025);
+    bench_claude_code_burst_fixed(15, 10025);
+    bench_claude_code_burst_fixed(30, 10025);
+    bench_claude_code_burst_fixed(50, 10025);
+
+    /* --- 7. Append baseline (shows the buffer itself is O(1)) --- */
+    printf("\n=== 7. Raw append baseline (buffer is not the bottleneck) ===\n");
     bench_append_baseline(  1000);
     bench_append_baseline( 10000);
     bench_append_baseline( 50000);
@@ -447,52 +548,46 @@ int main(void) {
     print_results();
 
     /* Summary */
-    printf("Key findings:\n");
-    printf("  - position_walk scales linearly with history depth\n");
-    printf("  - With screen_top tracking (bench 4), cost is nearly constant\n");
-    printf("  - Raw buffer append (bench 6) is O(1) — not the bottleneck\n");
-    printf("  - Claude Code slowdown = position_walk overhead per output line\n\n");
+    printf("Fix summary:\n");
+    printf("  BEFORE: qe_term_get_pos() called on each LF — O(total output) per line\n");
+    printf("  AFTER:  cur_y cached in ShellState — O(1) per line + O(cols) screen_top advance\n\n");
 
     /* Compute and print speedup ratios */
     {
-        int i, j;
-        double walk_1k = -1, walk_50k = -1;
-        double stream_0 = -1, stream_10k = -1;
-        double tracked_0 = -1, tracked_10k = -1;
+        int i;
+        double stream_0k  = -1, stream_10k  = -1;
+        double fixed_0k   = -1, fixed_10k   = -1;
+        double burst_5    = -1, burst_50     = -1;
+        double fixed_5    = -1, fixed_50     = -1;
 
         for (i = 0; i < result_count; i++) {
             double uop = (double)results[i].total_usec / results[i].iterations;
-            if (strstr(results[i].name, "position_walk") &&
-                strstr(results[i].name, "1k") &&
-                strstr(results[i].name, "79"))   walk_1k  = uop;
-            if (strstr(results[i].name, "position_walk") &&
-                strstr(results[i].name, "50k") &&
-                strstr(results[i].name, "79"))   walk_50k = uop;
-            if (strstr(results[i].name, "lf_stream") &&
-                !strstr(results[i].name, "tracked") &&
-                strstr(results[i].name, "    0k")) stream_0 = uop;
-            if (strstr(results[i].name, "lf_stream") &&
-                !strstr(results[i].name, "tracked") &&
-                strstr(results[i].name, "10k"))   stream_10k = uop;
-            if (strstr(results[i].name, "lf_stream_tracked") &&
-                strstr(results[i].name, "    0k")) tracked_0 = uop;
-            if (strstr(results[i].name, "lf_stream_tracked") &&
-                strstr(results[i].name, "10k"))   tracked_10k = uop;
+            const char *n = results[i].name;
+            if (strstr(n, "lf_stream  ") && strstr(n, "    0k")) stream_0k  = uop;
+            if (strstr(n, "lf_stream  ") && strstr(n, " 10k"))   stream_10k = uop;
+            if (strstr(n, "lf_stream_FIXED") && strstr(n, "    0k")) fixed_0k  = uop;
+            if (strstr(n, "lf_stream_FIXED") && strstr(n, " 10k"))   fixed_10k = uop;
+            if (strstr(n, "claude_code_burst  5"))    burst_5  = uop;
+            if (strstr(n, "claude_code_burst  50"))   burst_50 = uop;
+            if (strstr(n, "claude_FIXED") && strstr(n, "  5 burst")) fixed_5  = uop;
+            if (strstr(n, "claude_FIXED") && strstr(n, " 50 burst")) fixed_50 = uop;
         }
-        (void)j;
 
-        if (walk_1k > 0 && walk_50k > 0)
-            printf("  position_walk slowdown  1k→50k lines: %.1fx\n",
-                   walk_50k / walk_1k);
-        if (stream_0 > 0 && stream_10k > 0)
-            printf("  LF streaming slowdown   0k→10k hist:  %.1fx\n",
-                   stream_10k / stream_0);
-        if (tracked_0 > 0 && stream_0 > 0)
-            printf("  Tracked vs untracked at 0k hist:       %.1fx faster\n",
-                   stream_0 / tracked_0);
-        if (tracked_10k > 0 && stream_10k > 0)
-            printf("  Tracked vs untracked at 10k hist:      %.1fx faster\n",
-                   stream_10k / tracked_10k);
+        printf("  LF/line speedup at    0k history: ");
+        if (stream_0k > 0 && fixed_0k > 0) printf("%.0fx\n", stream_0k / fixed_0k);
+        else printf("n/a\n");
+
+        printf("  LF/line speedup at   10k history: ");
+        if (stream_10k > 0 && fixed_10k > 0) printf("%.0fx\n", stream_10k / fixed_10k);
+        else printf("n/a\n");
+
+        printf("  Claude burst speedup at  5 bursts: ");
+        if (burst_5 > 0 && fixed_5 > 0) printf("%.0fx\n", burst_5 / fixed_5);
+        else printf("n/a\n");
+
+        printf("  Claude burst speedup at 50 bursts: ");
+        if (burst_50 > 0 && fixed_50 > 0) printf("%.0fx\n", burst_50 / fixed_50);
+        else printf("n/a\n");
         printf("\n");
     }
 

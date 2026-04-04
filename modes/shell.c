@@ -69,6 +69,8 @@ typedef struct ShellState {
     QETermStyle bce_style; /* pending BCE style from \e[K, applied at next newline */
     int cur_offset; /* current offset at position x, y */
     int cur_offset_hack; /* the target position is in the middle of a wide glyph */
+    int cur_x;     /* cached cursor column (0-based), -1 = invalid */
+    int cur_y;     /* cached cursor row relative to screen_top, -1 = invalid */
     int cur_prompt; /* offset of end of prompt on current line */
     int save_x, save_y;
     int nb_params;
@@ -343,6 +345,8 @@ static void qe_term_init(ShellState *s)
     s->attr = 0;
     s->reverse = 0;
     s->lastc = ' ';
+    s->cur_x = 0;
+    s->cur_y = 0;
 
     term = getenv("TERM");
     if (!term)
@@ -900,7 +904,52 @@ static int qe_term_goto_pos(ShellState *s, int offset, int destx, int desty, int
     return eb_skip_accents(s->b, offset);
 }
 
+/* Update cached column/row after writing a glyph of visual width w.
+ * Handles line-wrap and screen_top advancement for the streaming case.
+ * Call only when cur_y >= 0 (cache valid) and NOT in alternate screen. */
+static void qe_term_update_cur_pos(ShellState *s, int w) {
+    s->cur_x += w;
+    if (s->cur_x >= s->cols) {
+        if (w > 1 && s->cur_x > s->cols) {
+            /* Wide glyph straddles EOL — complex, invalidate cache. */
+            s->cur_y = -1;
+            return;
+        }
+        s->cur_x -= s->cols;
+        s->cur_y++;
+        if (s->cur_y >= s->rows) {
+            int skip = s->cur_y - s->rows + 1;
+            s->screen_top = qe_term_skip_lines(s, s->screen_top, skip);
+            s->cur_y = s->rows - 1;
+        }
+    }
+}
+
+/* Advance state after a LF appended at the end of the buffer.
+ * O(1) fast path when cur_y is valid; O(N) fallback otherwise. */
+static void qe_term_advance_after_lf(ShellState *s, int offset) {
+    s->cur_x = 0;
+    if (s->cur_y >= 0) {
+        s->cur_y++;
+        if (s->cur_y >= s->rows) {
+            int skip = s->cur_y - s->rows + 1;
+            if (s->use_alternate_screen)
+                s->alternate_screen_top = qe_term_skip_lines(s, s->alternate_screen_top, skip);
+            else
+                s->screen_top = qe_term_skip_lines(s, s->screen_top, skip);
+            s->cur_y = s->rows - 1;
+        }
+    } else {
+        /* cur_y invalid (e.g. after a CSI cursor move): recompute. */
+        int x, y;
+        qe_term_get_pos(s, offset, &x, &y);
+        s->cur_y = y;
+    }
+}
+
 static void qe_term_goto_xy(ShellState *s, int destx, int desty, int flags) {
+    /* Any arbitrary cursor repositioning invalidates the position cache. */
+    s->cur_x = s->cur_y = -1;
     s->cur_offset = qe_term_goto_pos(s, s->cur_offset, destx, desty, flags);
 }
 
@@ -1479,7 +1528,6 @@ static void qe_term_emulate(ShellState *s, int c)
                 /* go to next line */
                 /* CG: should check if column should be kept in cooked mode */
                 if (offset >= s->b->total_size) {
-                    int x, y;
                     /* add a new line */
                     /* CG: XXX: ignoring charset */
                     qe_term_set_style(s);
@@ -1495,8 +1543,9 @@ static void qe_term_emulate(ShellState *s, int c)
                         s->bce_style = 0;
                     }
                     s->cur_offset = offset;
-                    /* update current screen_top */
-                    qe_term_get_pos(s, offset, &x, &y);
+                    /* Update screen_top: O(1) via cached cur_y when valid,
+                     * O(N) fallback via qe_term_get_pos otherwise. */
+                    qe_term_advance_after_lf(s, offset);
                 } else {
                     // XXX: test if cursor is on last row and append a newline
                     // XXX: potential style issue if appending a newline
@@ -1522,7 +1571,25 @@ static void qe_term_emulate(ShellState *s, int c)
         case 13:    /* CR   Carriage Return (Ctrl-M). */
             /* move to visual beginning of line */
             //TRACE_PRINTF(s, "CR: ");
-            qe_term_goto_xy(s, 0, 0, TG_RELATIVE_ROW);
+            if (!s->use_alternate_screen && s->cur_y >= 0) {
+                /* Fast O(cols) path: walk backward cur_x columns from cur_offset.
+                 * Avoids the O(N) qe_term_get_pos walk from screen_top. */
+                int off = s->cur_offset;
+                int rem = s->cur_x;
+                while (rem > 0 && off > 0) {
+                    int prev;
+                    char32_t ch = eb_prevc(s->b, off, &prev);
+                    if (ch == '\n') break;
+                    rem -= max_int(qe_wcwidth(ch), 1);
+                    if (rem < 0) break;
+                    off = prev;
+                }
+                s->cur_offset = off;
+                s->cur_x = 0;
+                /* cur_y is unchanged: still on same row */
+            } else {
+                qe_term_goto_xy(s, 0, 0, TG_RELATIVE_ROW);
+            }
             break;
         case 14:    /* SO   Shift Out (Ctrl-N) ->
              * Switch to Alternate Character Set.  This
@@ -1593,6 +1660,9 @@ static void qe_term_emulate(ShellState *s, int c)
                     len = 1;
                 }
                 s->cur_offset = qe_term_overwrite(s, offset, 1, buf1, len);
+                /* Update cached column for streaming output. */
+                if (!s->use_alternate_screen && s->cur_y >= 0)
+                    qe_term_update_cur_pos(s, 1);
             } else {
                 TRACE_MSG(s, "control");
             }
@@ -1612,6 +1682,9 @@ static void qe_term_emulate(ShellState *s, int c)
                 s->cur_offset += eb_insert(s->b, offset, s->term_buf, s->utf8_len);
             } else {
                 s->cur_offset = qe_term_overwrite(s, offset, w, cs8(s->term_buf), s->utf8_len);
+                /* Update cached column for streaming output. */
+                if (!s->use_alternate_screen && s->cur_y >= 0)
+                    qe_term_update_cur_pos(s, w);
             }
             s->state = QE_TERM_STATE_NORM;
         }
@@ -2268,6 +2341,8 @@ static void qe_term_emulate(ShellState *s, int c)
                         }
                         s->use_alternate_screen = 1;
                         s->cur_offset = s->alternate_screen_top = offset;
+                        s->cur_x = 0;
+                        s->cur_y = 0;
                         // XXX: should update window top?
                     }
                     break;
@@ -2350,6 +2425,7 @@ static void qe_term_emulate(ShellState *s, int c)
                         s->use_alternate_screen = 0;
                     }
                     s->cur_offset = s->b->total_size;
+                    s->cur_x = s->cur_y = -1;  /* position in main screen unknown */
                     break;
                 default:
                     TRACE_MSG(s, "mode reset");
