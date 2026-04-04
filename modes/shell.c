@@ -72,7 +72,7 @@ typedef struct ShellState {
     int cur_prompt; /* offset of end of prompt on current line */
     int save_x, save_y;
     int nb_params;
-#define CSI_PARAM_OMITTED  0x80000000
+#define CSI_PARAM_OMITTED  (int)0x80000000U
     int params[MAX_CSI_PARAMS + 1];
     int state;
     int esc1, esc2;
@@ -151,7 +151,7 @@ static int get_pty(int *master_fd, int *slave_fd)
         static const char ptychar2[] = "0123456789abcdef";
         char ptydev[] = "/dev/pty??";
         char ttydev[] = "/dev/tty??";
-        int len = strlen(ttydev);
+        int len = (int)strlen(ttydev);
         const char *c1, *c2;
 
         for (c1 = ptychar1; *c1; c1++) {
@@ -209,8 +209,8 @@ static int run_process(ShellState *s,
     fcntl(pty_fd, F_SETFD, FD_CLOEXEC);
 
     /* set screen size on the master */
-    ws.ws_col = cols;
-    ws.ws_row = rows;
+    ws.ws_col = (uint16_t)cols;
+    ws.ws_row = (uint16_t)rows;
     ws.ws_xpixel = ws.ws_col;
     ws.ws_ypixel = ws.ws_row;
     ioctl(pty_fd, TIOCSWINSZ, &ws);
@@ -490,14 +490,14 @@ static void qe_term_init(ShellState *s)
 static void qe_term_write(ShellState *s, const char *buf, int len)
 {
     if (len < 0)
-        len = strlen(buf);
+        len = (int)strlen(buf);
 
     if (s->base.qs->trace_buffer)
         qe_trace_bytes(s->base.qs, buf, len, EB_TRACE_PTY);
 
     /* Use bounded timeout to avoid busy-looping on EAGAIN when the
      * PTY buffer is full (child process hung or suspended). */
-    ssize_t written = qe_write_timeout(s->pty_fd, buf, len, 5000);
+    ssize_t written = qe_write_timeout(s->pty_fd, buf, (size_t)len, 5000);
     if (written > 0)
         s->last_char = buf[written - 1];
 }
@@ -1041,12 +1041,12 @@ static int qe_term_insert_lines(ShellState *s, int offset, int n)
 #if QE_TERM_FG_COLORS < 256
 #define MAP_FG_COLOR(color)  qe_map_color(xterm_colors[color], xterm_colors, QE_TERM_FG_COLORS, NULL)
 #else
-#define MAP_FG_COLOR(color)  (color)
+#define MAP_FG_COLOR(color)  (unsigned int)(color)
 #endif
 #if QE_TERM_BG_COLORS < 256
 #define MAP_BG_COLOR(color)  qe_map_color(xterm_colors[color], xterm_colors, QE_TERM_BG_COLORS, NULL)
 #else
-#define MAP_BG_COLOR(color)  (color)
+#define MAP_BG_COLOR(color)  (unsigned int)(color)
 #endif
 
 static int qe_term_csi_m(ShellState *s, const int *params, int count)
@@ -1113,16 +1113,16 @@ static int qe_term_csi_m(ShellState *s, const int *params, int count)
     case 21:    /* Doubly-underlined (ISO 6429). Bold off sometimes */
         goto unhandled;
     case 22:    /* Normal (neither bold nor faint). [exit_bold_mode] */
-        s->attr &= ~QE_TERM_BOLD;
+        s->attr &= ~(unsigned int)QE_TERM_BOLD;
         break;
     case 23:    /* Not italicized (ISO 6429). Not Fraktur. [exit_italic_mode] */
-        s->attr &= ~QE_TERM_ITALIC;
+        s->attr &= ~(unsigned int)QE_TERM_ITALIC;
         break;
     case 24:    /* Not underlined. [exit_underline_mode] */
-        s->attr &= ~QE_TERM_UNDERLINE;
+        s->attr &= ~(unsigned int)QE_TERM_UNDERLINE;
         break;
     case 25:    /* Steady (not blinking). [exit_blink_mode] */
-        s->attr &= ~QE_TERM_BLINK;
+        s->attr &= ~(unsigned int)QE_TERM_BLINK;
         break;
     case 26:    /* reserved */
         goto unhandled;
@@ -1319,8 +1319,8 @@ static void shell_display_hook(EditState *e)
                 }
                 if (s->pty_fd > 0) {
                     struct winsize ws;
-                    ws.ws_col = s->cols;
-                    ws.ws_row = s->rows;
+                    ws.ws_col = (uint16_t)s->cols;
+                    ws.ws_row = (uint16_t)s->rows;
                     ws.ws_xpixel = ws.ws_col;
                     ws.ws_ypixel = ws.ws_row;
                     ioctl(s->pty_fd, TIOCSWINSZ, &ws);
@@ -1381,12 +1381,12 @@ static void shell_key(void *opaque, int key)
     case KEY_F20:       p = s->kf20;  break;
     default:
         if (key < 256) {
-            buf[0] = key;
+            buf[0] = (char)key;
             len = 1;
         } else
         if (key >= KEY_META(0) && key <= KEY_META(255)) {
             buf[0] = '\033';
-            buf[1] = key;
+            buf[1] = (char)key;
             len = 2;
         } else {
             p = NULL;
@@ -1415,7 +1415,7 @@ static void qe_term_emulate(ShellState *s, int c)
     }
     if (s->term_pos < countof(s->term_buf)) {
         /* UTF-8 bytes are appended here (among other uses of the buffer) */
-        s->term_buf[s->term_pos++] = c;
+        s->term_buf[s->term_pos++] = (unsigned char)c;
         s->term_len = s->term_pos;
     }
 
@@ -1555,8 +1555,9 @@ static void qe_term_emulate(ShellState *s, int c)
                             0x2502, 0x2264, 0x2265, 0x03c0,
                             0x2260, 0x00a3, 0x00b7, 0x0020
                         };
-                        s->lastc = c = unitab_xterm_std[c - 96];
-                        len = utf8_encode(buf1, c);
+                        c = (int)unitab_xterm_std[c - 96];
+                        s->lastc = (char32_t)c;
+                        len = utf8_encode(buf1, (char32_t)c);
                     } else {
                         /* CG: quick 8 bit hack: store line drawing
                          * characters in [96..127] as meta control
@@ -1564,7 +1565,8 @@ static void qe_term_emulate(ShellState *s, int c)
                          * This hack is reversed in tty_term_flush().
                          */
                         c += 32;
-                        buf1[0] = s->lastc = c;
+                        s->lastc = (char32_t)c;
+                        buf1[0] = (char)c;
                         len = 1;
                     }
                 } else {
@@ -1586,7 +1588,8 @@ static void qe_term_emulate(ShellState *s, int c)
                         }
                     }
                     //len = eb_encode_char32(s->b, buf1, c);
-                    buf1[0] = s->lastc = c;
+                    s->lastc = (char32_t)c;
+                    buf1[0] = (char)c;
                     len = 1;
                 }
                 s->cur_offset = qe_term_overwrite(s, offset, 1, buf1, len);
@@ -1819,7 +1822,7 @@ static void qe_term_emulate(ShellState *s, int c)
         /* Stop string on \a (^G) or ST (ESC \) */
         if (!(c == '\007' || c == 0234 || (s->lastc == 27 && c == '\\'))) {
             /* XXX: should store the string for specific cases */
-            s->lastc = c;
+            s->lastc = (char32_t)c;
             break;
         }
         s->state = QE_TERM_STATE_NORM;
@@ -1840,7 +1843,7 @@ static void qe_term_emulate(ShellState *s, int c)
             case 7:   /* OSC 7: Current Working Directory */
                 /* Format: file://hostname/path or file:///path */
                 if (slen > 7 && !memcmp(str, "file://", 7)) {
-                    const char *path = memchr(str + 7, '/', slen - 7);
+                    const char *path = memchr(str + 7, '/', (size_t)(slen - 7));
                     if (path) {
                         int pathlen = slen - (int)(path - str);
                         pstrncpy(s->curpath, sizeof(s->curpath), path, pathlen);
@@ -1902,7 +1905,7 @@ static void qe_term_emulate(ShellState *s, int c)
             s->esc1 = c;    /* no need to distinguish leader and interm bytes */
             break;
         }
-        if (qe_isdigit(c)) {
+        if (qe_isdigit((char32_t)c)) {
             s->params[s->nb_params] &= ~CSI_PARAM_OMITTED;
             s->params[s->nb_params] *= 10;
             s->params[s->nb_params] += c - '0';
@@ -2468,7 +2471,7 @@ static void shell_read_cb(void *opaque)
     if (!s || s->base.mode != &shell_mode)
         return;
 
-    len = read(s->pty_fd, buf, sizeof(buf));
+    len = (int)read(s->pty_fd, buf, sizeof(buf));
     if (len <= 0) {
         if (len == 0 || (errno != EAGAIN && errno != EINTR)) {
             /* EOF or fatal error (e.g. EIO when slave pty closed):
@@ -2618,7 +2621,7 @@ static void shell_pid_cb(void *opaque, int status)
         int save_readonly = s->b->flags & BF_READONLY;
         s->b->flags &= ~BF_READONLY;
 
-        eb_write(b, b->total_size, buf, strlen(buf));
+        eb_write(b, b->total_size, buf, (int)strlen(buf));
 
         if (save_readonly) {
             s->b->modified = 0;
@@ -3044,10 +3047,10 @@ static void shell_write_char(EditState *e, int c)
 
         if (c >= KEY_META(0) && c <= KEY_META(0xff)) {
             buf[0] = '\033';
-            buf[1] = c - KEY_META(0);
+            buf[1] = (char)(c - KEY_META(0));
             len = 2;
         } else {
-            len = eb_encode_char32(e->b, buf, c);
+            len = eb_encode_char32(e->b, buf, (char32_t)c);
         }
         qe_term_write(s, buf, len);
     } else {
@@ -3290,7 +3293,7 @@ static void do_shell_yank(EditState *e)
                 if (c == '\n')
                     do_shell_newline(e);
                 else
-                    shell_write_char(e, c);
+                    shell_write_char(e, (int)c);
             }
         }
         qs->this_cmd_func = (CmdFunc)do_yank;
@@ -3355,8 +3358,8 @@ static void do_shell_refresh(EditState *e, int flags)
 
         if (s->pty_fd > 0 && (flags & SR_UPDATE_SIZE)) {
             struct winsize ws;
-            ws.ws_col = s->cols;
-            ws.ws_row = s->rows;
+            ws.ws_col = (uint16_t)s->cols;
+            ws.ws_row = (uint16_t)s->rows;
             ws.ws_xpixel = ws.ws_col;
             ws.ws_ypixel = ws.ws_row;
             ioctl(s->pty_fd, TIOCSWINSZ, &ws);
@@ -3586,7 +3589,7 @@ static void do_next_error(EditState *s, int arg, int dir)
                 break;
             if (!qe_isdigit(c))
                 goto next_line;
-            line_num = line_num * 10 + c - '0';
+            line_num = line_num * 10 + (int)(c - '0');
         }
         if (c == ':' || c == ',' || c == '.') {
             int offset0 = offset;
@@ -3596,7 +3599,7 @@ static void do_next_error(EditState *s, int arg, int dir)
                 if (c == ' ') continue;
                 if (!qe_isdigit(c))
                     break;
-                col_num = col_num * 10 + c - '0';
+                col_num = col_num * 10 + (int)(c - '0');
             }
             if (col_num == 0) {
                 offset = offset0;
@@ -3691,7 +3694,7 @@ static int shell_grab_filename(const char32_t *buf, int n,
             continue;
         }
         if (len + 1 < size) {
-            dest[len++] = c;
+            dest[len++] = (char)c;
         }
     }
     if (size)
