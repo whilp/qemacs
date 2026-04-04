@@ -91,11 +91,16 @@ $(OUTDIR)/bench_buffer: bench_buffer.c $(BENCH_SRCS) ../qe.h ../cutils.h | $(OUT
 $(OUTDIR)/bench_shell_buffer: bench_shell_buffer.c $(BENCH_SRCS) ../qe.h ../cutils.h | $(OUTDIR)
 	$(CC) $(TEST_CFLAGS) -Wno-format-truncation -o $@ bench_shell_buffer.c $(BENCH_SRCS)
 
-bench: $(OUTDIR)/bench_buffer $(OUTDIR)/bench_shell_buffer
+$(OUTDIR)/bench_kill_region: bench_kill_region.c $(BENCH_SRCS) ../qe.h ../cutils.h | $(OUTDIR)
+	$(CC) $(TEST_CFLAGS) -Wno-format-truncation -o $@ bench_kill_region.c $(BENCH_SRCS)
+
+bench: $(OUTDIR)/bench_buffer $(OUTDIR)/bench_shell_buffer $(OUTDIR)/bench_kill_region
 	@echo "--- Running bench_buffer ---"
 	./$(OUTDIR)/bench_buffer
 	@echo "--- Running bench_shell_buffer ---"
 	./$(OUTDIR)/bench_shell_buffer
+	@echo "--- Running bench_kill_region ---"
+	./$(OUTDIR)/bench_kill_region
 
 clean:
 	rm -rf $(OUTDIR) .embed
