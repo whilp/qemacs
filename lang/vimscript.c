@@ -83,7 +83,7 @@ static int is_vim_keyword(const char32_t *str, int from, int to,
         c = str[from + i];
         if (c >= 0x80)
             return 0;
-        keyword[i] = c;
+        keyword[i] = (char)c;
     }
     keyword[len] = '\0';
 
@@ -94,13 +94,13 @@ static int is_vim_keyword(const char32_t *str, int from, int to,
              i++) {
             continue;
         }
-        if (i <= len && !memcmp(p, keyword, i)) {
+        if (i <= len && !memcmp(p, keyword, (size_t)i)) {
             if (i == len)
                 return 1;
-            if (p[i] == '[' && !memcmp(p + i + 1, keyword + i, len - i))
+            if (p[i] == '[' && !memcmp(p + i + 1, keyword + i, (size_t)(len - i)))
                 return 1;
         }
-        for (p += i; *p != '\0' && (c = *p++) != ' ' && c != '|';)
+        for (p += i; *p != '\0' && (c = (char32_t)(unsigned char)*p++) != ' ' && c != '|';)
             continue;
     }
     return 0;

@@ -157,7 +157,7 @@ static void perl_colorize_line(QEColorizeContext *cp,
 
     if (colstate & (IN_PERL_STRING1 | IN_PERL_STRING2)) {
         delim = (colstate & IN_PERL_STRING1) ? '\'' : '\"';
-        i = perl_string(str, delim, start, n);
+        i = perl_string(str, (char32_t)delim, start, n);
         if (i < n) {
             i++;
             colstate &= ~(IN_PERL_STRING1 | IN_PERL_STRING2);
@@ -172,7 +172,7 @@ static void perl_colorize_line(QEColorizeContext *cp,
     }
     if (colstate & IN_PERL_HEREDOC) {
         i = n;
-        if (n == perl_eos_len && !umemcmp(perl_eos, str, n)) {
+        if (n == perl_eos_len && !umemcmp(perl_eos, str, (size_t)n)) {
             colstate &= ~IN_PERL_HEREDOC;
             SET_STYLE(sbuf, start, i, PERL_STYLE_KEYWORD);
         } else {
@@ -257,7 +257,7 @@ static void perl_colorize_line(QEColorizeContext *cp,
                 }
                 if (s2 > s1) {
                     perl_eos_len = min_int((int)(s2 - s1), countof(perl_eos) - 1);
-                    umemcpy(perl_eos, str + s1, perl_eos_len);
+                    umemcpy(perl_eos, str + s1, (size_t)perl_eos_len);
                     perl_eos[perl_eos_len] = '\0';
                     colstate |= IN_PERL_HEREDOC;
                 }
@@ -286,10 +286,10 @@ static void perl_colorize_line(QEColorizeContext *cp,
         case '\'':
         case '`':
         case '"':
-            delim = c;
+            delim = (int)c;
         string:
             /* parse string const */
-            s1 = perl_string(str, delim, i, n);
+            s1 = perl_string(str, (char32_t)delim, i, n);
             if (s1 >= n) {
                 if (c == '\'') {
                     colstate |= IN_PERL_STRING1;

@@ -53,7 +53,7 @@ static int shell_script_get_var(char *buf, int buf_size,
 
     while (j < n && qe_isalnum_(c = str[j])) {
         if (i < buf_size - 1) {
-            buf[i++] = c;
+            buf[i++] = (char)c;
         }
         j++;
     }

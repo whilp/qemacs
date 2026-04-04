@@ -118,7 +118,7 @@ static int get_rye_identifier(char *dest, int size, char32_t c,
     for (;; j++) {
         if (c < 128) {
             if (pos < size - 1) {
-                dest[pos++] = c;
+                dest[pos++] = (char)c;
             }
         } else {
             char buf[6];

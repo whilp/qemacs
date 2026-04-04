@@ -141,11 +141,11 @@ static void r_colorize_line(QEColorizeContext *cp,
             /* parse identifiers and keywords */
             if (qe_isalpha_(c) || c == '.') {
                 len = 0;
-                keyword[len++] = (c < 0xFF) ? c : 0xFF;
+                keyword[len++] = (char)((c < 0xFF) ? c : 0xFF);
                 for (; i < n; i++) {
                     if (qe_isalnum_(str[i]) || str[i] == '.') {
                         if (len < countof(keyword) - 1)
-                            keyword[len++] = (str[i] < 0xFF) ? str[i] : 0xFF;
+                            keyword[len++] = (char)((str[i] < 0xFF) ? str[i] : 0xFF);
                     } else {
                         break;
                     }

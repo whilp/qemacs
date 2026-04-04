@@ -1210,7 +1210,7 @@ static DiredItem *dired_add_item(DiredState *ds, const char *name,
         dip->flags |= DI_ISDIR;
     }
     dip->mode = st.st_mode;
-    dip->nlink = st.st_nlink;
+    dip->nlink = (nlink_t)st.st_nlink;
     dip->uid = st.st_uid;
     dip->gid = st.st_gid;
     dip->rdev = st.st_rdev;

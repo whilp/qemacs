@@ -200,32 +200,32 @@ static int lisp_is_number(const char *str)
     int i;
 
     if (*str == 'b' && str[1]) {
-        for (str++; qe_isbindigit(*str); str++)
+        for (str++; qe_isbindigit((char32_t)(unsigned char)*str); str++)
             continue;
     } else
     if (*str == 'o' && str[1]) {
-        for (str++; qe_isoctdigit(*str); str++)
+        for (str++; qe_isoctdigit((char32_t)(unsigned char)*str); str++)
             continue;
     } else
     if (*str == 'x' && str[1]) {
-        for (str++; qe_isxdigit(*str); str++)
+        for (str++; qe_isxdigit((char32_t)(unsigned char)*str); str++)
             continue;
     } else {
         if ((*str == '-' || *str == 'd') && str[1])
             str++;
-        if (qe_isdigit(*str)) {
-            for (; qe_isdigit(*str); str++)
+        if (qe_isdigit((char32_t)(unsigned char)*str)) {
+            for (; qe_isdigit((char32_t)(unsigned char)*str); str++)
                 continue;
             if (*str == '.') {
-                for (str++; qe_isdigit(*str); str++)
+                for (str++; qe_isdigit((char32_t)(unsigned char)*str); str++)
                     continue;
             }
-            if (qe_tolower(*str) == 'e') {
+            if (qe_tolower((char32_t)(unsigned char)*str) == 'e') {
                 i = 1;
                 if (str[i] == '+' || str[i] == '-')
                     i++;
-                if (qe_isdigit(str[i])) {
-                    for (str += i + 1; qe_isdigit(*str); str++)
+                if (qe_isdigit((char32_t)(unsigned char)str[i])) {
+                    for (str += i + 1; qe_isdigit((char32_t)(unsigned char)*str); str++)
                         continue;
                 }
             }

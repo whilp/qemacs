@@ -117,7 +117,7 @@ static int ff_match_number(const char *str, int *pnum)
     int i = 0, base = 10, digit;
     char32_t c;
     int year = -1, month = -1;
-    long long num = 0, stash = 0;
+    int num = 0, stash = 0;
 
     if (str[i] == '-') {
         i++;
@@ -170,13 +170,13 @@ static int ff_match_number(const char *str, int *pnum)
             continue;
         default:
             if (c >= '0' && c <= '9')
-                digit = (int)c - '0';
+                digit = (int)(c - '0');
             else
             if (c >= 'a' && c <= 'z')
-                digit = (int)c - 'a' + 10;
+                digit = (int)(c - 'a') + 10;
             else
             if (c >= 'A' && c <= 'Z')
-                digit = (int)c - 'A' + 10;
+                digit = (int)(c - 'A') + 10;
             else
                 digit = 255;
             if (digit >= base)
@@ -265,7 +265,7 @@ static void ff_colorize_line(QEColorizeContext *cp,
         word[len++] = (char)c;
         for (; i < n && !qe_isblank(str[i]); i++) {
             if (len < countof(word) - 1)
-                word[len++] = str[i];
+                word[len++] = (char)str[i];
         }
         word[len] = '\0';
         if (strequal("EOF", word) || strequal("EOF`", word)) {

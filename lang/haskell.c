@@ -180,7 +180,7 @@ static void haskell_colorize_line(QEColorizeContext *cp,
             if (qe_isalpha_(c)) {
                 for (klen = 0, i--; qe_isalnum_(str[i]) || str[i] == '\''; i++) {
                     if (klen < countof(kbuf) - 1)
-                        kbuf[klen++] = str[i];
+                        kbuf[klen++] = (char)str[i];
                 }
                 kbuf[klen] = '\0';
 

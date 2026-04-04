@@ -177,7 +177,7 @@ static void magpie_colorize_line(QEColorizeContext *cp,
                     style = MAGPIE_STYLE_FUNCTION;
                     break;
                 }
-                if (qe_isupper(kbuf[0]) && (start == 0 || str[start-1] != '.')) {
+                if (qe_isupper((u8)kbuf[0]) && (start == 0 || str[start-1] != '.')) {
                     /* Types are capitalized */
                     style = MAGPIE_STYLE_TYPE;
                     break;

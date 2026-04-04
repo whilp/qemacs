@@ -164,7 +164,7 @@ static void csv_colorize_line(QEColorizeContext *cp,
             }
             break;
         }
-        sep = CSV_SEP[colstate & CSV_STATE_SEP];
+        sep = (u8)CSV_SEP[colstate & CSV_STATE_SEP];
         start = i = 0;
         while (i < n) {
             c = str[i++];
@@ -183,7 +183,7 @@ static void csv_colorize_line(QEColorizeContext *cp,
         i = 0;
     }
 
-    sep = CSV_SEP[colstate & CSV_STATE_SEP];
+    sep = (char32_t)(unsigned char)CSV_SEP[colstate & CSV_STATE_SEP];
     if (sep == ';')
         dot = ',';
 

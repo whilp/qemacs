@@ -171,7 +171,7 @@ static void wolfram_colorize_line(QEColorizeContext *cp,
             if (qe_isdigit(c)) {
                 int value = 0;
                 while (qe_isdigit(str[i])) {
-                    value = value * 10 + str[i++] - '0';
+                    value = value * 10 + (int)(str[i++] - '0');
                 }
                 if (str[i] == '^' && str[i + 1] == '^' && value < 36) {
                     i += 2;

@@ -1368,17 +1368,17 @@ static inline int display_char(DisplayState *s, int offset1, int offset2,
     return display_char_bidir(s, offset1, offset2, 0, ch);
 }
 
-#define SET_STYLE(sbuf,a,b,style)  cp_set_style((sbuf) + (a), (sbuf) + (b), style)
+#define SET_STYLE(sbuf,a,b,style)  cp_set_style((sbuf) + (a), (sbuf) + (b), (QETermStyle)(style))
 
-static inline void cp_set_style(QETermStyle *p, QETermStyle *to, int style) {
+static inline void cp_set_style(QETermStyle *p, QETermStyle *to, QETermStyle style) {
     while (p < to)
-        *p++ = (QETermStyle)style;
+        *p++ = style;
 }
 
-#define SET_STYLE1(sbuf,a,style)  cp_set_style1((sbuf) + (a), style)
+#define SET_STYLE1(sbuf,a,style)  cp_set_style1((sbuf) + (a), (QETermStyle)(style))
 
-static inline void cp_set_style1(QETermStyle *p, int style) {
-    *p = (QETermStyle)style;
+static inline void cp_set_style1(QETermStyle *p, QETermStyle style) {
+    *p = style;
 }
 
 /* input.c */

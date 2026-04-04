@@ -103,7 +103,7 @@ static void elixir_colorize_line(QEColorizeContext *cp,
                         }
                     }
                 parse_regex:
-                    sep = elixir_delim2[state & 15];
+                    sep = (char32_t)(unsigned char)elixir_delim2[state & 15];
                     /* parse regular expression */
                     while (i < n) {
                         if ((c = str[i++]) == '\\') {
@@ -143,7 +143,7 @@ static void elixir_colorize_line(QEColorizeContext *cp,
                 i += 2;
             }
         parse_string:
-            sep = elixir_delim2[state & 15];
+            sep = (char32_t)(unsigned char)elixir_delim2[state & 15];
             style = (state & IN_ELIXIR_TRIPLE) ?
                 ELIXIR_STYLE_HEREDOC : ELIXIR_STYLE_STRING;
             while (i < n) {
@@ -244,15 +244,15 @@ static void elixir_colorize_line(QEColorizeContext *cp,
             if (qe_isalpha_(c)) {
         has_alpha:
                 klen = 0;
-                kbuf[klen++] = c;
+                kbuf[klen++] = (char)(unsigned char)c;
                 for (; qe_isalnum_(c = str[i]); i++) {
                     if (klen < countof(kbuf) - 1)
-                        kbuf[klen++] = c;
+                        kbuf[klen++] = (char)(unsigned char)c;
                 }
                 if (c == '!' || c == '?') {
                     i++;
                     if (klen < countof(kbuf) - 1)
-                        kbuf[klen++] = c;
+                        kbuf[klen++] = (char)(unsigned char)c;
                 }
                 kbuf[klen] = '\0';
 

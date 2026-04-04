@@ -134,7 +134,7 @@ static void scad_colorize_line(QEColorizeContext *cp,
             if (qe_isalnum_(c) || c == '$') {
                 isnum = qe_isdigit(c);
                 len = 0;
-                keyword[len++] = c;
+                keyword[len++] = (char)c;
                 for (; qe_isalnum_(str[i]) || str[i] == '.'; i++) {
                     if (str[i] == '.') {
                         if (!isnum)
@@ -144,7 +144,7 @@ static void scad_colorize_line(QEColorizeContext *cp,
                         isnum = 0;
                     }
                     if (len < countof(keyword) - 1)
-                        keyword[len++] = str[i];
+                        keyword[len++] = (char)str[i];
                 }
                 keyword[len] = '\0';
                 if (isnum) {

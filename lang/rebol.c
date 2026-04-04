@@ -228,27 +228,27 @@ static void rebol_colorize_line(QEColorizeContext *cp,
 
             /* parse words */
             klen = 0;
-            keyword[klen++] = qe_tolower(c);
+            keyword[klen++] = (char)qe_tolower(c);
             for (; i < n; i++) {
                 if (qe_findchar(" \t;()[]\"", str[i]))
                     break;
                 if (klen < countof(keyword) - 1)
-                    keyword[klen++] = qe_tolower(str[i]);
+                    keyword[klen++] = (char)qe_tolower(str[i]);
             }
             keyword[klen] = '\0';
             if (qe_isdigit(c) || c == '+' || c == '-') {
                 /* check numbers */
                 int dots = 0;
                 for (k = 1; k < klen; k++) {
-                    if (qe_match2(keyword[k], '.', ',')) {
+                    if (qe_match2((char32_t)(unsigned char)keyword[k], '.', ',')) {
                         dots++;
                     } else
                     if (keyword[k] == 'e') {
-                        if (qe_match2(keyword[k + 1], '+', '-'))
+                        if (qe_match2((char32_t)(unsigned char)keyword[k + 1], '+', '-'))
                             k++;
                     } else
-                    if (!qe_match2(keyword[k], '\'', '%')
-                    &&  !qe_isdigit(keyword[k]))
+                    if (!qe_match2((char32_t)(unsigned char)keyword[k], '\'', '%')
+                    &&  !qe_isdigit((char32_t)(unsigned char)keyword[k]))
                         break;
                 }
                 if (k == klen && dots <= 1) {

@@ -208,13 +208,13 @@ static int java_scan_number(const char32_t *str0, int flavor)
 
 done:
     if (!qe_isalnum_(*str)) {
-        return str - str0;
+        return (int)(str - str0);
     }
 
 error:
     while (qe_isalnum_(*str))
         str++;
-    return -(str - str0);
+    return -(int)(str - str0);
 }
 
 static void groovy_colorize_line(QEColorizeContext *cp,
@@ -397,11 +397,11 @@ static void groovy_colorize_line(QEColorizeContext *cp,
             hasname:
                 haslower = 0;
                 klen = 0;
-                kbuf[klen++] = c;
+                kbuf[klen++] = (char)c;
                 for (; qe_isalnum_(str[i]) || qe_is_groovy_letter(str[i]); i++) {
                     haslower |= qe_islower(str[i]);
                     if (klen < countof(kbuf) - 1)
-                        kbuf[klen++] = str[i];
+                        kbuf[klen++] = (char)str[i];
                 }
                 kbuf[klen] = '\0';
 

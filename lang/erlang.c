@@ -181,9 +181,9 @@ static void erlang_colorize_line(QEColorizeContext *cp,
         if (qe_isdigit(c)) {
             /* parse numbers */
             style = ERLANG_STYLE_INTEGER;
-            base = c - '0';
+            base = (int)(c - '0');
             while (qe_isdigit(str[i])) {
-                base = base * 10 + str[i++] - '0';
+                base = base * 10 + (int)(str[i++] - '0');
             }
             if (base >= 2 && base <= 36 && str[i] == '#') {
                 for (i += 1; qe_digit_value(str[i]) < base; i++)
@@ -214,10 +214,10 @@ static void erlang_colorize_line(QEColorizeContext *cp,
         if (qe_isalpha_(c) || c == '@') {
             /* parse an Erlang atom or identifier */
             len = 0;
-            keyword[len++] = c;
+            keyword[len++] = (char)c;
             for (; qe_isalnum_(str[i]) || str[i] == '@'; i++) {
                 if (len < countof(keyword) - 1)
-                    keyword[len++] = str[i];
+                    keyword[len++] = (char)str[i];
             }
             keyword[len] = '\0';
             if (start && str[start - 1] == '-'
@@ -233,7 +233,7 @@ static void erlang_colorize_line(QEColorizeContext *cp,
             if (check_fcall(str, i)) {
                 style = ERLANG_STYLE_FUNCTION;
             } else
-            if (qe_islower(keyword[0])) {
+            if (qe_islower((u8)keyword[0])) {
                 style = ERLANG_STYLE_ATOM;
             } else {
                 style = ERLANG_STYLE_IDENTIFIER;

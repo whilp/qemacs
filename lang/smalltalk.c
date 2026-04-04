@@ -107,11 +107,11 @@ static void smalltalk_colorize_line(QEColorizeContext *cp,
             if (qe_isalpha(c)) {
                 /* parse identifiers and keywords */
                 len = 0;
-                keyword[len++] = c;
+                keyword[len++] = (char)c;
                 /* should allow other chars: .+/\*~<>@%|&? */
                 for (; i < n && qe_isalnum(str[i]); i++) {
                     if (len < countof(keyword) - 1)
-                        keyword[len++] = str[i];
+                        keyword[len++] = (char)str[i];
                 }
                 keyword[len] = '\0';
                 if (strfind(syn->keywords, keyword))
@@ -128,9 +128,9 @@ static void smalltalk_colorize_line(QEColorizeContext *cp,
                 int value = 0;
 
                 while (qe_isdigit(str[i])) {
-                    value = value * 10 + str[i++] - '0';
+                    value = value * 10 + (int)(str[i++] - '0');
                 }
-                if (qe_findchar("rR", str[i]) && qe_inrange(value, 2, 36)) {
+                if (qe_findchar("rR", str[i]) && qe_inrange((char32_t)value, 2, 36)) {
                     i++;
                     while (qe_digit_value(str[i]) < value)
                         i++;
@@ -173,7 +173,7 @@ static int smalltalk_mode_probe(ModeDef *mode, ModeProbeData *pd)
             return 51;
     }
 
-    while (qe_isspace(*p))
+    while (qe_isspace((char32_t)(unsigned char)*p))
         p++;
 
     if (*p == '!') {
