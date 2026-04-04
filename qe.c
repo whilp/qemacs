@@ -4914,7 +4914,7 @@ static int syntax_get_colorized_line(QEColorizeContext *cp,
             offset1 = eb_next(b, offset1);
     }
 
-    memset(cp->sbuf, 0, (len + 1) * sizeof(*cp->sbuf));
+    memset(cp->sbuf, 0, (size_t)(len + 1) * sizeof(*cp->sbuf));
     bom = (cp->buf[0] == 0xFEFF);
     if (bom) {
         SET_STYLE1(cp->sbuf, 0, QE_STYLE_PREPROCESS);
@@ -4928,7 +4928,7 @@ static int syntax_get_colorized_line(QEColorizeContext *cp,
     //cp->buf[len + 1] = 0;
 
     /* XXX: if state is same as previous, minimize invalid region? */
-    s->colorize_states[line_num + 1] = cp->colorize_state;
+    s->colorize_states[line_num + 1] = (unsigned short)cp->colorize_state;
 
     /* Extend valid area */
     if (s->colorize_nb_valid_lines < line_num + 2)
@@ -5022,7 +5022,7 @@ int get_colorized_line(QEColorizeContext *cp,
         }
         cp->buf[len] = '\0';
         if (cp->sbuf) {
-            memset(cp->sbuf, 0, (len + 1) * sizeof(*cp->sbuf));
+            memset(cp->sbuf, 0, (size_t)(len + 1) * sizeof(*cp->sbuf));
         }
     }
     // XXX: should test if TABs should be colorized too
@@ -5119,7 +5119,7 @@ int text_display_line(EditState *s, DisplayState *ds, int offset)
                     if (cp->buf[i] == ']') {
                         level--;
                     } else
-                    if (level == 0 || !(cp->sbuf[i] & ~QE_STYLE_NUM)) {
+                    if (level == 0 || !(cp->sbuf[i] & ~(QETermStyle)QE_STYLE_NUM)) {
                         cp->sbuf[i] = QE_STYLE_HIGHLIGHT;
                     }
                 }
@@ -5161,7 +5161,7 @@ int text_display_line(EditState *s, DisplayState *ds, int offset)
                     eb_get_pos(s->b, &line, &end_char, end_offset);
 
                 for (i = start_char; i < end_char; i++) {
-                    cp->sbuf[i] = s->region_style;
+                    cp->sbuf[i] = (QETermStyle)s->region_style;
                 }
             }
         } else
@@ -5169,7 +5169,7 @@ int text_display_line(EditState *s, DisplayState *ds, int offset)
             /* XXX: only if qs->active_window == s ? */
             int i;
             for (i = 0; i < colored_nb_chars; i++)
-                cp->sbuf[i] = s->curline_style;
+                cp->sbuf[i] = (QETermStyle)s->curline_style;
         }
     }
 #endif
@@ -5386,7 +5386,7 @@ static void generic_text_display(EditState *s)
         if (ds->line_num >= 0 && ds->line_num < s->shadow_nb_lines) {
             /* erase the line shadow for the rest of the window */
             memset(&s->line_shadow[ds->line_num], 0xff,
-                   (s->shadow_nb_lines - ds->line_num) * sizeof(QELineShadow));
+                   (size_t)(s->shadow_nb_lines - ds->line_num) * sizeof(QELineShadow));
         }
     }
     display_close(ds);
@@ -5710,7 +5710,7 @@ static void parse_arguments(ExecCmdState *es)
             goto fail;
         type = cas.arg_type & CMD_ARG_TYPE_MASK;
         argp = &es->args[es->nb_args];
-        es->args_type[es->nb_args] = type;
+        es->args_type[es->nb_args] = (unsigned char)type;
         get_arg = 0;
         switch (type) {
         case CMD_ARG_INTVAL:
@@ -5864,9 +5864,9 @@ static void arg_edit_cb(void *opaque, char *str, CompletionDef *completion)
     switch (es->args_type[index]) {
     case CMD_ARG_INT:
         if (completion && completion->convert_entry) {
-            val = completion->convert_entry(es->s, str, &p);
+            val = (int)completion->convert_entry(es->s, str, &p);
         } else {
-            val = strtol_c(str, &p, 0);
+            val = (int)strtol_c(str, &p, 0);
         }
         if (*p != '\0') {
             put_error(es->s, "Invalid number: %s", str);
@@ -5991,7 +5991,7 @@ void qe_display(QEmacsState *qs)
                           qs->status_shadow, QE_STYLE_STATUS);
         }
         if (*qs->diag_shadow) {
-            int w = strlen(qs->diag_shadow) + 1;
+            int w = (int)strlen(qs->diag_shadow) + 1;
             w *= get_glyph_width(qs->screen, NULL, QE_STYLE_STATUS, '0');
             print_at_byte(qs->screen, x + width - w, y, w, height,
                           qs->diag_shadow, QE_STYLE_STATUS);
@@ -6368,7 +6368,7 @@ void do_define_kbd_macro(EditState *s, const char *name, const char *keys,
     int size, name_len;
     char *buf;
 
-    size = 2 + strlen(keys) + 3;
+    size = 2 + (int)strlen(keys) + 3;
     buf = qe_malloc_array(char, size);
     if (buf == NULL)
         return;
@@ -6378,7 +6378,7 @@ void do_define_kbd_macro(EditState *s, const char *name, const char *keys,
     /* CG: should parse macro keys to an array and pass index
      * to do_execute_macro.
      */
-    snprintf(buf, size, "@{%s}%c", keys, 0);
+    snprintf(buf, (size_t)size, "@{%s}%c", keys, 0);
 
     d = qe_find_cmd(s->qs, name);
     if (d && d->action.ESs == do_execute_macro_keys) {
@@ -6467,7 +6467,7 @@ static void qe_macro_add_key(QEmacsState *qs, int key)
             return;
         qs->macro_keys_size = new_size;
     }
-    qs->macro_keys[qs->nb_macro_keys++] = key;
+    qs->macro_keys[qs->nb_macro_keys++] = (unsigned short)key;
 }
 
 /*---------------- multi-cursor handling ----------------*/
@@ -6717,7 +6717,7 @@ static void qe_key_process(QEmacsState *qs, int key)
         return;
     }
 
-    c->keys[c->nb_keys++] = key;
+    c->keys[c->nb_keys++] = (unsigned int)key;
     s = qs->active_window;
     if (s == NULL) {
         s = qs->active_window = qs->first_window;
@@ -6735,7 +6735,7 @@ static void qe_key_process(QEmacsState *qs, int key)
     if (c->is_escape) {
         compose_keys(c->keys, &c->nb_keys);
         c->is_escape = 0;
-        key = c->keys[c->nb_keys - 1];
+        key = (int)c->keys[c->nb_keys - 1];
     }
 
     /* see if one command is found */
@@ -6787,7 +6787,7 @@ static void qe_key_process(QEmacsState *qs, int key)
             buf_put_keys(out, c->keys, c->nb_keys);
             if (key_redirect != KEY_NONE) {
                 buf_puts(out, " redirected to ");
-                buf_put_key(out, key_redirect);
+                buf_put_key(out, (int)key_redirect);
             }
             if (c->describe_key > 1) {
                 int save_offset = s->b->offset;
@@ -6876,7 +6876,7 @@ static void qe_key_process(QEmacsState *qs, int key)
  next:
     /* display prefix key pressed */
     if (key >= 0) {
-        len = strlen(c->buf);
+        len = (int)strlen(c->buf);
         if (len > 0 && c->buf[len-1] == '-')
             c->buf[len-1] = ' ';
         /* Should print argument if any in a more readable way */
@@ -7045,7 +7045,7 @@ void put_status(EditState *s, const char *fmt, ...)
         if (diag) {
             if (force || !strequal(p, qs->diag_shadow)) {
                 /* right align display and overwrite last diag message */
-                int w = strlen(qs->diag_shadow);
+                int w = (int)strlen(qs->diag_shadow);
                 w = snprintf(qs->diag_shadow, sizeof(qs->diag_shadow),
                              "%*s", w, p) + 1;
                 w *= get_glyph_width(qs->screen, NULL, QE_STYLE_STATUS, '0');
@@ -7364,7 +7364,7 @@ void file_complete(CompleteState *cp, CompleteFunc enumerate)
 
         base = get_basename(filename);
         /* ignore known backup files (hardcoded test for *~) */
-        len = strlen(base);
+        len = (int)strlen(base);
         if (!len || base[len - 1] == '~')
             continue;
         /* ignore known binary file extensions */
@@ -7461,7 +7461,7 @@ static int default_completion_window_get_entry(EditState *s, char *dest, int siz
     int len = eb_fgets(s->b, dest, size, offset, &offset);
     char *p = strchr(dest, '\t');
     if (p != NULL)
-        len = p - dest;
+        len = (int)(p - dest);
     dest[len] = '\0';   /* strip the TAB or trailing newline if any */
     return len;
 }
@@ -7546,8 +7546,8 @@ static void complete_test(CompleteState *cp, const char *str, int mode) {
             return;
         break;
     case CT_TEST:
-        if (memcmp(str, cp->current, cp->len)) {
-            if (!qe_memicmp(str, cp->current, cp->len))
+        if (memcmp(str, cp->current, (size_t)cp->len)) {
+            if (!qe_memicmp(str, cp->current, (size_t)cp->len))
                 fuzzy = 1;
             else
             if (cp->fuzzy && strmem(str, cp->current, cp->len))
@@ -7605,7 +7605,7 @@ static int match_strings(const char *s1, const char *s2, int len) {
     int pos, i;
 
     for (i = pos = 0; i < len; i++) {
-        u8 c = s1[i];
+        u8 c = (u8)s1[i];
         if (!utf8_is_trailing_byte(c))
             pos = i;
         if (c != s2[i])
@@ -7690,15 +7690,15 @@ void do_minibuffer_complete(EditState *s, int type, int key, int argval) {
 
     if (count > 0) {
         /* find the longest common prefix */
-        match_len = strlen(outputs[0]->str);
+        match_len = (int)strlen(outputs[0]->str);
         for (i = 1; i < count; i++) {
             match_len = match_strings(outputs[0]->str, outputs[i]->str,
                                       match_len);
         }
         /* strip extra data */
-        p = memchr(outputs[0]->str, '\t', match_len);
+        p = memchr(outputs[0]->str, '\t', (size_t)match_len);
         if (p)
-            match_len = p - outputs[0]->str;
+            match_len = (int)(p - outputs[0]->str);
     }
     if (match_len > cs.len) {
         /* add the possible chars */
@@ -7884,7 +7884,7 @@ static void minibuffer_set_str(EditState *s, int start, int end, const char *str
 {
     /* Replace the completion trigger zone */
     /* XXX: should insert UTF-8? */
-    start += eb_replace(s->b, start, end - start, str, strlen(str));
+    start += eb_replace(s->b, start, end - start, str, (int)strlen(str));
     s->offset = start;
 }
 
@@ -8115,7 +8115,7 @@ void minibuffer_edit(EditState *e, const char *input, const char *prompt,
     /* add default input */
     if (input) {
         /* Default input should already be encoded as UTF-8 */
-        len = strlen(input);
+        len = (int)strlen(input);
         eb_write(b, 0, (const u8 *)input, len);
         s->offset = len;
     }
@@ -8676,13 +8676,13 @@ void canonicalize_absolute_buffer_path(EditBuffer *b, int offset, char *buf, int
                 size_t ulen = strcspn(username, "/");
                 char uname[128];
                 struct passwd *pw;
-                pstrncpy(uname, sizeof(uname), username, ulen);
+                pstrncpy(uname, sizeof(uname), username, (int)ulen);
                 pw = getpwnam(uname);
                 if (pw) {
                     pstrcpy(path, sizeof(path), pw->pw_dir);
                 } else {
                     pstrcpy(path, sizeof(path), "/home/");
-                    pstrncat(path, sizeof(path), username, ulen);
+                    pstrncat(path, sizeof(path), username, (int)ulen);
                 }
                 pstrcat(path, sizeof(path), username + ulen);
                 path1 = path;
@@ -8781,14 +8781,14 @@ static int probe_mode(EditState *s, EditBuffer *b,
             if (ch == ESCAPE_CHAR) {
                 probe_data.charset_state.p = rawbuf + offset - 1;
                 ch = probe_data.charset_state.decode_func(&probe_data.charset_state);
-                offset = probe_data.charset_state.p - rawbuf;
+                offset = (int)(probe_data.charset_state.p - rawbuf);
             }
             bufp += utf8_encode((char *)bufp, ch);
             if (bufp > buf + sizeof(buf) - MAX_CHAR_BYTES - 1)
                 break;
         }
         probe_data.buf = buf;
-        probe_data.buf_size = bufp - buf;
+        probe_data.buf_size = (int)(bufp - buf);
         *bufp = '\0';
     }
 
@@ -8803,8 +8803,8 @@ static int probe_mode(EditState *s, EditBuffer *b,
 
     charset_decode_close(&probe_data.charset_state);
 
-    p = memchr(probe_data.buf, '\n', probe_data.buf_size);
-    probe_data.line_len = p ? p - probe_data.buf : probe_data.buf_size;
+    p = memchr(probe_data.buf, '\n', (size_t)probe_data.buf_size);
+    probe_data.line_len = p ? (int)(p - probe_data.buf) : probe_data.buf_size;
 
     for (m = qs->first_mode; m != NULL; m = m->next) {
         if (m->mode_probe) {
@@ -9040,7 +9040,7 @@ int qe_load_file(EditState *s, const char *filename1, int lflags, int bflags)
         do_load_qerc(s, s->b->filename);
         return 2;
     } else {
-        b->st_mode = st_mode = st.st_mode;
+        b->st_mode = st_mode = (int)st.st_mode;
         buf_size = 0;
         f = NULL;
 
@@ -9048,7 +9048,7 @@ int qe_load_file(EditState *s, const char *filename1, int lflags, int bflags)
             f = fopen(filename, "r");
             if (!f)
                 goto fail;
-            buf_size = fread(buf, 1, sizeof(buf) - 1, f);
+            buf_size = (int)fread(buf, 1, sizeof(buf) - 1, f);
             if (buf_size <= 0 && ferror(f)) {
                 fclose(f);
                 f = NULL;
@@ -9871,7 +9871,7 @@ void do_create_window(EditState *s, const char *filename, const char *layout)
     }
 
     for (n = 0; *p; n++) {
-        while (qe_isblank(*p))
+        while (qe_isblank((unsigned char)*p))
             p++;
         for (i = 0; i < countof(names); i++) {
             if (strstart(p, names[i], &p)) {
@@ -9886,8 +9886,8 @@ void do_create_window(EditState *s, const char *filename, const char *layout)
         if (n >= countof(args))
             break;
 
-        args[n] = strtol_c(p, &p, 0);
-        while (qe_isblank(*p))
+        args[n] = (int)strtol_c(p, &p, 0);
+        while (qe_isblank((unsigned char)*p))
             p++;
         if (*p == ',')
             p++;
@@ -10746,7 +10746,7 @@ void do_load_qerc(EditState *e, const char *filename)
         if (!p)
             break;
         p += 1;
-        pstrcpy(p, buf + sizeof(buf) - p, ".qerc.lua");
+        pstrcpy(p, (int)(buf + sizeof(buf) - p), ".qerc.lua");
         qs->active_window = e;
         parse_config_file(e, buf);
     }
@@ -10869,8 +10869,8 @@ static int qe_parse_command_line(QEmacsState *qs, int argc, char **argv)
             }
             r++;
         }
-        opt1.len = r - opt1.s;
-        opt2.len = r - opt2.s;
+        opt1.len = (int)(r - opt1.s);
+        opt2.len = (int)(r - opt2.s);
 
         for (p = first_cmd_options; p != NULL; p = p->u.next) {
             while (p->desc != NULL) {
@@ -10892,7 +10892,7 @@ static int qe_parse_command_line(QEmacsState *qs, int argc, char **argv)
                         *p->u.int_ptr = optarg_ ? qe_strtobool(optarg_, 1) : TRUE;
                         break;
                     case CMD_LINE_TYPE_INT:
-                        *p->u.int_ptr = optarg_ ? strtol(optarg_, NULL, 0) : *p->u.int_ptr + 1;
+                        *p->u.int_ptr = optarg_ ? (int)strtol(optarg_, NULL, 0) : *p->u.int_ptr + 1;
                         break;
                     case CMD_LINE_TYPE_STRING:
                         *p->u.string_ptr = optarg_;
@@ -11899,9 +11899,9 @@ static int qe_init(void *opaque)
                 continue;
             }
             /* Handle +linenumber[,column] before file */
-            line_num = strtol(arg + 1, &p, 10);
+            line_num = (int)strtol(arg + 1, &p, 10);
             if (*p == ',' || *p == ':') {
-                col_num = strtol(p + 1, NULL, 10);
+                col_num = (int)strtol(p + 1, NULL, 10);
                 col_num -= (col_num > 0);  // user column numbers are 1-based
             }
             arg = argv[i++];
