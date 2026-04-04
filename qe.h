@@ -539,7 +539,7 @@ static inline int eb_prev(EditBuffer *b, int offset) {
     return offset;
 }
 static inline int eb_peekc(EditBuffer *b, int offset) {
-    return eb_nextc(b, offset, &offset);
+    return (int)eb_nextc(b, offset, &offset);
 }
 
 //int eb_clip_offset(EditBuffer *b, int offset);
@@ -1372,13 +1372,13 @@ static inline int display_char(DisplayState *s, int offset1, int offset2,
 
 static inline void cp_set_style(QETermStyle *p, QETermStyle *to, int style) {
     while (p < to)
-        *p++ = style;
+        *p++ = (QETermStyle)style;
 }
 
 #define SET_STYLE1(sbuf,a,style)  cp_set_style1((sbuf) + (a), style)
 
 static inline void cp_set_style1(QETermStyle *p, int style) {
-    *p = style;
+    *p = (QETermStyle)style;
 }
 
 /* input.c */

@@ -386,7 +386,7 @@ static inline int min3_int(int a, int b, int c) {
     return min_int(min_int(a, b), c);
 }
 
-static inline int max_uint(unsigned int a, unsigned int b) {
+static inline unsigned int max_uint(unsigned int a, unsigned int b) {
     /*@API utils
        Compute the maximum value of 2 integers
        @argument `a` an `unsigned int` value
@@ -399,7 +399,7 @@ static inline int max_uint(unsigned int a, unsigned int b) {
         return b;
 }
 
-static inline int min_uint(unsigned int a, unsigned int b) {
+static inline unsigned int min_uint(unsigned int a, unsigned int b) {
     /*@API utils
        Compute the minimum value of 2 integers
        @argument `a` an `unsigned int` value

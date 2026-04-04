@@ -195,7 +195,7 @@ int css_get_font_family(const char *str);
 int css_get_enum(const char *str, const char *enum_str);
 int color_dist(QEColor c1, QEColor c2);
 static inline int color_y(QEColor c) {
-    return 30 * ((c >> 16) & 0xff) + 59 * ((c >> 8) & 0xff) + 11 * (c & 0xff);
+    return (int)(30 * ((c >> 16) & 0xff) + 59 * ((c >> 8) & 0xff) + 11 * (c & 0xff));
 }
 
 typedef struct CSSRect {
